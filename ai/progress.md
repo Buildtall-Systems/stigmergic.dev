@@ -6,12 +6,12 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 6
+**Completed**: 7
 **In Progress**: 0
-**Remaining**: 37
+**Remaining**: 36
 
 **Current Phase**: Phase 1 - CLI Foundation (Cobra + Viper)
-**Current Step**: Step 1.3 - Serve Command
+**Current Step**: Complete
 
 ---
 
@@ -60,12 +60,12 @@
   - [x] Add config flags to root command
   - [x] Bind viper to cobra flags
 
-- [ ] **Step 1.3: Serve Command**
-  - [ ] Create `cmd/stigmergic/serve.go` with serve command
-  - [ ] Accept path as positional argument
-  - [ ] Validate path exists and is a directory
-  - [ ] Wire up config to serve command
-  - [ ] Add basic logging of configuration
+- [x] **Step 1.3: Serve Command**
+  - [x] Create `cmd/stigmergic/serve.go` with serve command
+  - [x] Accept path as positional argument
+  - [x] Validate path exists and is a directory
+  - [x] Wire up config to serve command
+  - [x] Add basic logging of configuration
 
 ---
 

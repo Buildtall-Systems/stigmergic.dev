@@ -1,1 +1,4 @@
 tmp/
+stigmergic
+*_templ.go
+*.log
