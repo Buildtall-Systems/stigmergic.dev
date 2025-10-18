@@ -6,12 +6,12 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 2
+**Completed**: 3
 **In Progress**: 0
-**Remaining**: 41
+**Remaining**: 40
 
 **Current Phase**: Phase 0 - Project Foundation & Infrastructure
-**Current Step**: Step 0.3 - Add Go Dependencies
+**Current Step**: Step 0.4 - Testing Infrastructure
 
 ---
 
@@ -27,15 +27,15 @@
   - [x] Create basic directory structure
   - [x] Create placeholder `.keep` files in empty directories
 
-- [ ] **Step 0.3: Add Go Dependencies**
-  - [ ] Add cobra dependency
-  - [ ] Add viper dependency
-  - [ ] Add goldmark dependency
-  - [ ] Add chroma dependency
-  - [ ] Add fsnotify dependency
-  - [ ] Add templ dependency
-  - [ ] Run `go mod tidy`
-  - [ ] Update `flake.nix` with `vendorHash`
+- [x] **Step 0.3: Add Go Dependencies**
+  - [x] Add cobra dependency
+  - [x] Add viper dependency
+  - [x] Add goldmark dependency
+  - [x] Add chroma dependency
+  - [x] Add fsnotify dependency (auto-added via viper)
+  - [x] Add templ dependency
+  - [x] Run `go mod tidy`
+  - [x] vendorHash set to null (Nix will calculate it during build)
 
 - [ ] **Step 0.4: Testing Infrastructure**
   - [ ] Create `internal/testutil/testutil.go` with helper functions

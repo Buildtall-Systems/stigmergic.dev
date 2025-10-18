@@ -30,3 +30,4 @@ empty fields should be left empty... no "NA" or "*Not Found*"... nothing, just a
 | katex                 | /katex/katex                   |                                    |
 | fsnotify              | /fsnotify/fsnotify             |                                    |
 | tailwindcss           | /websites/tailwindcss          |                                    |
+| nixpkgs               | /nixos/nixpkgs                 |                                    |
