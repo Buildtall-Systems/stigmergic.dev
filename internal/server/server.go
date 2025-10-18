@@ -11,12 +11,15 @@ import (
 	"time"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/watcher"
 )
 
 type Server struct {
 	httpServer *http.Server
 	config     *config.Config
 	mux        *http.ServeMux
+	tree       *models.Tree
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -34,10 +37,17 @@ func NewServer(cfg *config.Config) *Server {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	tree, err := watcher.ScanDirectory(cfg.WatchPath)
+	if err != nil {
+		log.Printf("failed to scan directory: %v", err)
+		tree = &models.Tree{}
+	}
+
 	s := &Server{
 		httpServer: srv,
 		config:     cfg,
 		mux:        mux,
+		tree:       tree,
 	}
 
 	s.setupRoutes()

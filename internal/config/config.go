@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	Port int
-	Host string
+	Port      int
+	Host      string
+	WatchPath string
 }
 
 func Load(cfgFile string) (*Config, error) {

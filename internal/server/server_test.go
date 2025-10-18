@@ -128,10 +128,12 @@ func TestServerShutdownTimeout(t *testing.T) {
 func TestServerRespondsToRequests(t *testing.T) {
 	t.Parallel()
 
+	tmpDir := testutil.CreateTempDir(t)
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:      port,
+		Host:      "localhost",
+		WatchPath: tmpDir,
 	}
 
 	srv := NewServer(cfg)
@@ -145,17 +147,28 @@ func TestServerRespondsToRequests(t *testing.T) {
 		srv.Shutdown(ctx)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	waitForServer(t, port)
 
-	url := fmt.Sprintf("http://localhost:%d/", port)
-	resp, err := http.Get(url)
+	rootURL := fmt.Sprintf("http://localhost:%d/", port)
+	resp, err := http.Get(rootURL)
 	if err != nil {
 		t.Fatalf("failed to connect to server: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("expected status 404, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200 for /, got %d", resp.StatusCode)
+	}
+
+	notFoundURL := fmt.Sprintf("http://localhost:%d/nonexistent", port)
+	resp2, err := http.Get(notFoundURL)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Errorf("expected status 404 for /nonexistent, got %d", resp2.StatusCode)
 	}
 }
 
