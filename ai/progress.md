@@ -6,11 +6,11 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 7
+**Completed**: 10
 **In Progress**: 0
-**Remaining**: 36
+**Remaining**: 33
 
-**Current Phase**: Phase 1 - CLI Foundation (Cobra + Viper)
+**Current Phase**: Phase 2 - File Tree & Watcher
 **Current Step**: Complete
 
 ---
@@ -71,18 +71,18 @@
 
 ## Phase 2: File Tree & Watcher
 
-- [ ] **Step 2.1: File Tree Model**
-  - [ ] Create `internal/models/tree.go` with Node and Tree structs
-  - [ ] Create `internal/models/tree_test.go` with comprehensive tests
+- [x] **Step 2.1: File Tree Model**
+  - [x] Create `internal/models/tree.go` with Node and Tree structs
+  - [x] Create `internal/models/tree_test.go` with comprehensive tests
 
-- [ ] **Step 2.2: File Tree Scanner**
-  - [ ] Create `internal/watcher/scanner.go` with ScanDirectory function
-  - [ ] Create `internal/watcher/scanner_test.go` with comprehensive tests
+- [x] **Step 2.2: File Tree Scanner**
+  - [x] Create `internal/watcher/scanner.go` with ScanDirectory function
+  - [x] Create `internal/watcher/scanner_test.go` with comprehensive tests
 
-- [ ] **Step 2.3: Filesystem Watcher**
-  - [ ] Gather context for fsnotify from `/fsnotify/fsnotify`
-  - [ ] Create `internal/watcher/watcher.go` with Watcher struct
-  - [ ] Create `internal/watcher/watcher_test.go` with comprehensive tests
+- [x] **Step 2.3: Filesystem Watcher**
+  - [x] Gather context for fsnotify from `/fsnotify/fsnotify`
+  - [x] Create `internal/watcher/watcher.go` with Watcher struct
+  - [x] Create `internal/watcher/watcher_test.go` with comprehensive tests
 
 ---
 
