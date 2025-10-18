@@ -6,12 +6,12 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 5
+**Completed**: 6
 **In Progress**: 0
-**Remaining**: 38
+**Remaining**: 37
 
 **Current Phase**: Phase 1 - CLI Foundation (Cobra + Viper)
-**Current Step**: Step 1.2 - Configuration with Viper
+**Current Step**: Step 1.3 - Serve Command
 
 ---
 
@@ -53,12 +53,12 @@
   - [x] Add `--version` flag
   - [x] Build and test: `go build -o stigmergic ./cmd/stigmergic`
 
-- [ ] **Step 1.2: Configuration with Viper**
-  - [ ] Gather context for viper from `/spf13/viper`
-  - [ ] Create `internal/config/config.go` with Config struct and Load function
-  - [ ] Create `internal/config/config_test.go` with comprehensive tests
-  - [ ] Add config flags to root command
-  - [ ] Bind viper to cobra flags
+- [x] **Step 1.2: Configuration with Viper**
+  - [x] Gather context for viper from `/spf13/viper`
+  - [x] Create `internal/config/config.go` with Config struct and Load function
+  - [x] Create `internal/config/config_test.go` with comprehensive tests
+  - [x] Add config flags to root command
+  - [x] Bind viper to cobra flags
 
 - [ ] **Step 1.3: Serve Command**
   - [ ] Create `cmd/stigmergic/serve.go` with serve command
