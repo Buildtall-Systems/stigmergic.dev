@@ -2,7 +2,10 @@ package watcher
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -23,11 +26,17 @@ type Event struct {
 }
 
 type Watcher struct {
-	watcher *fsnotify.Watcher
-	Events  chan Event
-	Errors  chan error
-	done    chan struct{}
+	watcher       *fsnotify.Watcher
+	Events        chan Event
+	Errors        chan error
+	done          chan struct{}
+	debounceMap   map[string]*time.Timer
+	debounceMutex sync.Mutex
+	watchedDirs   map[string]bool
+	watchMutex    sync.RWMutex
 }
+
+const debounceWindow = 200 * time.Millisecond
 
 func NewWatcher() (*Watcher, error) {
 	fw, err := fsnotify.NewWatcher()
@@ -36,10 +45,12 @@ func NewWatcher() (*Watcher, error) {
 	}
 
 	w := &Watcher{
-		watcher: fw,
-		Events:  make(chan Event, 100),
-		Errors:  make(chan error, 10),
-		done:    make(chan struct{}),
+		watcher:     fw,
+		Events:      make(chan Event, 100),
+		Errors:      make(chan error, 10),
+		done:        make(chan struct{}),
+		debounceMap: make(map[string]*time.Timer),
+		watchedDirs: make(map[string]bool),
 	}
 
 	go w.eventLoop()
@@ -53,8 +64,46 @@ func (w *Watcher) Add(path string) error {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
-	if err := w.watcher.Add(absPath); err != nil {
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", absPath)
+	}
+
+	return w.addRecursive(absPath)
+}
+
+func (w *Watcher) addRecursive(path string) error {
+	w.watchMutex.Lock()
+	if w.watchedDirs[path] {
+		w.watchMutex.Unlock()
+		return nil
+	}
+	w.watchedDirs[path] = true
+	w.watchMutex.Unlock()
+
+	if err := w.watcher.Add(path); err != nil {
+		w.watchMutex.Lock()
+		delete(w.watchedDirs, path)
+		w.watchMutex.Unlock()
 		return fmt.Errorf("failed to watch path: %w", err)
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			childPath := filepath.Join(path, entry.Name())
+			if err := w.addRecursive(childPath); err != nil {
+				continue
+			}
+		}
 	}
 
 	return nil
@@ -66,6 +115,10 @@ func (w *Watcher) Remove(path string) error {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
+	w.watchMutex.Lock()
+	delete(w.watchedDirs, absPath)
+	w.watchMutex.Unlock()
+
 	if err := w.watcher.Remove(absPath); err != nil {
 		return fmt.Errorf("failed to unwatch path: %w", err)
 	}
@@ -75,6 +128,13 @@ func (w *Watcher) Remove(path string) error {
 
 func (w *Watcher) Close() error {
 	close(w.done)
+
+	w.debounceMutex.Lock()
+	for _, timer := range w.debounceMap {
+		timer.Stop()
+	}
+	w.debounceMutex.Unlock()
+
 	return w.watcher.Close()
 }
 
@@ -89,7 +149,7 @@ func (w *Watcher) eventLoop() {
 			if !ok {
 				return
 			}
-			w.Events <- w.convertEvent(event)
+			w.handleEvent(event)
 		case err, ok := <-w.watcher.Errors:
 			if !ok {
 				return
@@ -97,6 +157,38 @@ func (w *Watcher) eventLoop() {
 			w.Errors <- err
 		}
 	}
+}
+
+func (w *Watcher) handleEvent(event fsnotify.Event) {
+	convertedEvent := w.convertEvent(event)
+
+	if convertedEvent.Type == EventCreate {
+		info, err := os.Stat(event.Name)
+		if err == nil && info.IsDir() {
+			w.addRecursive(event.Name)
+		}
+	}
+
+	w.debounceEvent(convertedEvent)
+}
+
+func (w *Watcher) debounceEvent(event Event) {
+	w.debounceMutex.Lock()
+	defer w.debounceMutex.Unlock()
+
+	key := fmt.Sprintf("%d:%s", event.Type, event.Path)
+
+	if timer, exists := w.debounceMap[key]; exists {
+		timer.Stop()
+	}
+
+	w.debounceMap[key] = time.AfterFunc(debounceWindow, func() {
+		w.Events <- event
+
+		w.debounceMutex.Lock()
+		delete(w.debounceMap, key)
+		w.debounceMutex.Unlock()
+	})
 }
 
 func (w *Watcher) convertEvent(event fsnotify.Event) Event {
