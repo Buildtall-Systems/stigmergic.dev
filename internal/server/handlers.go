@@ -22,6 +22,7 @@ func (s *Server) setupRoutes() {
 
 	s.mux.HandleFunc("/", s.handleHome)
 	s.mux.HandleFunc("/file/", s.handleMarkdown)
+	s.mux.HandleFunc("/events", s.handleSSE)
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +64,12 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	breadcrumbs := buildBreadcrumbs(filePath)
 	title := filepath.Base(filePath)
 
-	templates.Markdown(title, breadcrumbs, string(html)).Render(r.Context(), w)
+	isHTMX := r.Header.Get("HX-Request") == "true"
+	if isHTMX {
+		templates.MarkdownContent(breadcrumbs, string(html)).Render(r.Context(), w)
+	} else {
+		templates.Markdown(title, breadcrumbs, string(html)).Render(r.Context(), w)
+	}
 }
 
 func buildBreadcrumbs(path string) []string {
@@ -75,4 +81,47 @@ func buildBreadcrumbs(path string) []string {
 		}
 	}
 	return crumbs
+}
+
+func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	ctx := r.Context()
+	clientEvents := make(chan string, 10)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-s.events:
+				if !ok {
+					return
+				}
+				clientEvents <- filepath.Base(event.Path)
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-clientEvents:
+			_, err := w.Write([]byte("data: " + msg + "\n\n"))
+			if err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
 }

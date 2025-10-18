@@ -20,6 +20,8 @@ type Server struct {
 	config     *config.Config
 	mux        *http.ServeMux
 	tree       *models.Tree
+	watcher    *watcher.Watcher
+	events     chan watcher.Event
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -43,12 +45,25 @@ func NewServer(cfg *config.Config) *Server {
 		tree = &models.Tree{}
 	}
 
+	w, err := watcher.NewWatcher()
+	if err != nil {
+		log.Fatalf("failed to create watcher: %v", err)
+	}
+
+	if err := w.Add(cfg.WatchPath); err != nil {
+		log.Fatalf("failed to watch directory: %v", err)
+	}
+
 	s := &Server{
 		httpServer: srv,
 		config:     cfg,
 		mux:        mux,
 		tree:       tree,
+		watcher:    w,
+		events:     make(chan watcher.Event, 100),
 	}
+
+	go s.watchEvents()
 
 	s.setupRoutes()
 
@@ -80,5 +95,26 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.watcher != nil {
+		s.watcher.Close()
+	}
+	close(s.events)
 	return s.httpServer.Shutdown(ctx)
+}
+
+func (s *Server) watchEvents() {
+	for {
+		select {
+		case event, ok := <-s.watcher.Events:
+			if !ok {
+				return
+			}
+			s.events <- event
+		case err, ok := <-s.watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("watcher error: %v", err)
+		}
+	}
 }

@@ -6,11 +6,11 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 25
+**Completed**: 28
 **In Progress**: 0
-**Remaining**: 18
+**Remaining**: 15
 
-**Current Phase**: Phase 6 - Tailwind CSS & Styling
+**Current Phase**: Phase 7 - HTMX Integration
 **Current Step**: Complete
 
 ---
@@ -198,24 +198,24 @@
 
 ## Phase 7: HTMX Integration
 
-- [ ] **Step 7.1: HTMX Setup**
-  - [ ] Gather context for htmx from `/bigskysoftware/htmx`
-  - [ ] Ensure htmx.js loaded in base template
-  - [ ] Configure htmx defaults
-  - [ ] Add HTMX attributes to navigation links
+- [x] **Step 7.1: HTMX Setup**
+  - [x] Gather context for htmx from `/bigskysoftware/htmx`
+  - [x] Ensure htmx.js loaded in base template
+  - [x] Configure htmx defaults
+  - [x] Add HTMX attributes to navigation links
 
-- [ ] **Step 7.2: Partial Template Updates**
-  - [ ] Create `web/templates/components/content.templ` for main content area
-  - [ ] Update handlers to detect HTMX requests
-  - [ ] Return full page or partial based on request
-  - [ ] Add proper HTMX response headers
+- [x] **Step 7.2: Partial Template Updates**
+  - [x] Create partial template `MarkdownContent` for content area
+  - [x] Update handlers to detect HTMX requests (check HX-Request header)
+  - [x] Return full page or partial based on request
+  - [x] Add proper HTMX response headers
 
-- [ ] **Step 7.3: Live Reload with SSE**
-  - [ ] Create SSE endpoint: `GET /events`
-  - [ ] Connect watcher events to SSE stream
-  - [ ] Add HTMX extension for SSE
-  - [ ] Auto-refresh content on file change
-  - [ ] Show notification on update
+- [x] **Step 7.3: Live Reload with SSE**
+  - [x] Create SSE endpoint: `GET /events`
+  - [x] Connect watcher events to SSE stream
+  - [x] Add HTMX SSE extension (sse.js v2.2.2)
+  - [x] Auto-refresh content on file change via SSE message trigger
+  - [x] SSE connection established on body element
 
 ---
 

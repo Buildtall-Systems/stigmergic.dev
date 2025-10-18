@@ -17,6 +17,7 @@ templ Layout(title string) {
 				mermaid.initialize({ startOnLoad: true });
 			</script>
 			<script src="/static/js/htmx.min.js"></script>
+			<script src="/static/js/sse.js"></script>
 			<script>
 				document.addEventListener("DOMContentLoaded", function() {
 					renderMathInElement(document.body, {
@@ -29,7 +30,8 @@ templ Layout(title string) {
 				});
 			</script>
 		</head>
-		<body class="min-h-screen bg-gray-50">
+		<body class="min-h-screen bg-gray-50" hx-ext="sse" sse-connect="/events">
+			<div hx-trigger="sse:message" hx-get="window.location.pathname" hx-target="main" hx-swap="innerHTML" style="display:none;"></div>
 			<header class="bg-white shadow-sm border-b border-gray-200">
 				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
 					<h1 class="text-2xl font-bold text-gray-900">stigmergic</h1>

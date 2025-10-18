@@ -4,33 +4,37 @@ import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
 templ Markdown(title string, breadcrumbs []string, content string) {
 	@components.Layout(title) {
-		<div class="space-y-6">
-			if len(breadcrumbs) > 0 {
-				<nav class="breadcrumb" aria-label="Breadcrumb">
-					<ol class="flex items-center space-x-2">
-						<li class="inline-flex items-center">
-							<a href="/" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">
-								Home
-							</a>
-						</li>
-						for i, crumb := range breadcrumbs {
-							<li>
-								<div class="flex items-center">
-									<span class="breadcrumb-separator mx-2">/</span>
-									if i == len(breadcrumbs) - 1 {
-										<span class="text-gray-700 font-medium">{ crumb }</span>
-									} else {
-										<span class="text-gray-600 hover:text-gray-800">{ crumb }</span>
-									}
-								</div>
-							</li>
-						}
-					</ol>
-				</nav>
-			}
-			<article class="prose prose-slate prose-headings:font-bold prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-pre:bg-slate-800 prose-pre:text-slate-50 max-w-none">
-				@templ.Raw(content)
-			</article>
-		</div>
+		@MarkdownContent(breadcrumbs, content)
 	}
+}
+
+templ MarkdownContent(breadcrumbs []string, content string) {
+	<div class="space-y-6">
+		if len(breadcrumbs) > 0 {
+			<nav class="breadcrumb" aria-label="Breadcrumb">
+				<ol class="flex items-center space-x-2">
+					<li class="inline-flex items-center">
+						<a href="/" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+							Home
+						</a>
+					</li>
+					for i, crumb := range breadcrumbs {
+						<li>
+							<div class="flex items-center">
+								<span class="breadcrumb-separator mx-2">/</span>
+								if i == len(breadcrumbs) - 1 {
+									<span class="text-gray-700 font-medium">{ crumb }</span>
+								} else {
+									<span class="text-gray-600 hover:text-gray-800">{ crumb }</span>
+								}
+							</div>
+						</li>
+					}
+				</ol>
+			</nav>
+		}
+		<article class="prose prose-slate prose-headings:font-bold prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-pre:bg-slate-800 prose-pre:text-slate-50 max-w-none">
+			@templ.Raw(content)
+		</article>
+	</div>
 }
