@@ -1,0 +1,36 @@
+package templates
+
+import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
+
+templ Markdown(title string, breadcrumbs []string, content string) {
+	@components.Layout(title) {
+		<div class="space-y-6">
+			if len(breadcrumbs) > 0 {
+				<nav class="flex" aria-label="Breadcrumb">
+					<ol class="inline-flex items-center space-x-1">
+						<li class="inline-flex items-center">
+							<a href="/" class="text-gray-700 hover:text-blue-600">
+								Home
+							</a>
+						</li>
+						for i, crumb := range breadcrumbs {
+							<li>
+								<div class="flex items-center">
+									<span class="mx-2 text-gray-400">/</span>
+									if i == len(breadcrumbs) - 1 {
+										<span class="text-gray-500">{ crumb }</span>
+									} else {
+										<span class="text-gray-700">{ crumb }</span>
+									}
+								</div>
+							</li>
+						}
+					</ol>
+				</nav>
+			}
+			<article class="prose max-w-none">
+				@templ.Raw(content)
+			</article>
+		</div>
+	}
+}
