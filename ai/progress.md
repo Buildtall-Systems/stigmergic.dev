@@ -6,11 +6,11 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 10
+**Completed**: 13
 **In Progress**: 0
-**Remaining**: 33
+**Remaining**: 30
 
-**Current Phase**: Phase 2 - File Tree & Watcher
+**Current Phase**: Phase 3 - HTTP Server Foundation
 **Current Step**: Complete
 
 ---
@@ -88,20 +88,20 @@
 
 ## Phase 3: HTTP Server Foundation
 
-- [ ] **Step 3.1: Basic HTTP Server**
-  - [ ] Create `internal/server/server.go` with Server struct
-  - [ ] Create `internal/server/server_test.go` with comprehensive tests
+- [x] **Step 3.1: Basic HTTP Server**
+  - [x] Create `internal/server/server.go` with Server struct
+  - [x] Create `internal/server/server_test.go` with comprehensive tests
 
-- [ ] **Step 3.2: Static File Serving**
-  - [ ] Create `web/static/js/` directory and add htmx
-  - [ ] Create `web/static/styles/` directory
-  - [ ] Add static file handler in `internal/server/handlers.go`
-  - [ ] Create test to verify static files served correctly
+- [x] **Step 3.2: Static File Serving**
+  - [x] Create `web/static/js/` directory and add htmx
+  - [x] Create `web/static/styles/` directory
+  - [x] Add static file handler in `internal/server/handlers.go`
+  - [x] Create test to verify static files served correctly
 
-- [ ] **Step 3.3: Middleware**
-  - [ ] Create `internal/server/middleware.go` with logging, recovery, and security middleware
-  - [ ] Add middleware to server
-  - [ ] Test middleware behavior
+- [x] **Step 3.3: Middleware**
+  - [x] Create `internal/server/middleware.go` with logging, recovery, and security middleware
+  - [x] Add middleware to server
+  - [x] Test middleware behavior
 
 ---
 
