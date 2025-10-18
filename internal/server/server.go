@@ -3,7 +3,11 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
@@ -42,10 +46,27 @@ func NewServer(cfg *config.Config) *Server {
 }
 
 func (s *Server) Start() error {
-	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("server failed: %w", err)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	errChan := make(chan error, 1)
+	go func() {
+		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- fmt.Errorf("server failed: %w", err)
+		} else {
+			errChan <- nil
+		}
+	}()
+
+	select {
+	case err := <-errChan:
+		return err
+	case sig := <-sigChan:
+		log.Printf("Received signal: %v, shutting down gracefully...", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return s.Shutdown(ctx)
 	}
-	return nil
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
