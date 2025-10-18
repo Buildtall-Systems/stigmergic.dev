@@ -104,6 +104,10 @@ Flags:
 
 ## Technical Architecture
 
+### Packaging & Distribution
+
+**Static Asset Embedding**: All static files (htmx.min.js, CSS) are embedded into the binary using Go's `embed` package. This ensures the binary is self-contained and can run from any directory without requiring external file dependencies.
+
 ### Server Components
 
 ```
@@ -132,7 +136,7 @@ stigmergic/
 │   │   ├── home.templ
 │   │   ├── markdown.templ
 │   │   └── components/
-│   ├── static/
+│   ├── static/               # Embedded into binary via go:embed
 │   │   ├── styles/
 │   │   │   └── tailwind.css
 │   │   └── js/

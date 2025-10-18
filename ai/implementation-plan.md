@@ -240,12 +240,14 @@ This document outlines a strategic, iterative approach to implementing stigmergi
 1. Create `web/static/js/` directory and add htmx
 2. Create `web/static/styles/` directory
 3. Add static file handler in `internal/server/handlers.go`
-4. Create test to verify static files served correctly
+4. Embed static files using `//go:embed` directive for self-contained binary
+5. Create test to verify static files served correctly
 
 **Success Criteria**:
 - Static files accessible at `/static/*`
 - Correct MIME types set
 - 404 for missing files
+- Static files embedded in binary (works from any directory)
 
 ### Step 3.3: Middleware
 **Goal**: Add logging and basic middleware

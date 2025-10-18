@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,27 +11,22 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/testutil"
 )
 
+func waitForServer(t *testing.T, port int) {
+	t.Helper()
+	url := fmt.Sprintf("http://localhost:%d/", port)
+	for i := 0; i < 50; i++ {
+		resp, err := http.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("server failed to start within timeout")
+}
+
 func TestStaticFileServing(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-
-	root := filepath.Join(cwd, "../..")
-	testFile := filepath.Join(root, "web/static/js/htmx.min.js")
-	if _, err := os.Stat(testFile); os.IsNotExist(err) {
-		t.Skip("htmx.min.js not found, skipping test")
-	}
-
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to change to root directory: %v", err)
-	}
+	t.Parallel()
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
@@ -52,7 +45,7 @@ func TestStaticFileServing(t *testing.T) {
 		srv.Shutdown(ctx)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	waitForServer(t, port)
 
 	url := fmt.Sprintf("http://localhost:%d/static/js/htmx.min.js", port)
 	resp, err := http.Get(url)
@@ -72,15 +65,7 @@ func TestStaticFileServing(t *testing.T) {
 }
 
 func TestStaticFileMissing(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-
-	root := filepath.Join(cwd, "../..")
-	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(root)
+	t.Parallel()
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
@@ -99,7 +84,7 @@ func TestStaticFileMissing(t *testing.T) {
 		srv.Shutdown(ctx)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	waitForServer(t, port)
 
 	url := fmt.Sprintf("http://localhost:%d/static/nonexistent.js", port)
 	resp, err := http.Get(url)
@@ -114,31 +99,7 @@ func TestStaticFileMissing(t *testing.T) {
 }
 
 func TestStaticStylesDirectory(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-
-	root := filepath.Join(cwd, "../..")
-	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(root)
-
-	dir := testutil.CreateTempDir(t)
-	cssPath := filepath.Join(dir, "test.css")
-	if err := os.WriteFile(cssPath, []byte("body { color: red; }"), 0644); err != nil {
-		t.Fatalf("failed to create test CSS file: %v", err)
-	}
-
-	if err := os.MkdirAll("web/static/styles", 0755); err != nil {
-		t.Fatalf("failed to create styles directory: %v", err)
-	}
-
-	testCSSPath := "web/static/styles/test.css"
-	if err := os.WriteFile(testCSSPath, []byte("body { color: red; }"), 0644); err != nil {
-		t.Fatalf("failed to create test CSS: %v", err)
-	}
-	defer os.Remove(testCSSPath)
+	t.Parallel()
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
@@ -157,16 +118,17 @@ func TestStaticStylesDirectory(t *testing.T) {
 		srv.Shutdown(ctx)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	waitForServer(t, port)
 
-	url := fmt.Sprintf("http://localhost:%d/static/styles/test.css", port)
+	url := fmt.Sprintf("http://localhost:%d/static/styles/", port)
 	resp, err := http.Get(url)
 	if err != nil {
-		t.Fatalf("failed to get CSS file: %v", err)
+		t.Fatalf("failed to get styles directory: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected status 404 for empty styles directory, got %d", resp.StatusCode)
 	}
 }
+

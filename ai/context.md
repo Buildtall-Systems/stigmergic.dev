@@ -31,3 +31,4 @@ empty fields should be left empty... no "NA" or "*Not Found*"... nothing, just a
 | fsnotify              | /fsnotify/fsnotify             |                                    |
 | tailwindcss           | /websites/tailwindcss          |                                    |
 | nixpkgs               | /nixos/nixpkgs                 |                                    |
+| go embed              |                                | ai/context/embed                   |
