@@ -120,15 +120,15 @@ func TestStaticStylesDirectory(t *testing.T) {
 
 	waitForServer(t, port)
 
-	url := fmt.Sprintf("http://localhost:%d/static/styles/", port)
+	url := fmt.Sprintf("http://localhost:%d/static/styles/output.css", port)
 	resp, err := http.Get(url)
 	if err != nil {
-		t.Fatalf("failed to get styles directory: %v", err)
+		t.Fatalf("failed to get CSS file: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("expected status 404 for empty styles directory, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200 for CSS file, got %d", resp.StatusCode)
 	}
 }
 

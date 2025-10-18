@@ -2,6 +2,6 @@ tmp/
 stigmergic
 *_templ.go
 *.log
-web/static/styles/output.css
+internal/embed/web/static/styles/output.css
 node_modules/
 pnpm-lock.yaml

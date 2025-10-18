@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .tree-item {
+    @apply flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors cursor-pointer;
+  }
+
+  .tree-item-icon {
+    @apply w-5 h-5 flex-shrink-0 text-gray-500;
+  }
+
+  .tree-item-text {
+    @apply text-sm font-medium text-gray-700 truncate;
+  }
+
+  .tree-item-folder {
+    @apply font-semibold text-gray-900;
+  }
+
+  .breadcrumb {
+    @apply flex items-center gap-2 text-sm text-gray-600;
+  }
+
+  .breadcrumb-separator {
+    @apply text-gray-400;
+  }
+
+  .markdown-content {
+    @apply prose prose-slate max-w-none;
+  }
+
+  .btn {
+    @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-600 hover:bg-gray-700 focus:ring-gray-500;
+  }
+}
