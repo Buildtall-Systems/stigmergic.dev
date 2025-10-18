@@ -6,11 +6,11 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 13
+**Completed**: 25
 **In Progress**: 0
-**Remaining**: 30
+**Remaining**: 18
 
-**Current Phase**: Phase 3 - HTTP Server Foundation
+**Current Phase**: Phase 6 - Tailwind CSS & Styling
 **Current Step**: Complete
 
 ---
@@ -107,88 +107,89 @@
 
 ## Phase 4: Templating with Templ
 
-- [ ] **Step 4.1: Templ Setup**
-  - [ ] Gather context for templ from `/a-h/templ`
-  - [ ] Create `web/templates/base.templ` with HTML5 boilerplate
-  - [ ] Add templ generation to build process
-  - [ ] Create `Makefile` with generate, build, and test targets
-  - [ ] Update `.gitignore` to ignore generated `*_templ.go` files
+- [x] **Step 4.1: Templ Setup**
+  - [x] Gather context for templ from `/a-h/templ`
+  - [x] Create `web/templates/base.templ` with HTML5 boilerplate
+  - [x] Add templ generation to build process
+  - [x] Create `Makefile` with generate, build, and test targets
+  - [x] Update `.gitignore` to ignore generated `*_templ.go` files
 
-- [ ] **Step 4.2: Base Layout**
-  - [ ] Create `web/templates/components/layout.templ` with base HTML structure
-  - [ ] Create basic styling structure
-  - [ ] Test template renders
+- [x] **Step 4.2: Base Layout**
+  - [x] Create `web/templates/components/layout.templ` with base HTML structure
+  - [x] Create basic styling structure
+  - [x] Test template renders
 
-- [ ] **Step 4.3: Home Page Template**
-  - [ ] Create `web/templates/home.templ` with file tree rendering
-  - [ ] Create `internal/server/handlers.go` home handler
-  - [ ] Wire up route: `GET /`
+- [x] **Step 4.3: Home Page Template**
+  - [x] Create `web/templates/home.templ` with file tree rendering
+  - [x] Create `internal/server/handlers.go` home handler
+  - [x] Wire up route: `GET /`
 
 ---
 
 ## Phase 5: Markdown Rendering
 
-- [ ] **Step 5.1: Basic Goldmark Setup**
-  - [ ] Gather context for goldmark from `/yuin/goldmark`
-  - [ ] Create `internal/markdown/parser.go` with Parse function
-  - [ ] Create `internal/markdown/parser_test.go` with comprehensive tests
+- [x] **Step 5.1: Basic Goldmark Setup**
+  - [x] Gather context for goldmark from `/yuin/goldmark`
+  - [x] Create `internal/markdown/parser.go` with Parse function
+  - [x] Create `internal/markdown/parser_test.go` with comprehensive tests
 
-- [ ] **Step 5.2: Syntax Highlighting (Chroma)**
-  - [ ] Gather context for chroma from `/alecthomas/chroma`
-  - [ ] Update `internal/markdown/parser.go` with chroma extension
-  - [ ] Create `internal/markdown/extensions.go` for extension setup
-  - [ ] Test with various code languages
+- [x] **Step 5.2: Syntax Highlighting (Chroma)**
+  - [x] Gather context for chroma from `/alecthomas/chroma`
+  - [x] Update `internal/markdown/parser.go` with chroma extension
+  - [x] Create `internal/markdown/extensions.go` for extension setup
+  - [x] Test with various code languages
 
-- [ ] **Step 5.3: GFM Extensions**
-  - [ ] Add GFM extension for tables
-  - [ ] Add GFM extension for strikethrough
-  - [ ] Add GFM extension for task lists
-  - [ ] Test each GFM feature
+- [x] **Step 5.3: GFM Extensions**
+  - [x] Add GFM extension for tables
+  - [x] Add GFM extension for strikethrough
+  - [x] Add GFM extension for task lists
+  - [x] Test each GFM feature
 
-- [ ] **Step 5.4: Math Rendering (KaTeX)**
-  - [ ] Gather context for katex from `/katex/katex`
-  - [ ] Add KaTeX CSS and JS to base template
-  - [ ] Create custom goldmark extension for math
-  - [ ] Test math rendering
+- [x] **Step 5.4: Math Rendering (KaTeX)**
+  - [x] Gather context for katex from `/katex/katex`
+  - [x] Add KaTeX CSS and JS to base template
+  - [x] Create custom goldmark extension for math
+  - [x] Test math rendering
 
-- [ ] **Step 5.5: Mermaid Diagrams**
-  - [ ] Gather context for mermaid from `/mermaid-js/mermaid`
-  - [ ] Add Mermaid JS to base template
-  - [ ] Create custom goldmark extension for mermaid blocks
-  - [ ] Test various diagram types
+- [x] **Step 5.5: Mermaid Diagrams**
+  - [x] Gather context for mermaid from `/mermaid-js/mermaid`
+  - [x] Add Mermaid JS to base template
+  - [x] Create custom goldmark extension for mermaid blocks
+  - [x] Test various diagram types
 
-- [ ] **Step 5.6: Nostr URL Parsing**
-  - [ ] Create custom goldmark extension for nostr URLs
-  - [ ] Test nostr URL detection and linking
+- [x] **Step 5.6: Nostr URL Parsing**
+  - [x] Create custom goldmark extension for nostr URLs
+  - [x] Test nostr URL detection and linking
 
-- [ ] **Step 5.7: Markdown View Template**
-  - [ ] Create `web/templates/markdown.templ` with markdown rendering
-  - [ ] Create handler for markdown files
-  - [ ] Wire up route: `GET /file/*path`
+- [x] **Step 5.7: Markdown View Template**
+  - [x] Create `web/templates/markdown.templ` with markdown rendering
+  - [x] Create handler for markdown files
+  - [x] Wire up route: `GET /file/*path`
 
 ---
 
 ## Phase 6: Tailwind CSS & Styling
 
-- [ ] **Step 6.1: Tailwind Setup**
-  - [ ] Gather context for tailwindcss from `/websites/tailwindcss`
-  - [ ] Create `tailwind.config.js` with content paths
-  - [ ] Create `web/static/styles/input.css` with Tailwind directives
-  - [ ] Add build script to generate CSS
-  - [ ] Update Makefile with CSS build
+- [x] **Step 6.1: Tailwind Setup**
+  - [x] Gather context for tailwindcss from `/websites/tailwindcss`
+  - [x] Create `tailwind.config.js` with content paths
+  - [x] Create `internal/embed/web/static/styles/input.css` with Tailwind directives
+  - [x] Add build script to generate CSS
+  - [x] Update Makefile with CSS build
+  - [x] Fix embed directive to properly include CSS in binary
 
-- [ ] **Step 6.2: Typography & Layout Styling**
-  - [ ] Add Tailwind Typography plugin
-  - [ ] Style markdown content area
-  - [ ] Style navigation and tree view
-  - [ ] Add responsive design
+- [x] **Step 6.2: Typography & Layout Styling**
+  - [x] Add Tailwind Typography plugin
+  - [x] Style markdown content area
+  - [x] Style navigation and tree view
+  - [x] Add responsive design
 
-- [ ] **Step 6.3: Component Styling**
-  - [ ] Style file tree navigation
-  - [ ] Style breadcrumbs
-  - [ ] Style buttons and links
-  - [ ] Add hover states and transitions
-  - [ ] Ensure consistent spacing
+- [x] **Step 6.3: Component Styling**
+  - [x] Style file tree navigation
+  - [x] Style breadcrumbs
+  - [x] Style buttons and links
+  - [x] Add hover states and transitions
+  - [x] Ensure consistent spacing
 
 ---
 
