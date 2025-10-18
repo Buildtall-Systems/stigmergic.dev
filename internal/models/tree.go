@@ -21,12 +21,14 @@ type Node struct {
 }
 
 type Tree struct {
-	Root *Node
+	Root     *Node
+	RootPath string
 }
 
 func NewTree(rootPath string) *Tree {
 	absPath, _ := filepath.Abs(rootPath)
 	return &Tree{
+		RootPath: absPath,
 		Root: &Node{
 			Name:     filepath.Base(absPath),
 			Path:     absPath,
@@ -53,7 +55,11 @@ func (n *Node) AddChild(child *Node) {
 
 func (t *Tree) Find(path string) *Node {
 	absPath, _ := filepath.Abs(path)
-	return t.findNode(t.Root, absPath)
+	relPath, err := filepath.Rel(t.RootPath, absPath)
+	if err != nil {
+		return nil
+	}
+	return t.findNode(t.Root, relPath)
 }
 
 func (t *Tree) findNode(node *Node, path string) *Node {

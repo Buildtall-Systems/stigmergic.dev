@@ -74,10 +74,12 @@
 - [x] **Step 2.1: File Tree Model**
   - [x] Create `internal/models/tree.go` with Node and Tree structs
   - [x] Create `internal/models/tree_test.go` with comprehensive tests
+  - [ ] **BUG FIX REQUIRED**: Node.Path stores absolute paths, must be relative to watch root
 
 - [x] **Step 2.2: File Tree Scanner**
   - [x] Create `internal/watcher/scanner.go` with ScanDirectory function
   - [x] Create `internal/watcher/scanner_test.go` with comprehensive tests
+  - [ ] **BUG FIX REQUIRED**: Scanner stores absolute paths, must store relative paths
 
 - [x] **Step 2.3: Filesystem Watcher**
   - [x] Gather context for fsnotify from `/fsnotify/fsnotify`

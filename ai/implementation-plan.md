@@ -155,14 +155,17 @@ This document outlines a strategic, iterative approach to implementing stigmergi
 **Tasks**:
 1. Create `internal/models/tree.go`:
    - Define `Node` struct (path, name, isDir, children)
+   - **IMPORTANT**: Node.Path must always be relative to watch root, never absolute
    - Define `Tree` struct (root node, index map)
 2. Create `internal/models/tree_test.go`:
    - Test tree creation from directory
    - Test tree traversal
+   - Verify all paths are relative
    - Use temp directories for test fixtures
 
 **Success Criteria**:
 - Tree can represent nested directories
+- All Node paths are relative to watch root
 - Tree can be serialized/traversed efficiently
 - All tests pass with isolation
 
@@ -174,15 +177,18 @@ This document outlines a strategic, iterative approach to implementing stigmergi
    - Implement `ScanDirectory(path string) (*models.Tree, error)`
    - Walk directory structure
    - Filter for markdown files and directories
+   - **CRITICAL**: Store all paths as relative to root, not absolute
    - Build tree model
 2. Create `internal/watcher/scanner_test.go`:
    - Test scanning directory with markdown files
    - Test nested directory scanning
    - Test empty directory handling
+   - Verify all paths in tree are relative
    - Use `testutil.CreateTempDir` and `testutil.CreateTestFile`
 
 **Success Criteria**:
 - Can scan directory and build tree
+- All paths in tree are relative to watch root
 - Performance: < 500ms for 1000 files
 - All tests pass with proper isolation
 

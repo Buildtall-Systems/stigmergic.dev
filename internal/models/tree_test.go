@@ -114,27 +114,27 @@ func TestTreeFind(t *testing.T) {
 
 	root := &Node{
 		Name:     "root",
-		Path:     "/test/root",
+		Path:     ".",
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
 	child1 := &Node{
 		Name: "file1.md",
-		Path: "/test/root/file1.md",
+		Path: "file1.md",
 		Type: NodeTypeFile,
 	}
 
 	subdir := &Node{
 		Name:     "subdir",
-		Path:     "/test/root/subdir",
+		Path:     "subdir",
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
 	child2 := &Node{
 		Name: "file2.md",
-		Path: "/test/root/subdir/file2.md",
+		Path: "subdir/file2.md",
 		Type: NodeTypeFile,
 	}
 
@@ -142,7 +142,10 @@ func TestTreeFind(t *testing.T) {
 	root.AddChild(subdir)
 	subdir.AddChild(child2)
 
-	tree := &Tree{Root: root}
+	tree := &Tree{
+		Root:     root,
+		RootPath: "/test/root",
+	}
 
 	found := tree.Find("/test/root/file1.md")
 	if found == nil {
@@ -170,9 +173,9 @@ func TestTreeFindRoot(t *testing.T) {
 	t.Parallel()
 
 	tree := NewTree("/test/path")
-	absPath, _ := filepath.Abs("/test/path")
-	tree.Root.Path = absPath
+	tree.Root.Path = "."
 
+	absPath, _ := filepath.Abs("/test/path")
 	found := tree.Find(absPath)
 	if found == nil {
 		t.Fatal("expected to find root node, got nil")

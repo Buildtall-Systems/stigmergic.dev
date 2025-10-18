@@ -230,8 +230,15 @@ func TestScanDirectoryRelativePath(t *testing.T) {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}
 
-	absDir, _ := filepath.Abs(dir)
-	if tree.Root.Path != absDir {
-		t.Errorf("expected absolute path %s, got %s", absDir, tree.Root.Path)
+	if tree.Root.Path != "." {
+		t.Errorf("expected root path '.', got %s", tree.Root.Path)
+	}
+
+	if len(tree.Root.Children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(tree.Root.Children))
+	}
+
+	if tree.Root.Children[0].Path != "file.md" {
+		t.Errorf("expected child path 'file.md', got %s", tree.Root.Children[0].Path)
 	}
 }

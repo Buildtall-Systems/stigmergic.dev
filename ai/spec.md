@@ -246,6 +246,8 @@ Or directly: `nix run github:Buildtall-Systems/stigmergic.dev -- /path/to/docs`
 ## Security Considerations
 
 - Only serve files within specified directory (no path traversal)
+- All internal paths stored as relative paths from watch root (never absolute)
+- Path validation ensures requests stay within watch directory
 - Bind to localhost by default (no external exposure)
 - Sanitize markdown output (XSS prevention)
 - Rate limiting on file watching to prevent DOS

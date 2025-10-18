@@ -24,23 +24,24 @@ func ScanDirectory(rootPath string) (*models.Tree, error) {
 	}
 
 	tree := models.NewTree(absPath)
+	tree.Root.Path = "."
 	tree.Root.ModTime = info.ModTime()
 
-	if err := scanNode(tree.Root); err != nil {
+	if err := scanNode(tree.Root, absPath); err != nil {
 		return nil, err
 	}
 
 	return tree, nil
 }
 
-func scanNode(node *models.Node) error {
-	entries, err := os.ReadDir(node.Path)
+func scanNode(node *models.Node, rootPath string) error {
+	absNodePath := filepath.Join(rootPath, node.Path)
+	entries, err := os.ReadDir(absNodePath)
 	if err != nil {
-		return fmt.Errorf("failed to read directory %s: %w", node.Path, err)
+		return fmt.Errorf("failed to read directory %s: %w", absNodePath, err)
 	}
 
 	for _, entry := range entries {
-		childPath := filepath.Join(node.Path, entry.Name())
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -51,9 +52,11 @@ func scanNode(node *models.Node) error {
 			nodeType = models.NodeTypeDirectory
 		}
 
+		childRelPath := filepath.Join(node.Path, entry.Name())
+
 		child := &models.Node{
 			Name:     entry.Name(),
-			Path:     childPath,
+			Path:     childRelPath,
 			Type:     nodeType,
 			ModTime:  info.ModTime(),
 			Children: make([]*models.Node, 0),
@@ -62,7 +65,7 @@ func scanNode(node *models.Node) error {
 		node.AddChild(child)
 
 		if entry.IsDir() {
-			if err := scanNode(child); err != nil {
+			if err := scanNode(child, rootPath); err != nil {
 				return err
 			}
 		}
