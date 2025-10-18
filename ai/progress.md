@@ -6,12 +6,12 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 4
+**Completed**: 5
 **In Progress**: 0
-**Remaining**: 39
+**Remaining**: 38
 
 **Current Phase**: Phase 1 - CLI Foundation (Cobra + Viper)
-**Current Step**: Step 1.1 - Basic CLI Structure
+**Current Step**: Step 1.2 - Configuration with Viper
 
 ---
 
@@ -46,12 +46,12 @@
 
 ## Phase 1: CLI Foundation (Cobra + Viper)
 
-- [ ] **Step 1.1: Basic CLI Structure**
-  - [ ] Gather context for cobra from `/spf13/cobra`
-  - [ ] Create `cmd/stigmergic/main.go` with cobra root command
-  - [ ] Create `cmd/stigmergic/root.go` with basic command structure
-  - [ ] Add `--version` flag
-  - [ ] Build and test: `go build -o stigmergic ./cmd/stigmergic`
+- [x] **Step 1.1: Basic CLI Structure**
+  - [x] Gather context for cobra from `/spf13/cobra`
+  - [x] Create `cmd/stigmergic/main.go` with cobra root command
+  - [x] Root command structure in main.go (no separate root.go needed)
+  - [x] Add `--version` flag
+  - [x] Build and test: `go build -o stigmergic ./cmd/stigmergic`
 
 - [ ] **Step 1.2: Configuration with Viper**
   - [ ] Gather context for viper from `/spf13/viper`
