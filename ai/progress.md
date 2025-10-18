@@ -6,12 +6,12 @@
 ## Progress Summary
 
 **Total Steps**: 43
-**Completed**: 3
+**Completed**: 4
 **In Progress**: 0
-**Remaining**: 40
+**Remaining**: 39
 
-**Current Phase**: Phase 0 - Project Foundation & Infrastructure
-**Current Step**: Step 0.4 - Testing Infrastructure
+**Current Phase**: Phase 1 - CLI Foundation (Cobra + Viper)
+**Current Step**: Step 1.1 - Basic CLI Structure
 
 ---
 
@@ -37,10 +37,10 @@
   - [x] Run `go mod tidy`
   - [x] vendorHash set to null (Nix will calculate it during build)
 
-- [ ] **Step 0.4: Testing Infrastructure**
-  - [ ] Create `internal/testutil/testutil.go` with helper functions
-  - [ ] Create example test file `internal/testutil/testutil_test.go`
-  - [ ] Run `go test ./...` to verify
+- [x] **Step 0.4: Testing Infrastructure**
+  - [x] Create `internal/testutil/testutil.go` with helper functions
+  - [x] Create example test file `internal/testutil/testutil_test.go`
+  - [x] Run `go test ./...` to verify
 
 ---
 
