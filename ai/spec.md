@@ -163,9 +163,10 @@ stigmergic/
 
 3. **File Change**:
    - Filesystem watcher detects change
-   - Server broadcasts update via SSE or WebSocket
-   - HTMX polls or receives push event
-   - Affected portions of UI update
+   - Server broadcasts update via SSE to all connected clients
+   - Each client maintains independent SSE connection
+   - Broadcaster pattern ensures all clients receive events
+   - HTMX receives SSE message and triggers content refresh
 
 ### Markdown Processing Pipeline
 

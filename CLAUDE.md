@@ -96,4 +96,4 @@ Please find a list of supplimentary rules at ai/rules.md
 ### Accessibility & Performance
 
 ### Security
-
+- you are NEVER allowed to write to /tmp

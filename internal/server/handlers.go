@@ -95,28 +95,20 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	clientEvents := make(chan string, 10)
+	clientChan := make(chan string, 10)
+	s.addClient(clientChan)
+	defer s.removeClient(clientChan)
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-s.events:
-				if !ok {
-					return
-				}
-				clientEvents <- filepath.Base(event.Path)
-			}
-		}
-	}()
+	w.Write([]byte(": connected\n\n"))
+	flusher.Flush()
+
+	ctx := r.Context()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case msg := <-clientEvents:
+		case msg := <-clientChan:
 			_, err := w.Write([]byte("data: " + msg + "\n\n"))
 			if err != nil {
 				return

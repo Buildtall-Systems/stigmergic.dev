@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,7 +23,8 @@ type Server struct {
 	mux        *http.ServeMux
 	tree       *models.Tree
 	watcher    *watcher.Watcher
-	events     chan watcher.Event
+	clients    map[chan string]bool
+	clientsMux sync.RWMutex
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -32,11 +35,10 @@ func NewServer(cfg *config.Config) *Server {
 	handler = securityMiddleware(handler)
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:        fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		Handler:     handler,
+		ReadTimeout: 15 * time.Second,
+		IdleTimeout: 60 * time.Second,
 	}
 
 	tree, err := watcher.ScanDirectory(cfg.WatchPath)
@@ -60,10 +62,10 @@ func NewServer(cfg *config.Config) *Server {
 		mux:        mux,
 		tree:       tree,
 		watcher:    w,
-		events:     make(chan watcher.Event, 100),
+		clients:    make(map[chan string]bool),
 	}
 
-	go s.watchEvents()
+	go s.broadcastEvents()
 
 	s.setupRoutes()
 
@@ -98,18 +100,30 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.watcher != nil {
 		s.watcher.Close()
 	}
-	close(s.events)
+	s.clientsMux.Lock()
+	for client := range s.clients {
+		close(client)
+	}
+	s.clients = make(map[chan string]bool)
+	s.clientsMux.Unlock()
 	return s.httpServer.Shutdown(ctx)
 }
 
-func (s *Server) watchEvents() {
+func (s *Server) broadcastEvents() {
 	for {
 		select {
 		case event, ok := <-s.watcher.Events:
 			if !ok {
 				return
 			}
-			s.events <- event
+			s.clientsMux.RLock()
+			for client := range s.clients {
+				select {
+				case client <- filepath.Base(event.Path):
+				default:
+				}
+			}
+			s.clientsMux.RUnlock()
 		case err, ok := <-s.watcher.Errors:
 			if !ok {
 				return
@@ -117,4 +131,17 @@ func (s *Server) watchEvents() {
 			log.Printf("watcher error: %v", err)
 		}
 	}
+}
+
+func (s *Server) addClient(client chan string) {
+	s.clientsMux.Lock()
+	s.clients[client] = true
+	s.clientsMux.Unlock()
+}
+
+func (s *Server) removeClient(client chan string) {
+	s.clientsMux.Lock()
+	delete(s.clients, client)
+	close(client)
+	s.clientsMux.Unlock()
 }

@@ -202,10 +202,6 @@ func TestServerTimeouts(t *testing.T) {
 		t.Errorf("expected ReadTimeout 15s, got %v", srv.httpServer.ReadTimeout)
 	}
 
-	if srv.httpServer.WriteTimeout != 15*time.Second {
-		t.Errorf("expected WriteTimeout 15s, got %v", srv.httpServer.WriteTimeout)
-	}
-
 	if srv.httpServer.IdleTimeout != 60*time.Second {
 		t.Errorf("expected IdleTimeout 60s, got %v", srv.httpServer.IdleTimeout)
 	}

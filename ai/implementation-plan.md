@@ -532,17 +532,40 @@ This document outlines a strategic, iterative approach to implementing stigmergi
 - URL updates correctly
 
 ### Step 7.3: Live Reload with SSE
-**Goal**: Auto-reload content when files change
+**Goal**: Auto-reload content when files change using SSE broadcaster pattern
 
 **Tasks**:
-1. Create SSE endpoint: `GET /events`
-2. Connect watcher events to SSE stream
-3. Add HTMX extension for SSE
-4. Auto-refresh content on file change
-5. Show notification on update
+1. Update Server struct to use broadcaster pattern:
+   - Add `clients map[chan string]bool` field
+   - Add `clientsMux sync.RWMutex` for thread-safe access
+   - Add `addClient(chan string)` method
+   - Add `removeClient(chan string)` method
+2. Implement `broadcastEvents()` goroutine:
+   - Read from watcher.Events channel
+   - Broadcast to all connected clients
+   - Use non-blocking send to avoid slow clients blocking others
+3. Create SSE endpoint: `GET /events`:
+   - Check if response writer supports flushing
+   - Create client-specific channel
+   - Register client with addClient()
+   - Stream events to client
+   - Cleanup on disconnect with removeClient()
+4. Add HTMX SSE extension (sse.js)
+5. Configure body with `hx-ext="sse"` and `sse-connect="/events"`
+6. Add hidden div with `hx-trigger="sse:message"` to refresh content
+
+**Implementation Notes**:
+- Broadcaster pattern ensures all clients receive all events
+- Each SSE connection gets its own channel
+- Non-blocking sends prevent slow clients from blocking fast ones
+- Proper cleanup prevents channel/goroutine leaks
+- Thread-safe client registration/removal with RWMutex
 
 **Success Criteria**:
+- Multiple browser tabs all receive file change events
 - Content updates when file changes
+- No memory leaks from abandoned connections
+- SSE endpoint returns 200 status code
 - < 1 second from change to update
 - Visual feedback for updates
 
