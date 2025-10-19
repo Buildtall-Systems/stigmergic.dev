@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -44,6 +45,8 @@ func NewWatcher() (*Watcher, error) {
 		return nil, fmt.Errorf("failed to create watcher: %w", err)
 	}
 
+	logger.Log.Info("watcher created")
+
 	w := &Watcher{
 		watcher:     fw,
 		Events:      make(chan Event, 100),
@@ -80,6 +83,7 @@ func (w *Watcher) addRecursive(path string) error {
 	w.watchMutex.Lock()
 	if w.watchedDirs[path] {
 		w.watchMutex.Unlock()
+		logger.Log.Debug("path already watched", "path", path)
 		return nil
 	}
 	w.watchedDirs[path] = true
@@ -89,11 +93,15 @@ func (w *Watcher) addRecursive(path string) error {
 		w.watchMutex.Lock()
 		delete(w.watchedDirs, path)
 		w.watchMutex.Unlock()
+		logger.Log.Error("failed to add watch", "path", path, "error", err)
 		return fmt.Errorf("failed to watch path: %w", err)
 	}
 
+	logger.Log.Info("watching path", "path", path)
+
 	entries, err := os.ReadDir(path)
 	if err != nil {
+		logger.Log.Error("failed to read directory", "path", path, "error", err)
 		return fmt.Errorf("failed to read directory: %w", err)
 	}
 
@@ -101,6 +109,7 @@ func (w *Watcher) addRecursive(path string) error {
 		if entry.IsDir() {
 			childPath := filepath.Join(path, entry.Name())
 			if err := w.addRecursive(childPath); err != nil {
+				logger.Log.Warn("failed to watch subdirectory", "path", childPath, "error", err)
 				continue
 			}
 		}
@@ -139,21 +148,27 @@ func (w *Watcher) Close() error {
 }
 
 func (w *Watcher) eventLoop() {
+	logger.Log.Debug("event loop started")
 	for {
 		select {
 		case <-w.done:
+			logger.Log.Debug("event loop stopping")
 			close(w.Events)
 			close(w.Errors)
 			return
 		case event, ok := <-w.watcher.Events:
 			if !ok {
+				logger.Log.Debug("watcher events channel closed")
 				return
 			}
+			logger.Log.Debug("received fsnotify event", "event", event.String())
 			w.handleEvent(event)
 		case err, ok := <-w.watcher.Errors:
 			if !ok {
+				logger.Log.Debug("watcher errors channel closed")
 				return
 			}
+			logger.Log.Error("watcher error from fsnotify", "error", err)
 			w.Errors <- err
 		}
 	}
@@ -161,10 +176,12 @@ func (w *Watcher) eventLoop() {
 
 func (w *Watcher) handleEvent(event fsnotify.Event) {
 	convertedEvent := w.convertEvent(event)
+	logger.Log.Info("handling event", "type", convertedEvent.Type, "path", convertedEvent.Path)
 
 	if convertedEvent.Type == EventCreate {
 		info, err := os.Stat(event.Name)
 		if err == nil && info.IsDir() {
+			logger.Log.Info("new directory created, adding watch", "path", event.Name)
 			w.addRecursive(event.Name)
 		}
 	}
@@ -179,10 +196,12 @@ func (w *Watcher) debounceEvent(event Event) {
 	key := fmt.Sprintf("%d:%s", event.Type, event.Path)
 
 	if timer, exists := w.debounceMap[key]; exists {
+		logger.Log.Debug("debouncing repeated event", "key", key)
 		timer.Stop()
 	}
 
 	w.debounceMap[key] = time.AfterFunc(debounceWindow, func() {
+		logger.Log.Info("sending debounced event", "type", event.Type, "path", event.Path)
 		w.Events <- event
 
 		w.debounceMutex.Lock()

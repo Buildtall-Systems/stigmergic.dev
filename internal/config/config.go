@@ -10,6 +10,7 @@ type Config struct {
 	Port      int
 	Host      string
 	WatchPath string
+	LogLevel  string
 }
 
 func Load(cfgFile string) (*Config, error) {
@@ -17,6 +18,7 @@ func Load(cfgFile string) (*Config, error) {
 
 	v.SetDefault("port", 8080)
 	v.SetDefault("host", "localhost")
+	v.SetDefault("loglevel", "ERROR")
 
 	v.SetEnvPrefix("STIGMERGIC")
 	v.AutomaticEnv()

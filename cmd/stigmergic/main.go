@@ -5,15 +5,17 @@ import (
 	"os"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/spf13/cobra"
 )
 
 const version = "0.1.0"
 
 var (
-	cfgFile string
-	port    int
-	host    string
+	cfgFile  string
+	port     int
+	host     string
+	logLevel string
 )
 
 var rootCmd = &cobra.Command{
@@ -34,6 +36,11 @@ beautifully through a local web server with real-time updates.`,
 		if !cmd.Flags().Changed("host") {
 			host = cfg.Host
 		}
+		if !cmd.Flags().Changed("log-level") {
+			logLevel = cfg.LogLevel
+		}
+
+		logger.Init(logLevel)
 
 		return nil
 	},
@@ -43,6 +50,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is .stigmergic.toml)")
 	rootCmd.PersistentFlags().IntVarP(&port, "port", "p", 8080, "server port")
 	rootCmd.PersistentFlags().StringVar(&host, "host", "localhost", "server host")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "ERROR", "log level (DEBUG, INFO, WARN, ERROR)")
 
 	rootCmd.AddCommand(serveCmd)
 }

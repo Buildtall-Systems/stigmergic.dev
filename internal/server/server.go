@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/watcher"
 )
@@ -41,19 +41,25 @@ func NewServer(cfg *config.Config) *Server {
 		IdleTimeout: 60 * time.Second,
 	}
 
+	logger.Log.Info("scanning directory", "path", cfg.WatchPath)
 	tree, err := watcher.ScanDirectory(cfg.WatchPath)
 	if err != nil {
-		log.Printf("failed to scan directory: %v", err)
+		logger.Log.Error("failed to scan directory", "error", err)
 		tree = &models.Tree{}
+	} else {
+		logger.Log.Info("directory scanned successfully")
 	}
 
 	w, err := watcher.NewWatcher()
 	if err != nil {
-		log.Fatalf("failed to create watcher: %v", err)
+		logger.Log.Error("failed to create watcher", "error", err)
+		panic(fmt.Sprintf("failed to create watcher: %v", err))
 	}
 
+	logger.Log.Info("adding watch path", "path", cfg.WatchPath)
 	if err := w.Add(cfg.WatchPath); err != nil {
-		log.Fatalf("failed to watch directory: %v", err)
+		logger.Log.Error("failed to watch directory", "error", err)
+		panic(fmt.Sprintf("failed to watch directory: %v", err))
 	}
 
 	s := &Server{
@@ -73,23 +79,28 @@ func NewServer(cfg *config.Config) *Server {
 }
 
 func (s *Server) Start() error {
+	logger.Log.Info("starting server", "addr", s.httpServer.Addr)
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	errChan := make(chan error, 1)
 	go func() {
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Log.Error("server failed", "error", err)
 			errChan <- fmt.Errorf("server failed: %w", err)
 		} else {
 			errChan <- nil
 		}
 	}()
 
+	logger.Log.Info("server started successfully", "addr", s.httpServer.Addr)
+
 	select {
 	case err := <-errChan:
 		return err
 	case sig := <-sigChan:
-		log.Printf("Received signal: %v, shutting down gracefully...", sig)
+		logger.Log.Info("received shutdown signal", "signal", sig)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return s.Shutdown(ctx)
@@ -110,25 +121,33 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) broadcastEvents() {
+	logger.Log.Info("broadcast events goroutine started")
 	for {
 		select {
 		case event, ok := <-s.watcher.Events:
 			if !ok {
+				logger.Log.Info("watcher events channel closed, stopping broadcast")
 				return
 			}
+			logger.Log.Info("broadcasting event to clients", "path", event.Path, "type", event.Type)
 			s.clientsMux.RLock()
+			clientCount := len(s.clients)
+			logger.Log.Debug("active SSE clients", "count", clientCount)
 			for client := range s.clients {
 				select {
 				case client <- filepath.Base(event.Path):
+					logger.Log.Debug("sent event to client")
 				default:
+					logger.Log.Warn("client channel full, skipping")
 				}
 			}
 			s.clientsMux.RUnlock()
 		case err, ok := <-s.watcher.Errors:
 			if !ok {
+				logger.Log.Info("watcher errors channel closed")
 				return
 			}
-			log.Printf("watcher error: %v", err)
+			logger.Log.Error("watcher error", "error", err)
 		}
 	}
 }
@@ -136,12 +155,16 @@ func (s *Server) broadcastEvents() {
 func (s *Server) addClient(client chan string) {
 	s.clientsMux.Lock()
 	s.clients[client] = true
+	clientCount := len(s.clients)
 	s.clientsMux.Unlock()
+	logger.Log.Info("SSE client connected", "total_clients", clientCount)
 }
 
 func (s *Server) removeClient(client chan string) {
 	s.clientsMux.Lock()
 	delete(s.clients, client)
 	close(client)
+	clientCount := len(s.clients)
 	s.clientsMux.Unlock()
+	logger.Log.Info("SSE client disconnected", "remaining_clients", clientCount)
 }
