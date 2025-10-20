@@ -44,6 +44,37 @@ func themeCSS(thm *theme.Theme) string {
 	}
 	pre code {
 		color: var(--code-fg-color);
+	}
+	.tree-item-text {
+		color: var(--fg-color);
+	}
+	.tree-item-folder {
+		color: var(--cyan-color);
+	}
+	.tree-item-icon {
+		color: var(--comment-color);
+	}
+	.tree-item:hover {
+		background-color: var(--selection-color);
+	}
+	.prose {
+		color: var(--fg-color);
+		--tw-prose-body: var(--fg-color);
+		--tw-prose-headings: var(--fg-color);
+		--tw-prose-lead: var(--comment-color);
+		--tw-prose-links: var(--link-color);
+		--tw-prose-bold: var(--fg-color);
+		--tw-prose-counters: var(--comment-color);
+		--tw-prose-bullets: var(--comment-color);
+		--tw-prose-hr: var(--border-color);
+		--tw-prose-quotes: var(--cyan-color);
+		--tw-prose-quote-borders: var(--border-color);
+		--tw-prose-captions: var(--comment-color);
+		--tw-prose-code: var(--orange-color);
+		--tw-prose-pre-code: var(--fg-color);
+		--tw-prose-pre-bg: var(--code-bg-color);
+		--tw-prose-th-borders: var(--border-color);
+		--tw-prose-td-borders: var(--border-color);
 	}</style>`
 }
 
@@ -55,8 +86,8 @@ templ Layout(title string, thm *theme.Theme) {
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<meta name="description" content="Markdown file watcher and renderer"/>
 			<title>{ title } - stigmergic</title>
-			@templ.Raw(themeCSS(thm))
 			<link rel="stylesheet" href="/static/styles/output.css"/>
+			@templ.Raw(themeCSS(thm))
 			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" integrity="sha384-5TcZemv2l/9On385z///+d7MSYlvIEw9FuZTIdZ14vJLqWphw7e7ZPuOiCHJcFCP" crossorigin="anonymous"/>
 			<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" integrity="sha384-cMkvdD8LoxVzGF/RPUKAcvmm49FQ0oxwDF3BGKtDXcEc+T1b2N+teh/OJfpU0jr6" crossorigin="anonymous"></script>
 			<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" integrity="sha384-hCXGrW6PitJEwbkoStFjeJxv+fSOOQKOPbJxSfM6G5sWZjAyWhXiTIIAmQqnlLlh" crossorigin="anonymous"></script>
