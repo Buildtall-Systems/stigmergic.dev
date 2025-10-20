@@ -1,14 +1,15 @@
 package templates
 
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Home(tree *models.Tree) {
-	@components.Layout("Home") {
+templ Home(tree *models.Tree, thm *theme.Theme) {
+	@components.Layout("Home", thm) {
 		<div class="space-y-4">
-			<h2 class="text-xl font-semibold text-gray-900">Markdown Files</h2>
+			<h2 class="text-xl font-semibold">Markdown Files</h2>
 			if tree == nil || tree.Root == nil {
-				<p class="text-gray-500">No markdown files found.</p>
+				<p style="color: var(--comment-color);">No markdown files found.</p>
 			} else {
 				@renderTree(tree.Root)
 			}
@@ -44,7 +45,7 @@ templ renderTree(node *models.Node) {
 						<svg class="tree-item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
 						</svg>
-						<span class="tree-item-text group-hover:text-blue-600">{ child.Name }</span>
+						<span class="tree-item-text">{ child.Name }</span>
 					</a>
 				}
 			</li>

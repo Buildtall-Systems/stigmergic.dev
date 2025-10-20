@@ -33,3 +33,4 @@ empty fields should be left empty... no "NA" or "*Not Found*"... nothing, just a
 | nixpkgs               | /nixos/nixpkgs                 |                                    |
 | go embed              |                                | ai/context/embed                   |
 | nostr                 | /nostr-protocol/nips           |                                    |
+| iceberg.vim           |                                | ai/context/iceberg.vim             |

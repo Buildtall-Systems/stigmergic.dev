@@ -6,13 +6,42 @@ import (
 	"testing"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 )
+
+func testTheme() *theme.Theme {
+	return &theme.Theme{
+		Name: "test",
+		Colors: theme.Colors{
+			Background:       "#161821",
+			Foreground:       "#c6c8d1",
+			BackgroundAlt:    "#1e2132",
+			Comment:          "#6b7089",
+			CurrentLine:      "#1e2132",
+			Selection:        "#272c42",
+			LineNumber:       "#444b71",
+			LineNumberActive: "#cdd1e6",
+			Red:              "#e27878",
+			Orange:           "#e2a478",
+			Yellow:           "#e4aa80",
+			Green:            "#b4be82",
+			Cyan:             "#89b8c2",
+			Blue:             "#84a0c6",
+			Purple:           "#a093c7",
+			Link:             "#89b8c2",
+			LinkHover:        "#84a0c6",
+			CodeBg:           "#1e2132",
+			CodeFg:           "#c6c8d1",
+			BorderColor:      "#0f1117",
+		},
+	}
+}
 
 func TestHomeRendersWithoutTree(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil).Render(context.Background(), &sb)
+	err := Home(nil, testTheme()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -31,7 +60,7 @@ func TestHomeRendersWithEmptyTree(t *testing.T) {
 
 	tree := &models.Tree{}
 	var sb strings.Builder
-	err := Home(tree).Render(context.Background(), &sb)
+	err := Home(tree, testTheme()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -61,7 +90,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree).Render(context.Background(), &sb)
+	err := Home(tree, testTheme()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -101,7 +130,7 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree).Render(context.Background(), &sb)
+	err := Home(tree, testTheme()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}

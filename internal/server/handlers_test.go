@@ -30,8 +30,9 @@ func TestStaticFileServing(t *testing.T) {
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:  port,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -69,8 +70,9 @@ func TestStaticFileMissing(t *testing.T) {
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:  port,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -103,8 +105,9 @@ func TestStaticStylesDirectory(t *testing.T) {
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:  port,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)

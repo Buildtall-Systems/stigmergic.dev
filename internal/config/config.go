@@ -15,6 +15,7 @@ type Config struct {
 	LogLevel         string
 	RespectGitignore bool
 	IgnorePatterns   []string
+	Theme            string
 }
 
 func Load(cfgFile string) (*Config, error) {
@@ -24,6 +25,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("host", "localhost")
 	v.SetDefault("loglevel", "ERROR")
 	v.SetDefault("respectgitignore", true)
+	v.SetDefault("theme", "iceberg-dark")
 	v.SetDefault("ignorepatterns", []string{
 		".git",
 		"node_modules",

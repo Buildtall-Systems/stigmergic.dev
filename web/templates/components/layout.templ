@@ -1,6 +1,53 @@
 package components
 
-templ Layout(title string) {
+import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
+
+func themeCSS(thm *theme.Theme) string {
+	return `<style type="text/css">:root {
+		--bg-color: ` + thm.Colors.Background + `;
+		--fg-color: ` + thm.Colors.Foreground + `;
+		--bg-alt-color: ` + thm.Colors.BackgroundAlt + `;
+		--comment-color: ` + thm.Colors.Comment + `;
+		--current-line-color: ` + thm.Colors.CurrentLine + `;
+		--selection-color: ` + thm.Colors.Selection + `;
+		--line-number-color: ` + thm.Colors.LineNumber + `;
+		--line-number-active-color: ` + thm.Colors.LineNumberActive + `;
+		--red-color: ` + thm.Colors.Red + `;
+		--orange-color: ` + thm.Colors.Orange + `;
+		--yellow-color: ` + thm.Colors.Yellow + `;
+		--green-color: ` + thm.Colors.Green + `;
+		--cyan-color: ` + thm.Colors.Cyan + `;
+		--blue-color: ` + thm.Colors.Blue + `;
+		--purple-color: ` + thm.Colors.Purple + `;
+		--link-color: ` + thm.Colors.Link + `;
+		--link-hover-color: ` + thm.Colors.LinkHover + `;
+		--code-bg-color: ` + thm.Colors.CodeBg + `;
+		--code-fg-color: ` + thm.Colors.CodeFg + `;
+		--border-color: ` + thm.Colors.BorderColor + `;
+	}
+	body {
+		background-color: var(--bg-color);
+		color: var(--fg-color);
+	}
+	a {
+		color: var(--link-color);
+	}
+	a:hover {
+		color: var(--link-hover-color);
+	}
+	code {
+		background-color: var(--code-bg-color);
+		color: var(--code-fg-color);
+	}
+	pre {
+		background-color: var(--code-bg-color);
+	}
+	pre code {
+		color: var(--code-fg-color);
+	}</style>`
+}
+
+templ Layout(title string, thm *theme.Theme) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -8,6 +55,7 @@ templ Layout(title string) {
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<meta name="description" content="Markdown file watcher and renderer"/>
 			<title>{ title } - stigmergic</title>
+			@templ.Raw(themeCSS(thm))
 			<link rel="stylesheet" href="/static/styles/output.css"/>
 			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" integrity="sha384-5TcZemv2l/9On385z///+d7MSYlvIEw9FuZTIdZ14vJLqWphw7e7ZPuOiCHJcFCP" crossorigin="anonymous"/>
 			<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" integrity="sha384-cMkvdD8LoxVzGF/RPUKAcvmm49FQ0oxwDF3BGKtDXcEc+T1b2N+teh/OJfpU0jr6" crossorigin="anonymous"></script>
@@ -33,10 +81,10 @@ templ Layout(title string) {
 				});
 			</script>
 		</head>
-		<body class="min-h-screen bg-gray-50" hx-ext="sse" sse-connect="/events">
-			<header class="bg-white shadow-sm border-b border-gray-200">
+		<body class="min-h-screen" hx-ext="sse" sse-connect="/events" style="background-color: var(--bg-color); color: var(--fg-color);">
+			<header style="background-color: var(--bg-alt-color); border-bottom: 1px solid var(--border-color);">
 				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-					<h1 class="text-2xl font-bold text-gray-900">stigmergic</h1>
+					<h1 class="text-2xl font-bold" style="color: var(--fg-color);">stigmergic</h1>
 				</div>
 			</header>
 			<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

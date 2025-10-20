@@ -15,8 +15,9 @@ func TestNewServer(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		Port: 8080,
-		Host: "localhost",
+		Port:  8080,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -38,8 +39,9 @@ func TestServerStartAndShutdown(t *testing.T) {
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:  port,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -80,8 +82,9 @@ func TestServerGracefulShutdown(t *testing.T) {
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:  port,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -105,8 +108,9 @@ func TestServerShutdownTimeout(t *testing.T) {
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:  port,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -134,6 +138,7 @@ func TestServerRespondsToRequests(t *testing.T) {
 		Port:      port,
 		Host:      "localhost",
 		WatchPath: tmpDir,
+		Theme:     "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -176,8 +181,9 @@ func TestServerAddress(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		Port: 9000,
-		Host: "0.0.0.0",
+		Port:  9000,
+		Host:  "0.0.0.0",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -192,8 +198,9 @@ func TestServerTimeouts(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		Port: 8080,
-		Host: "localhost",
+		Port:  8080,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)

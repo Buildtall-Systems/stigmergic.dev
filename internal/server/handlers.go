@@ -34,7 +34,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	templates.Home(s.tree).Render(r.Context(), w)
+	templates.Home(s.tree, s.theme).Render(r.Context(), w)
 }
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +81,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		templates.MarkdownContent(breadcrumbs, string(html)).Render(r.Context(), w)
 	} else {
 		logger.Log.Debug("rendering full page")
-		templates.Markdown(title, breadcrumbs, string(html)).Render(r.Context(), w)
+		templates.Markdown(title, breadcrumbs, string(html), s.theme).Render(r.Context(), w)
 	}
 }
 

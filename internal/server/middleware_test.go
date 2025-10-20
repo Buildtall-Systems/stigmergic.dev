@@ -16,8 +16,9 @@ func TestSecurityHeaders(t *testing.T) {
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:  port,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)
@@ -58,8 +59,9 @@ func TestRecoveryMiddleware(t *testing.T) {
 
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
-		Port: port,
-		Host: "localhost",
+		Port:  port,
+		Host:  "localhost",
+		Theme: "iceberg-dark",
 	}
 
 	srv := NewServer(cfg)

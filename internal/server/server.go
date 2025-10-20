@@ -14,6 +14,7 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/watcher"
 )
 
@@ -23,6 +24,7 @@ type Server struct {
 	mux        *http.ServeMux
 	tree       *models.Tree
 	watcher    *watcher.Watcher
+	theme      *theme.Theme
 	clients    map[chan string]bool
 	clientsMux sync.RWMutex
 }
@@ -62,12 +64,21 @@ func NewServer(cfg *config.Config) *Server {
 		panic(fmt.Sprintf("failed to watch directory: %v", err))
 	}
 
+	logger.Log.Info("loading theme", "theme", cfg.Theme)
+	thm, err := theme.Load(cfg.Theme)
+	if err != nil {
+		logger.Log.Error("failed to load theme", "error", err, "theme", cfg.Theme)
+		panic(fmt.Sprintf("failed to load theme: %v", err))
+	}
+	logger.Log.Info("theme loaded successfully", "theme", cfg.Theme)
+
 	s := &Server{
 		httpServer: srv,
 		config:     cfg,
 		mux:        mux,
 		tree:       tree,
 		watcher:    w,
+		theme:      thm,
 		clients:    make(map[chan string]bool),
 	}
 
