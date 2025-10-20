@@ -1,14 +1,17 @@
 package watcher
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+	gitignore "github.com/sabhiram/go-gitignore"
 )
 
-func ScanDirectory(rootPath string) (*models.Tree, error) {
+func ScanDirectory(rootPath string, respectGitignore bool, ignorePatterns []string) (*models.Tree, error) {
 	absPath, err := filepath.Abs(rootPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve path: %w", err)
@@ -23,18 +26,44 @@ func ScanDirectory(rootPath string) (*models.Tree, error) {
 		return nil, fmt.Errorf("path is not a directory: %s", absPath)
 	}
 
+	var allPatterns []string
+	allPatterns = append(allPatterns, ignorePatterns...)
+
+	if respectGitignore {
+		gitignorePath := filepath.Join(absPath, ".gitignore")
+		if file, err := os.Open(gitignorePath); err == nil {
+			defer file.Close()
+			scanner := bufio.NewScanner(file)
+			lineCount := 0
+			for scanner.Scan() {
+				line := scanner.Text()
+				if line != "" && line[0] != '#' {
+					allPatterns = append(allPatterns, line)
+					lineCount++
+				}
+			}
+			logger.Log.Info("loaded .gitignore", "path", gitignorePath, "patterns", lineCount)
+		}
+	}
+
+	var gi *gitignore.GitIgnore
+	if len(allPatterns) > 0 {
+		gi = gitignore.CompileIgnoreLines(allPatterns...)
+		logger.Log.Info("compiled ignore patterns", "total_count", len(allPatterns))
+	}
+
 	tree := models.NewTree(absPath)
 	tree.Root.Path = "."
 	tree.Root.ModTime = info.ModTime()
 
-	if err := scanNode(tree.Root, absPath); err != nil {
+	if err := scanNode(tree.Root, absPath, gi); err != nil {
 		return nil, err
 	}
 
 	return tree, nil
 }
 
-func scanNode(node *models.Node, rootPath string) error {
+func scanNode(node *models.Node, rootPath string, gi *gitignore.GitIgnore) error {
 	absNodePath := filepath.Join(rootPath, node.Path)
 	entries, err := os.ReadDir(absNodePath)
 	if err != nil {
@@ -47,12 +76,17 @@ func scanNode(node *models.Node, rootPath string) error {
 			continue
 		}
 
+		childRelPath := filepath.Join(node.Path, entry.Name())
+
+		if gi != nil && gi.MatchesPath(childRelPath) {
+			logger.Log.Debug("ignoring path from .gitignore", "path", childRelPath)
+			continue
+		}
+
 		nodeType := models.NodeTypeFile
 		if entry.IsDir() {
 			nodeType = models.NodeTypeDirectory
 		}
-
-		childRelPath := filepath.Join(node.Path, entry.Name())
 
 		child := &models.Node{
 			Name:     entry.Name(),
@@ -65,7 +99,7 @@ func scanNode(node *models.Node, rootPath string) error {
 		node.AddChild(child)
 
 		if entry.IsDir() {
-			if err := scanNode(child, rootPath); err != nil {
+			if err := scanNode(child, rootPath, gi); err != nil {
 				return err
 			}
 		}

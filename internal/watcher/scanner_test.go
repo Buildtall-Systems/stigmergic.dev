@@ -16,7 +16,7 @@ func TestScanDirectoryBasic(t *testing.T) {
 	testutil.CreateTestFile(t, dir, "file1.md", "content1")
 	testutil.CreateTestFile(t, dir, "file2.txt", "content2")
 
-	tree, err := ScanDirectory(dir)
+	tree, err := ScanDirectory(dir, false, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestScanDirectoryNested(t *testing.T) {
 	testutil.CreateTestFile(t, dir, "subdir/nested.md", "nested content")
 	testutil.CreateTestFile(t, dir, "subdir/deep/file.md", "deep content")
 
-	tree, err := ScanDirectory(dir)
+	tree, err := ScanDirectory(dir, false, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestScanDirectoryEmpty(t *testing.T) {
 
 	dir := testutil.CreateTempDir(t)
 
-	tree, err := ScanDirectory(dir)
+	tree, err := ScanDirectory(dir, false, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestScanDirectoryNonExistent(t *testing.T) {
 	dir := testutil.CreateTempDir(t)
 	nonExistent := filepath.Join(dir, "nonexistent")
 
-	_, err := ScanDirectory(nonExistent)
+	_, err := ScanDirectory(nonExistent, false, nil)
 	if err == nil {
 		t.Fatal("expected error for nonexistent directory, got nil")
 	}
@@ -128,7 +128,7 @@ func TestScanDirectoryFile(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	_, err := ScanDirectory(filePath)
+	_, err := ScanDirectory(filePath, false, nil)
 	if err == nil {
 		t.Fatal("expected error when scanning file instead of directory, got nil")
 	}
@@ -140,7 +140,7 @@ func TestScanDirectoryModTime(t *testing.T) {
 	dir := testutil.CreateTempDir(t)
 	testutil.CreateTestFile(t, dir, "file.md", "content")
 
-	tree, err := ScanDirectory(dir)
+	tree, err := ScanDirectory(dir, false, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestScanDirectoryNodeTypes(t *testing.T) {
 	testutil.CreateTestFile(t, dir, "file.md", "content")
 	testutil.CreateTestFile(t, dir, "subdir/nested.md", "nested")
 
-	tree, err := ScanDirectory(dir)
+	tree, err := ScanDirectory(dir, false, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestScanDirectoryFind(t *testing.T) {
 	testutil.CreateTestFile(t, dir, "root.md", "root")
 	testutil.CreateTestFile(t, dir, "subdir/nested.md", "nested")
 
-	tree, err := ScanDirectory(dir)
+	tree, err := ScanDirectory(dir, false, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestScanDirectoryRelativePath(t *testing.T) {
 	dir := testutil.CreateTempDir(t)
 	testutil.CreateTestFile(t, dir, "file.md", "content")
 
-	tree, err := ScanDirectory(dir)
+	tree, err := ScanDirectory(dir, false, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}

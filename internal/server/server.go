@@ -41,8 +41,8 @@ func NewServer(cfg *config.Config) *Server {
 		IdleTimeout: 60 * time.Second,
 	}
 
-	logger.Log.Info("scanning directory", "path", cfg.WatchPath)
-	tree, err := watcher.ScanDirectory(cfg.WatchPath)
+	logger.Log.Info("scanning directory", "path", cfg.WatchPath, "respect_gitignore", cfg.RespectGitignore, "ignore_patterns", len(cfg.IgnorePatterns))
+	tree, err := watcher.ScanDirectory(cfg.WatchPath, cfg.RespectGitignore, cfg.IgnorePatterns)
 	if err != nil {
 		logger.Log.Error("failed to scan directory", "error", err)
 		tree = &models.Tree{}
@@ -57,7 +57,7 @@ func NewServer(cfg *config.Config) *Server {
 	}
 
 	logger.Log.Info("adding watch path", "path", cfg.WatchPath)
-	if err := w.Add(cfg.WatchPath); err != nil {
+	if err := w.Add(cfg.WatchPath, cfg.RespectGitignore, cfg.IgnorePatterns); err != nil {
 		logger.Log.Error("failed to watch directory", "error", err)
 		panic(fmt.Sprintf("failed to watch directory: %v", err))
 	}

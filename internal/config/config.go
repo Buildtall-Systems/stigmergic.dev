@@ -2,15 +2,19 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Port      int
-	Host      string
-	WatchPath string
-	LogLevel  string
+	Port             int
+	Host             string
+	WatchPath        string
+	LogLevel         string
+	RespectGitignore bool
+	IgnorePatterns   []string
 }
 
 func Load(cfgFile string) (*Config, error) {
@@ -19,6 +23,23 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("port", 8080)
 	v.SetDefault("host", "localhost")
 	v.SetDefault("loglevel", "ERROR")
+	v.SetDefault("respectgitignore", true)
+	v.SetDefault("ignorepatterns", []string{
+		".git",
+		"node_modules",
+		".DS_Store",
+		"*.swp",
+		"*.swo",
+		"*~",
+		".vscode",
+		".idea",
+		"vendor",
+		"dist",
+		"build",
+		"target",
+		"__pycache__",
+		"*.pyc",
+	})
 
 	v.SetEnvPrefix("STIGMERGIC")
 	v.AutomaticEnv()
@@ -32,7 +53,11 @@ func Load(cfgFile string) (*Config, error) {
 		v.SetConfigName(".stigmergic")
 		v.SetConfigType("toml")
 		v.AddConfigPath(".")
-		v.AddConfigPath("$HOME/.config/stigmergic")
+
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			v.AddConfigPath(filepath.Join(homeDir, ".config", "stigmergic"))
+		}
 
 		if err := v.ReadInConfig(); err != nil {
 			if _, ok := err.(viper.ConfigFileNotFoundError); ok {

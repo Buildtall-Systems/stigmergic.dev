@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/fsnotify/fsnotify"
+	gitignore "github.com/sabhiram/go-gitignore"
 )
 
 type EventType int
@@ -35,6 +37,8 @@ type Watcher struct {
 	debounceMutex sync.Mutex
 	watchedDirs   map[string]bool
 	watchMutex    sync.RWMutex
+	gitignore     *gitignore.GitIgnore
+	rootPath      string
 }
 
 const debounceWindow = 200 * time.Millisecond
@@ -61,7 +65,7 @@ func NewWatcher() (*Watcher, error) {
 	return w, nil
 }
 
-func (w *Watcher) Add(path string) error {
+func (w *Watcher) Add(path string, respectGitignore bool, ignorePatterns []string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
@@ -76,10 +80,45 @@ func (w *Watcher) Add(path string) error {
 		return fmt.Errorf("path is not a directory: %s", absPath)
 	}
 
+	if w.rootPath == "" {
+		w.rootPath = absPath
+
+		var allPatterns []string
+		allPatterns = append(allPatterns, ignorePatterns...)
+
+		if respectGitignore {
+			gitignorePath := filepath.Join(absPath, ".gitignore")
+			if file, err := os.Open(gitignorePath); err == nil {
+				defer file.Close()
+				scanner := bufio.NewScanner(file)
+				lineCount := 0
+				for scanner.Scan() {
+					line := scanner.Text()
+					if line != "" && line[0] != '#' {
+						allPatterns = append(allPatterns, line)
+						lineCount++
+					}
+				}
+				logger.Log.Info("watcher loaded .gitignore", "path", gitignorePath, "patterns", lineCount)
+			}
+		}
+
+		if len(allPatterns) > 0 {
+			w.gitignore = gitignore.CompileIgnoreLines(allPatterns...)
+			logger.Log.Info("watcher compiled ignore patterns", "total_count", len(allPatterns))
+		}
+	}
+
 	return w.addRecursive(absPath)
 }
 
 func (w *Watcher) addRecursive(path string) error {
+	relPath, _ := filepath.Rel(w.rootPath, path)
+	if w.gitignore != nil && w.gitignore.MatchesPath(relPath) {
+		logger.Log.Debug("skipping ignored path", "path", relPath)
+		return nil
+	}
+
 	w.watchMutex.Lock()
 	if w.watchedDirs[path] {
 		w.watchMutex.Unlock()

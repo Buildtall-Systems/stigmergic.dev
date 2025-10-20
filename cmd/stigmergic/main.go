@@ -12,10 +12,12 @@ import (
 const version = "0.1.0"
 
 var (
-	cfgFile  string
-	port     int
-	host     string
-	logLevel string
+	cfgFile          string
+	port             int
+	host             string
+	logLevel         string
+	respectGitignore bool
+	loadedConfig     *config.Config
 )
 
 var rootCmd = &cobra.Command{
@@ -30,17 +32,22 @@ beautifully through a local web server with real-time updates.`,
 			return err
 		}
 
-		if !cmd.Flags().Changed("port") {
-			port = cfg.Port
+		loadedConfig = cfg
+
+		if cmd.Flags().Changed("port") {
+			loadedConfig.Port = port
 		}
-		if !cmd.Flags().Changed("host") {
-			host = cfg.Host
+		if cmd.Flags().Changed("host") {
+			loadedConfig.Host = host
 		}
-		if !cmd.Flags().Changed("log-level") {
-			logLevel = cfg.LogLevel
+		if cmd.Flags().Changed("log-level") {
+			loadedConfig.LogLevel = logLevel
+		}
+		if cmd.Flags().Changed("respect-gitignore") {
+			loadedConfig.RespectGitignore = respectGitignore
 		}
 
-		logger.Init(logLevel)
+		logger.Init(loadedConfig.LogLevel)
 
 		return nil
 	},
@@ -51,6 +58,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVarP(&port, "port", "p", 8080, "server port")
 	rootCmd.PersistentFlags().StringVar(&host, "host", "localhost", "server host")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "ERROR", "log level (DEBUG, INFO, WARN, ERROR)")
+	rootCmd.PersistentFlags().BoolVar(&respectGitignore, "respect-gitignore", true, "respect .gitignore patterns")
 
 	rootCmd.AddCommand(serveCmd)
 }

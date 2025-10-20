@@ -42,7 +42,7 @@ func TestWatcherAdd(t *testing.T) {
 
 	dir := testutil.CreateTempDir(t)
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
 }
@@ -59,7 +59,7 @@ func TestWatcherAddNonExistent(t *testing.T) {
 	dir := testutil.CreateTempDir(t)
 	nonExistent := filepath.Join(dir, "nonexistent")
 
-	if err := w.Add(nonExistent); err == nil {
+	if err := w.Add(nonExistent, false, nil); err == nil {
 		t.Fatal("expected error when adding nonexistent path, got nil")
 	}
 }
@@ -79,7 +79,7 @@ func TestWatcherAddFile(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	if err := w.Add(filePath); err == nil {
+	if err := w.Add(filePath, false, nil); err == nil {
 		t.Fatal("expected error when adding file instead of directory, got nil")
 	}
 }
@@ -95,7 +95,7 @@ func TestWatcherRemove(t *testing.T) {
 
 	dir := testutil.CreateTempDir(t)
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestWatcherCreateEvent(t *testing.T) {
 
 	dir := testutil.CreateTempDir(t)
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestWatcherWriteEvent(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
 
@@ -224,7 +224,7 @@ func TestWatcherRemoveEvent(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
 
@@ -268,7 +268,7 @@ func TestWatcherDebouncing(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
 
@@ -317,7 +317,7 @@ func TestWatcherRecursiveWatch(t *testing.T) {
 		t.Fatalf("failed to create subdir: %v", err)
 	}
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
 
@@ -365,7 +365,7 @@ func TestWatcherNewDirectoryWatch(t *testing.T) {
 
 	dir := testutil.CreateTempDir(t)
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
 
@@ -457,7 +457,7 @@ func TestWatcherRelativePath(t *testing.T) {
 
 	dir := testutil.CreateTempDir(t)
 
-	if err := w.Add(dir); err != nil {
+	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add with absolute path failed: %v", err)
 	}
 }
