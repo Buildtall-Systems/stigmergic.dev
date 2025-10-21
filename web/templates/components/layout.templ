@@ -38,12 +38,17 @@ func themeCSS(thm *theme.Theme) string {
 	code {
 		background-color: var(--code-bg-color);
 		color: var(--code-fg-color);
+		padding: 0.125rem 0.25rem;
+		border-radius: 0.25rem;
+		font-size: 0.875em;
 	}
 	pre {
 		background-color: var(--code-bg-color);
 	}
 	pre code {
 		color: var(--code-fg-color);
+		background-color: transparent;
+		padding: 0;
 	}
 	.tree-item-text {
 		color: var(--fg-color);
@@ -70,11 +75,15 @@ func themeCSS(thm *theme.Theme) string {
 		--tw-prose-quotes: var(--cyan-color);
 		--tw-prose-quote-borders: var(--border-color);
 		--tw-prose-captions: var(--comment-color);
-		--tw-prose-code: var(--orange-color);
+		--tw-prose-code: var(--code-fg-color);
 		--tw-prose-pre-code: var(--fg-color);
 		--tw-prose-pre-bg: var(--code-bg-color);
 		--tw-prose-th-borders: var(--border-color);
 		--tw-prose-td-borders: var(--border-color);
+	}
+	.prose code::before,
+	.prose code::after {
+		content: none;
 	}</style>`
 }
 

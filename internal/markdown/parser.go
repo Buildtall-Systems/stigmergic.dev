@@ -18,7 +18,6 @@ func Parse(source []byte) ([]byte, error) {
 			highlighting.NewHighlighting(
 				highlighting.WithStyle("monokai"),
 				highlighting.WithFormatOptions(
-					html.WithClasses(true),
 					html.WithLineNumbers(true),
 				),
 			),

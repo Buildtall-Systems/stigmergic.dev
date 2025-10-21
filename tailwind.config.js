@@ -11,15 +11,15 @@ module.exports = {
             maxWidth: 'none',
             color: 'inherit',
             a: {
-              color: '#3b82f6',
+              color: 'var(--link-color)',
               textDecoration: 'underline',
               '&:hover': {
-                color: '#2563eb',
+                color: 'var(--link-hover-color)',
               },
             },
             code: {
-              color: '#e11d48',
-              backgroundColor: '#f1f5f9',
+              color: 'var(--code-fg-color)',
+              backgroundColor: 'var(--code-bg-color)',
               padding: '0.25rem 0.375rem',
               borderRadius: '0.25rem',
               fontWeight: '600',
@@ -31,8 +31,8 @@ module.exports = {
               content: '""',
             },
             pre: {
-              backgroundColor: '#1e293b',
-              color: '#e2e8f0',
+              backgroundColor: 'var(--code-bg-color)',
+              color: 'var(--fg-color)',
             },
             'pre code': {
               backgroundColor: 'transparent',

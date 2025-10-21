@@ -117,7 +117,7 @@ Link to [example](https://example.com).
 		"<a href=\"https://example.com\">example</a>",
 		"<ul>",
 		"<li>Item 1</li>",
-		"<pre class=\"chroma\">",
+		"<pre style=",
 	}
 
 	for _, expected := range expectations {
@@ -227,26 +227,29 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			name: "go code block",
 			input: "```go\nfunc main() {\n}\n```",
 			expected: []string{
-				"<pre class=\"chroma\">",
-				"<span class=\"kd\">func</span>",
-				"<span class=\"nf\">main</span>",
+				"<pre style=",
+				"<span style=",
+				">func</span>",
+				">main</span>",
 			},
 		},
 		{
 			name: "python code block",
 			input: "```python\ndef hello():\n    pass\n```",
 			expected: []string{
-				"<pre class=\"chroma\">",
-				"<span class=\"k\">def</span>",
-				"<span class=\"nf\">hello</span>",
+				"<pre style=",
+				"<span style=",
+				">def</span>",
+				">hello</span>",
 			},
 		},
 		{
 			name: "javascript code block",
 			input: "```javascript\nconst x = 42;\n```",
 			expected: []string{
-				"<pre class=\"chroma\">",
-				"<span class=\"kr\">const</span>",
+				"<pre style=",
+				"<span style=",
+				">const</span>",
 			},
 		},
 	}
@@ -280,8 +283,8 @@ func TestParseLineNumbers(t *testing.T) {
 	}
 
 	output := string(result)
-	if !strings.Contains(output, "chroma") {
-		t.Error("Expected chroma class in output")
+	if !strings.Contains(output, "white-space:pre") {
+		t.Error("Expected line number styling in output")
 	}
 }
 

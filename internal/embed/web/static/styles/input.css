@@ -34,7 +34,7 @@
   }
 
   .markdown-content {
-    @apply prose prose-slate max-w-none;
+    @apply prose max-w-none;
   }
 
   .btn {
