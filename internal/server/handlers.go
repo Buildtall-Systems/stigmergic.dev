@@ -9,6 +9,7 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/embed"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
 )
 
@@ -56,6 +57,35 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		logger.Log.Warn("path not found", "path", cleanPath, "error", err)
+		http.NotFound(w, r)
+		return
+	}
+
+	breadcrumbs := buildBreadcrumbs(filePath)
+	title := filepath.Base(filePath)
+	isHTMX := r.Header.Get("HX-Request") == "true"
+
+	if info.IsDir() {
+		node := s.tree.Find(cleanPath)
+		if node == nil {
+			logger.Log.Warn("directory node not found in tree", "path", cleanPath)
+			http.NotFound(w, r)
+			return
+		}
+
+		if isHTMX {
+			logger.Log.Debug("rendering HTMX directory partial")
+			templates.DirectoryContent(breadcrumbs, node).Render(r.Context(), w)
+		} else {
+			logger.Log.Debug("rendering full directory page")
+			templates.Directory(title, breadcrumbs, node, s.theme).Render(r.Context(), w)
+		}
+		return
+	}
+
 	content, err := os.ReadFile(cleanPath)
 	if err != nil {
 		logger.Log.Warn("file not found", "path", cleanPath, "error", err)
@@ -72,10 +102,6 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	breadcrumbs := buildBreadcrumbs(filePath)
-	title := filepath.Base(filePath)
-
-	isHTMX := r.Header.Get("HX-Request") == "true"
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
 		templates.MarkdownContent(breadcrumbs, string(html)).Render(r.Context(), w)
@@ -85,12 +111,21 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func buildBreadcrumbs(path string) []string {
+func buildBreadcrumbs(path string) []models.Breadcrumb {
 	parts := strings.Split(filepath.Clean(path), string(filepath.Separator))
-	var crumbs []string
+	var crumbs []models.Breadcrumb
+	var currentPath string
 	for _, part := range parts {
 		if part != "" && part != "." {
-			crumbs = append(crumbs, part)
+			if currentPath == "" {
+				currentPath = part
+			} else {
+				currentPath = filepath.Join(currentPath, part)
+			}
+			crumbs = append(crumbs, models.Breadcrumb{
+				Name: part,
+				Path: "/file/" + currentPath,
+			})
 		}
 	}
 	return crumbs

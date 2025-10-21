@@ -1,5 +1,5 @@
 tmp/
-stigmergic
+/stigmergic
 *_templ.go
 *.log
 internal/embed/web/static/styles/output.css

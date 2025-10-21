@@ -98,6 +98,23 @@ templ Layout(title string, thm *theme.Theme) {
 			<script src="/static/js/htmx.min.js"></script>
 			<script src="/static/js/sse.js"></script>
 			<script>
+				function toggleDirectory(element) {
+					const isExpanded = element.getAttribute('data-expanded') === 'true';
+					const parent = element.parentElement;
+					const childrenDiv = parent.querySelector('.directory-children');
+					const chevron = element.querySelector('.chevron-btn svg');
+
+					if (isExpanded) {
+						childrenDiv.style.display = 'none';
+						chevron.classList.remove('rotate-90');
+						element.setAttribute('data-expanded', 'false');
+					} else {
+						childrenDiv.style.display = 'block';
+						chevron.classList.add('rotate-90');
+						element.setAttribute('data-expanded', 'true');
+					}
+				}
+
 				document.addEventListener("DOMContentLoaded", function() {
 					renderMathInElement(document.body, {
 						delimiters: [
@@ -115,7 +132,9 @@ templ Layout(title string, thm *theme.Theme) {
 		<body class="min-h-screen" hx-ext="sse" sse-connect="/events" style="background-color: var(--bg-color); color: var(--fg-color);">
 			<header style="background-color: var(--bg-alt-color); border-bottom: 1px solid var(--border-color);">
 				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-					<h1 class="text-2xl font-bold" style="color: var(--fg-color);">stigmergic</h1>
+					<h1 class="text-2xl font-bold">
+						<a href="/" style="color: var(--fg-color); text-decoration: none;">stigmergic</a>
+					</h1>
 				</div>
 			</header>
 			<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

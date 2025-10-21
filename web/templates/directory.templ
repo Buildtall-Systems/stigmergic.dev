@@ -1,16 +1,16 @@
 package templates
 
+import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
-import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, thm *theme.Theme) {
+templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, thm *theme.Theme) {
 	@components.Layout(title, thm) {
-		@MarkdownContent(breadcrumbs, content)
+		@DirectoryContent(breadcrumbs, node)
 	}
 }
 
-templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string) {
+templ DirectoryContent(breadcrumbs []models.Breadcrumb, node *models.Node) {
 	<div class="space-y-6">
 		if len(breadcrumbs) > 0 {
 			<nav class="breadcrumb" aria-label="Breadcrumb">
@@ -35,8 +35,14 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string) {
 				</ol>
 			</nav>
 		}
-		<article class="prose prose-headings:font-bold prose-a:no-underline hover:prose-a:underline max-w-none">
-			@templ.Raw(content)
-		</article>
+		<div class="space-y-4">
+			<h2 class="text-xl font-semibold">{ node.Name }</h2>
+			if node != nil && len(node.Children) > 0 {
+				@components.Tree(node)
+			} else {
+				<p style="color: var(--comment-color);">Empty directory</p>
+			}
+		</div>
 	</div>
 }
+

@@ -86,6 +86,8 @@ func scanNode(node *models.Node, rootPath string, gi *gitignore.GitIgnore) error
 		nodeType := models.NodeTypeFile
 		if entry.IsDir() {
 			nodeType = models.NodeTypeDirectory
+		} else if filepath.Ext(entry.Name()) != ".md" {
+			continue
 		}
 
 		child := &models.Node{

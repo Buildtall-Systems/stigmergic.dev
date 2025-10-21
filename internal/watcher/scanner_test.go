@@ -29,8 +29,12 @@ func TestScanDirectoryBasic(t *testing.T) {
 		t.Fatal("expected root node, got nil")
 	}
 
-	if len(tree.Root.Children) != 2 {
-		t.Fatalf("expected 2 children, got %d", len(tree.Root.Children))
+	if len(tree.Root.Children) != 1 {
+		t.Fatalf("expected 1 child (only .md files), got %d", len(tree.Root.Children))
+	}
+
+	if tree.Root.Children[0].Name != "file1.md" {
+		t.Errorf("expected child to be file1.md, got %s", tree.Root.Children[0].Name)
 	}
 }
 

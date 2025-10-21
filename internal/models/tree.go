@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+type Breadcrumb struct {
+	Name string
+	Path string
+}
+
 type NodeType int
 
 const (
@@ -44,6 +49,20 @@ func (n *Node) IsDir() bool {
 
 func (n *Node) IsFile() bool {
 	return n.Type == NodeTypeFile
+}
+
+func (n *Node) ContainsMarkdown() bool {
+	if n.IsFile() {
+		return filepath.Ext(n.Name) == ".md"
+	}
+
+	for _, child := range n.Children {
+		if child.ContainsMarkdown() {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (n *Node) AddChild(child *Node) {
