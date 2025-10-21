@@ -41,7 +41,7 @@ func TestHomeRendersWithoutTree(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, testTheme()).Render(context.Background(), &sb)
+	err := Home(nil, "/test/path", testTheme()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestHomeRendersWithEmptyTree(t *testing.T) {
 
 	tree := &models.Tree{}
 	var sb strings.Builder
-	err := Home(tree, testTheme()).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, testTheme()).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -99,8 +99,8 @@ func TestHomeRendersWithTree(t *testing.T) {
 	if !strings.Contains(html, "file.md") {
 		t.Error("expected filename in output")
 	}
-	if !strings.Contains(html, "Markdown Files") {
-		t.Error("expected heading in output")
+	if !strings.Contains(html, "/test/path") {
+		t.Error("expected rootPath in output")
 	}
 }
 
@@ -130,7 +130,7 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, testTheme()).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}

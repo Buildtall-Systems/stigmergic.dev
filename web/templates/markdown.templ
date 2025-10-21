@@ -4,20 +4,20 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, thm *theme.Theme) {
+templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rootPath string, thm *theme.Theme) {
 	@components.Layout(title, thm) {
-		@MarkdownContent(breadcrumbs, content)
+		@MarkdownContent(breadcrumbs, content, rootPath)
 	}
 }
 
-templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string) {
+templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rootPath string) {
 	<div class="space-y-6">
 		if len(breadcrumbs) > 0 {
 			<nav class="breadcrumb" aria-label="Breadcrumb">
 				<ol class="flex items-center space-x-2">
 					<li class="inline-flex items-center">
 						<a href="/" class="font-medium transition-colors">
-							Home
+							{ rootPath }
 						</a>
 					</li>
 					for i, crumb := range breadcrumbs {

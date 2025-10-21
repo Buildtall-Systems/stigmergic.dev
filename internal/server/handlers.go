@@ -35,7 +35,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	templates.Home(s.tree, s.theme).Render(r.Context(), w)
+	templates.Home(s.tree, s.config.WatchPath, s.theme).Render(r.Context(), w)
 }
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
@@ -78,10 +78,10 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 		if isHTMX {
 			logger.Log.Debug("rendering HTMX directory partial")
-			templates.DirectoryContent(breadcrumbs, node).Render(r.Context(), w)
+			templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w)
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			templates.Directory(title, breadcrumbs, node, s.theme).Render(r.Context(), w)
+			templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme).Render(r.Context(), w)
 		}
 		return
 	}
@@ -104,10 +104,10 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		templates.MarkdownContent(breadcrumbs, string(html)).Render(r.Context(), w)
+		templates.MarkdownContent(breadcrumbs, string(html), s.config.WatchPath).Render(r.Context(), w)
 	} else {
 		logger.Log.Debug("rendering full page")
-		templates.Markdown(title, breadcrumbs, string(html), s.theme).Render(r.Context(), w)
+		templates.Markdown(title, breadcrumbs, string(html), s.config.WatchPath, s.theme).Render(r.Context(), w)
 	}
 }
 
