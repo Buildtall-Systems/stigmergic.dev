@@ -59,12 +59,31 @@ func (b *mathBlockParser) Trigger() []byte {
 }
 
 func (b *mathBlockParser) Open(parent ast.Node, reader text.Reader, pc parser.Context) (ast.Node, parser.State) {
-	line, _ := reader.PeekLine()
-	if len(line) >= 2 && line[0] == '$' && line[1] == '$' {
-		reader.Advance(2)
-		return NewMathBlock(), parser.NoChildren
+	line, segment := reader.PeekLine()
+	if len(line) < 2 || line[0] != '$' || line[1] != '$' {
+		return nil, parser.NoChildren
 	}
-	return nil, parser.NoChildren
+
+	trimmed := line
+	if len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
+		trimmed = line[:len(line)-1]
+		if len(trimmed) > 0 && trimmed[len(trimmed)-1] == '\r' {
+			trimmed = trimmed[:len(trimmed)-1]
+		}
+	}
+
+	if len(trimmed) >= 4 && trimmed[len(trimmed)-1] == '$' && trimmed[len(trimmed)-2] == '$' {
+		closingPos := len(trimmed) - 2
+		node := NewMathBlock()
+		contentSegment := segment.WithStop(segment.Start + closingPos)
+		contentSegment = contentSegment.WithStart(segment.Start + 2)
+		node.Lines().Append(contentSegment)
+		reader.AdvanceLine()
+		return node, parser.Close
+	}
+
+	reader.Advance(2)
+	return NewMathBlock(), parser.NoChildren
 }
 
 func (b *mathBlockParser) Continue(node ast.Node, reader text.Reader, pc parser.Context) parser.State {
@@ -193,91 +212,3 @@ func (e *mathExtension) Extend(m goldmark.Markdown) {
 	)
 }
 
-type mermaidTransformer struct{}
-
-var defaultMermaidTransformer = &mermaidTransformer{}
-
-func NewMermaidTransformer() parser.ASTTransformer {
-	return defaultMermaidTransformer
-}
-
-func (t *mermaidTransformer) Transform(node *ast.Document, reader text.Reader, pc parser.Context) {
-	ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-
-		if n.Kind() != ast.KindFencedCodeBlock {
-			return ast.WalkContinue, nil
-		}
-
-		block := n.(*ast.FencedCodeBlock)
-		language := block.Language(reader.Source())
-
-		if string(language) != "mermaid" {
-			return ast.WalkContinue, nil
-		}
-
-		block.SetAttributeString("class", []byte("mermaid"))
-
-		return ast.WalkContinue, nil
-	})
-}
-
-type mermaidExtension struct{}
-
-func NewMermaidExtension() goldmark.Extender {
-	return &mermaidExtension{}
-}
-
-func (e *mermaidExtension) Extend(m goldmark.Markdown) {
-	m.Parser().AddOptions(
-		parser.WithASTTransformers(
-			util.Prioritized(NewMermaidTransformer(), 100),
-		),
-	)
-}
-
-type nostrTransformer struct{}
-
-var defaultNostrTransformer = &nostrTransformer{}
-
-func NewNostrTransformer() parser.ASTTransformer {
-	return defaultNostrTransformer
-}
-
-func (t *nostrTransformer) Transform(node *ast.Document, reader text.Reader, pc parser.Context) {
-	ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-
-		link, ok := n.(*ast.Link)
-		if !ok {
-			return ast.WalkContinue, nil
-		}
-
-		dest := string(link.Destination)
-		if len(dest) < 6 || dest[:6] != "nostr:" {
-			return ast.WalkContinue, nil
-		}
-
-		link.SetAttributeString("class", []byte("nostr-link"))
-
-		return ast.WalkContinue, nil
-	})
-}
-
-type nostrExtension struct{}
-
-func NewNostrExtension() goldmark.Extender {
-	return &nostrExtension{}
-}
-
-func (e *nostrExtension) Extend(m goldmark.Markdown) {
-	m.Parser().AddOptions(
-		parser.WithASTTransformers(
-			util.Prioritized(NewNostrTransformer(), 500),
-		),
-	)
-}

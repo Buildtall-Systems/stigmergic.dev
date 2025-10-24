@@ -124,14 +124,23 @@ templ Layout(title string, thm *theme.Theme) {
 					}
 				}
 
-				document.addEventListener("DOMContentLoaded", function() {
-					renderMathInElement(document.body, {
+				function renderMath(element) {
+					renderMathInElement(element, {
 						delimiters: [
 							{left: '$$', right: '$$', display: true},
 							{left: '$', right: '$', display: false}
 						],
 						throwOnError: false
 					});
+				}
+
+				document.addEventListener("DOMContentLoaded", function() {
+					renderMath(document.body);
+
+					document.body.addEventListener('htmx:afterSwap', function(evt) {
+						renderMath(evt.detail.target);
+					});
+
 					document.body.addEventListener('htmx:sseMessage', function(evt) {
 						htmx.ajax('GET', window.location.pathname, {target: 'main', swap: 'innerHTML'});
 					});

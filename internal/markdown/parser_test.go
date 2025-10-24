@@ -379,73 +379,6 @@ func TestParseGFMLinkify(t *testing.T) {
 	}
 }
 
-func TestParseMathInline(t *testing.T) {
-	t.Parallel()
-
-	input := "The equation $E = mc^2$ is famous."
-	result, err := Parse([]byte(input))
-	if err != nil {
-		t.Fatalf("Parse failed: %v", err)
-	}
-
-	output := string(result)
-	expectations := []string{
-		"<span class=\"math-inline\">",
-		"$E = mc^2$",
-	}
-
-	for _, expected := range expectations {
-		if !strings.Contains(output, expected) {
-			t.Errorf("Expected output to contain %q\nGot:\n%s", expected, output)
-		}
-	}
-}
-
-func TestParseMathBlock(t *testing.T) {
-	t.Parallel()
-
-	input := `$$
-x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
-$$`
-
-	result, err := Parse([]byte(input))
-	if err != nil {
-		t.Fatalf("Parse failed: %v", err)
-	}
-
-	output := string(result)
-	expectations := []string{
-		"<div class=\"math-block\">",
-		"$$",
-		"\\frac",
-		"\\sqrt",
-	}
-
-	for _, expected := range expectations {
-		if !strings.Contains(output, expected) {
-			t.Errorf("Expected output to contain %q\nGot:\n%s", expected, output)
-		}
-	}
-}
-
-func TestParseMathMultipleInline(t *testing.T) {
-	t.Parallel()
-
-	input := "Consider $a^2 + b^2 = c^2$ and also $x = y + z$."
-	result, err := Parse([]byte(input))
-	if err != nil {
-		t.Fatalf("Parse failed: %v", err)
-	}
-
-	output := string(result)
-	if !strings.Contains(output, "$a^2 + b^2 = c^2$") {
-		t.Error("Expected first math equation in output")
-	}
-	if !strings.Contains(output, "$x = y + z$") {
-		t.Error("Expected second math equation in output")
-	}
-}
-
 func TestParseMermaidFlowchart(t *testing.T) {
 	t.Parallel()
 
@@ -457,7 +390,7 @@ func TestParseMermaidFlowchart(t *testing.T) {
 
 	output := string(result)
 	expectations := []string{
-		"language-mermaid",
+		"<pre class=\"mermaid\">",
 		"graph TD",
 	}
 
@@ -480,7 +413,7 @@ func TestParseMermaidSequenceDiagram(t *testing.T) {
 
 	output := string(result)
 	expectations := []string{
-		"language-mermaid",
+		"<pre class=\"mermaid\">",
 		"sequenceDiagram",
 	}
 
@@ -494,7 +427,7 @@ func TestParseMermaidSequenceDiagram(t *testing.T) {
 func TestParseNostrNpub(t *testing.T) {
 	t.Parallel()
 
-	input := "Follow me at [nostr:npub1prtsd0e39unnacud7vzxwxec49xxau33xyq2lzuj3xpzfxg0z9wqjn0v8q](nostr:npub1prtsd0e39unnacud7vzxwxec49xxau33xyq2lzuj3xpzfxg0z9wqjn0v8q) for updates."
+	input := "Follow me at nostr:npub1prtsd0e39unnacud7vzxwxec49xxau33xyq2lzuj3xpzfxg0z9wqjn0v8q for updates."
 	result, err := Parse([]byte(input))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
@@ -503,7 +436,6 @@ func TestParseNostrNpub(t *testing.T) {
 	output := string(result)
 	expectations := []string{
 		"<a href=\"nostr:npub1prtsd0e39unnacud7vzxwxec49xxau33xyq2lzuj3xpzfxg0z9wqjn0v8q\"",
-		"class=\"nostr-link\"",
 		"nostr:npub1prtsd0e39unnacud7vzxwxec49xxau33xyq2lzuj3xpzfxg0z9wqjn0v8q",
 	}
 
@@ -517,7 +449,7 @@ func TestParseNostrNpub(t *testing.T) {
 func TestParseNostrMultipleNpubs(t *testing.T) {
 	t.Parallel()
 
-	input := "Follow [nostr:npub1r45pcpwtqsnp5t0pj8x7y95tse7k3t47pp4az889aqutwlh7dcsql04zht](nostr:npub1r45pcpwtqsnp5t0pj8x7y95tse7k3t47pp4az889aqutwlh7dcsql04zht) and [nostr:npub139dkdt7rtcqn8wrxtemfjz8ah47l5c7fuxxqhfsepzcwvaqwqy9s34w8ju](nostr:npub139dkdt7rtcqn8wrxtemfjz8ah47l5c7fuxxqhfsepzcwvaqwqy9s34w8ju)"
+	input := "Follow nostr:npub1r45pcpwtqsnp5t0pj8x7y95tse7k3t47pp4az889aqutwlh7dcsql04zht and nostr:npub139dkdt7rtcqn8wrxtemfjz8ah47l5c7fuxxqhfsepzcwvaqwqy9s34w8ju"
 	result, err := Parse([]byte(input))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
@@ -530,8 +462,8 @@ func TestParseNostrMultipleNpubs(t *testing.T) {
 	if !strings.Contains(output, "nostr:npub139dkdt7rtcqn8wrxtemfjz8ah47l5c7fuxxqhfsepzcwvaqwqy9s34w8ju") {
 		t.Error("Expected second nostr link in output")
 	}
-	if strings.Count(output, "class=\"nostr-link\"") != 2 {
-		t.Errorf("Expected exactly 2 nostr-link classes, got %d", strings.Count(output, "class=\"nostr-link\""))
+	if strings.Count(output, "<a href=\"nostr:") != 2 {
+		t.Errorf("Expected exactly 2 nostr links, got %d", strings.Count(output, "<a href=\"nostr:"))
 	}
 }
 

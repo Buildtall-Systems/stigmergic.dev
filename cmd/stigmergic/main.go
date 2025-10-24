@@ -51,6 +51,12 @@ beautifully through a local web server with real-time updates.`,
 
 		return nil
 	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return serveCmd.RunE(cmd, []string{"."})
+		}
+		return cmd.Help()
+	},
 }
 
 func init() {
