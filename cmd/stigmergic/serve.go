@@ -2,12 +2,33 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/server"
 	"github.com/spf13/cobra"
 )
+
+func isPortAvailable(host string, port int) bool {
+	addr := fmt.Sprintf("%s:%d", host, port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	listener.Close()
+	return true
+}
+
+func findAvailablePort(host string, startPort int, maxAttempts int) (int, error) {
+	for i := 0; i < maxAttempts; i++ {
+		port := startPort + i
+		if isPortAvailable(host, port) {
+			return port, nil
+		}
+	}
+	return 0, fmt.Errorf("no available port found after %d attempts starting from %d", maxAttempts, startPort)
+}
 
 var serveCmd = &cobra.Command{
 	Use:   "serve [path]",
@@ -36,6 +57,18 @@ If no path is provided, the current directory is used.`,
 		}
 
 		loadedConfig.WatchPath = absPath
+
+		portExplicitlySet := cmd.Flags().Changed("port")
+		if !portExplicitlySet {
+			availablePort, err := findAvailablePort(loadedConfig.Host, loadedConfig.Port, 100)
+			if err != nil {
+				return fmt.Errorf("failed to find available port: %w", err)
+			}
+			if availablePort != loadedConfig.Port {
+				fmt.Printf("Port %d is occupied, using port %d instead\n", loadedConfig.Port, availablePort)
+				loadedConfig.Port = availablePort
+			}
+		}
 
 		fmt.Printf("Starting server at %s:%d\n", loadedConfig.Host, loadedConfig.Port)
 		fmt.Printf("Watching directory: %s\n", absPath)
