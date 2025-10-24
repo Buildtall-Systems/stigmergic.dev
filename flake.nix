@@ -36,6 +36,12 @@
           version = "0.1.0";
           src = ./.;
           vendorHash = null;
+
+          nativeBuildInputs = [ pkgs.templ ];
+
+          preBuild = ''
+            templ generate
+          '';
         };
       }
     );
