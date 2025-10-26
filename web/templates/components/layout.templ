@@ -141,14 +141,13 @@ templ Layout(title string, thm *theme.Theme) {
 						renderMath(evt.detail.target);
 					});
 
-					document.body.addEventListener('htmx:sseBeforeMessage', function(evt) {
-						evt.preventDefault();
+					document.body.addEventListener('sse:message', function(evt) {
 						htmx.ajax('GET', window.location.pathname, {target: '#main', swap: 'innerHTML'});
 					});
 				});
 			</script>
 		</head>
-		<body class="min-h-screen" hx-ext="sse" sse-connect="/events" sse-swap="message" style="background-color: var(--bg-color); color: var(--fg-color);">
+		<body class="min-h-screen" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);">
 			<header style="background-color: var(--bg-alt-color); border-bottom: 1px solid var(--border-color);">
 				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
 					<h1 class="text-2xl font-bold">
