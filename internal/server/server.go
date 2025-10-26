@@ -23,6 +23,7 @@ type Server struct {
 	config     *config.Config
 	mux        *http.ServeMux
 	tree       *models.Tree
+	treeMux    sync.RWMutex
 	watcher    *watcher.Watcher
 	theme      *theme.Theme
 	clients    map[chan string]bool
@@ -141,6 +142,9 @@ func (s *Server) broadcastEvents() {
 				return
 			}
 			logger.Log.Info("broadcasting event to clients", "path", event.Path, "type", event.Type)
+
+			s.updateTree()
+
 			s.clientsMux.RLock()
 			clientCount := len(s.clients)
 			logger.Log.Debug("active SSE clients", "count", clientCount)
@@ -178,4 +182,18 @@ func (s *Server) removeClient(client chan string) {
 	clientCount := len(s.clients)
 	s.clientsMux.Unlock()
 	logger.Log.Info("SSE client disconnected", "remaining_clients", clientCount)
+}
+
+func (s *Server) updateTree() {
+	logger.Log.Info("rescanning directory tree", "path", s.config.WatchPath)
+	newTree, err := watcher.ScanDirectory(s.config.WatchPath, s.config.RespectGitignore, s.config.IgnorePatterns)
+	if err != nil {
+		logger.Log.Error("failed to rescan directory", "error", err)
+		return
+	}
+
+	s.treeMux.Lock()
+	s.tree = newTree
+	s.treeMux.Unlock()
+	logger.Log.Info("directory tree updated successfully")
 }

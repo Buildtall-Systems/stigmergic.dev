@@ -35,7 +35,11 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	templates.Home(s.tree, s.config.WatchPath, s.theme).Render(r.Context(), w)
+	s.treeMux.RLock()
+	tree := s.tree
+	s.treeMux.RUnlock()
+
+	templates.Home(tree, s.config.WatchPath, s.theme).Render(r.Context(), w)
 }
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +73,10 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	isHTMX := r.Header.Get("HX-Request") == "true"
 
 	if info.IsDir() {
+		s.treeMux.RLock()
 		node := s.tree.Find(cleanPath)
+		s.treeMux.RUnlock()
+
 		if node == nil {
 			logger.Log.Warn("directory node not found in tree", "path", cleanPath)
 			http.NotFound(w, r)
