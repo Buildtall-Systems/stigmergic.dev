@@ -28,6 +28,9 @@ type Server struct {
 	theme      *theme.Theme
 	clients    map[chan string]bool
 	clientsMux sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -73,6 +76,8 @@ func NewServer(cfg *config.Config) *Server {
 	}
 	logger.Log.Info("theme loaded successfully", "theme", cfg.Theme)
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	s := &Server{
 		httpServer: srv,
 		config:     cfg,
@@ -81,8 +86,11 @@ func NewServer(cfg *config.Config) *Server {
 		watcher:    w,
 		theme:      thm,
 		clients:    make(map[chan string]bool),
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 
+	s.wg.Add(1)
 	go s.broadcastEvents()
 
 	s.setupRoutes()
@@ -95,14 +103,13 @@ func (s *Server) Start() error {
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	errChan := make(chan error, 1)
 	go func() {
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Log.Error("server failed", "error", err)
 			errChan <- fmt.Errorf("server failed: %w", err)
-		} else {
-			errChan <- nil
 		}
 	}()
 
@@ -110,37 +117,81 @@ func (s *Server) Start() error {
 
 	select {
 	case err := <-errChan:
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.Shutdown(shutdownCtx)
 		return err
 	case sig := <-sigChan:
 		logger.Log.Info("received shutdown signal", "signal", sig)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return s.Shutdown(ctx)
+	case <-s.ctx.Done():
+		logger.Log.Info("server context cancelled")
+		return nil
 	}
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	if s.watcher != nil {
-		s.watcher.Close()
-	}
+	logger.Log.Info("shutting down server")
+
+	s.cancel()
+
 	s.clientsMux.Lock()
 	for client := range s.clients {
 		close(client)
 	}
 	s.clients = make(map[chan string]bool)
 	s.clientsMux.Unlock()
+
+	if s.watcher != nil {
+		if err := s.watcher.Close(); err != nil {
+			logger.Log.Error("error closing watcher", "error", err)
+		}
+	}
+
+	s.wg.Wait()
+
 	return s.httpServer.Shutdown(ctx)
 }
 
 func (s *Server) broadcastEvents() {
 	logger.Log.Info("broadcast events goroutine started")
+	defer func() {
+		s.wg.Done()
+		logger.Log.Info("broadcast events goroutine stopped")
+	}()
+
 	for {
 		select {
+		case <-s.ctx.Done():
+			logger.Log.Info("broadcast context cancelled, stopping")
+			return
 		case event, ok := <-s.watcher.Events:
 			if !ok {
 				logger.Log.Info("watcher events channel closed, stopping broadcast")
 				return
 			}
+
+			shouldBroadcast := false
+			ext := filepath.Ext(event.Path)
+
+			info, err := os.Stat(event.Path)
+			if err == nil {
+				if info.IsDir() {
+					shouldBroadcast = true
+				} else if ext == ".md" {
+					shouldBroadcast = true
+				}
+			} else if event.Type == watcher.EventRemove && ext == ".md" {
+				shouldBroadcast = true
+			}
+
+			if !shouldBroadcast {
+				logger.Log.Debug("ignoring non-markdown file event", "path", event.Path, "ext", ext)
+				continue
+			}
+
 			logger.Log.Info("broadcasting event to clients", "path", event.Path, "type", event.Type)
 
 			s.updateTree()
@@ -150,7 +201,7 @@ func (s *Server) broadcastEvents() {
 			logger.Log.Debug("active SSE clients", "count", clientCount)
 			for client := range s.clients {
 				select {
-				case client <- filepath.Base(event.Path):
+				case client <- "reload":
 					logger.Log.Debug("sent event to client")
 				default:
 					logger.Log.Warn("client channel full, skipping")
@@ -177,10 +228,14 @@ func (s *Server) addClient(client chan string) {
 
 func (s *Server) removeClient(client chan string) {
 	s.clientsMux.Lock()
+	_, exists := s.clients[client]
 	delete(s.clients, client)
-	close(client)
 	clientCount := len(s.clients)
 	s.clientsMux.Unlock()
+
+	if exists {
+		close(client)
+	}
 	logger.Log.Info("SSE client disconnected", "remaining_clients", clientCount)
 }
 

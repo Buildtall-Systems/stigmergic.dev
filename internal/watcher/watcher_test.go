@@ -121,7 +121,7 @@ func TestWatcherRemoveNotWatched(t *testing.T) {
 }
 
 func TestWatcherCreateEvent(t *testing.T) {
-	w, err := NewWatcher()
+	w, err := NewWatcherWithDebounce(10 * time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
@@ -157,8 +157,6 @@ func TestWatcherCreateEvent(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
-
 	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -167,7 +165,7 @@ func TestWatcherCreateEvent(t *testing.T) {
 }
 
 func TestWatcherWriteEvent(t *testing.T) {
-	w, err := NewWatcher()
+	w, err := NewWatcherWithDebounce(10 * time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
@@ -201,8 +199,6 @@ func TestWatcherWriteEvent(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
-
 	if err := os.WriteFile(filePath, []byte("updated"), 0644); err != nil {
 		t.Fatalf("failed to update test file: %v", err)
 	}
@@ -211,7 +207,7 @@ func TestWatcherWriteEvent(t *testing.T) {
 }
 
 func TestWatcherRemoveEvent(t *testing.T) {
-	w, err := NewWatcher()
+	w, err := NewWatcherWithDebounce(10 * time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
@@ -245,8 +241,6 @@ func TestWatcherRemoveEvent(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
-
 	if err := os.Remove(filePath); err != nil {
 		t.Fatalf("failed to remove test file: %v", err)
 	}
@@ -255,7 +249,7 @@ func TestWatcherRemoveEvent(t *testing.T) {
 }
 
 func TestWatcherDebouncing(t *testing.T) {
-	w, err := NewWatcher()
+	w, err := NewWatcherWithDebounce(10 * time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
@@ -272,13 +266,11 @@ func TestWatcherDebouncing(t *testing.T) {
 		t.Fatalf("Add failed: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
-
 	eventCount := 0
 	done := make(chan bool)
 
 	go func() {
-		timeout := time.After(1 * time.Second)
+		timeout := time.After(100 * time.Millisecond)
 		for {
 			select {
 			case <-w.Events:
@@ -294,7 +286,7 @@ func TestWatcherDebouncing(t *testing.T) {
 		if err := os.WriteFile(filePath, []byte("update"), 0644); err != nil {
 			t.Fatalf("failed to write file: %v", err)
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 
 	<-done
@@ -305,7 +297,7 @@ func TestWatcherDebouncing(t *testing.T) {
 }
 
 func TestWatcherRecursiveWatch(t *testing.T) {
-	w, err := NewWatcher()
+	w, err := NewWatcherWithDebounce(10 * time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
@@ -320,8 +312,6 @@ func TestWatcherRecursiveWatch(t *testing.T) {
 	if err := w.Add(dir, false, nil); err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
-
-	time.Sleep(100 * time.Millisecond)
 
 	filePath := filepath.Join(subdir, "test.txt")
 
@@ -347,8 +337,6 @@ func TestWatcherRecursiveWatch(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
-
 	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
 		t.Fatalf("failed to create test file in subdir: %v", err)
 	}
@@ -357,7 +345,7 @@ func TestWatcherRecursiveWatch(t *testing.T) {
 }
 
 func TestWatcherNewDirectoryWatch(t *testing.T) {
-	w, err := NewWatcher()
+	w, err := NewWatcherWithDebounce(10 * time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
@@ -369,14 +357,12 @@ func TestWatcherNewDirectoryWatch(t *testing.T) {
 		t.Fatalf("Add failed: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
-
 	newDir := filepath.Join(dir, "newdir")
 	if err := os.Mkdir(newDir, 0755); err != nil {
 		t.Fatalf("failed to create new directory: %v", err)
 	}
 
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	filePath := filepath.Join(newDir, "test.txt")
 
@@ -401,8 +387,6 @@ func TestWatcherNewDirectoryWatch(t *testing.T) {
 			}
 		}
 	}()
-
-	time.Sleep(100 * time.Millisecond)
 
 	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
 		t.Fatalf("failed to create test file in new dir: %v", err)
@@ -433,8 +417,6 @@ func TestWatcherCloseChannels(t *testing.T) {
 	if err := w.Close(); err != nil {
 		t.Fatalf("Close failed: %v", err)
 	}
-
-	time.Sleep(100 * time.Millisecond)
 
 	select {
 	case _, ok := <-w.Events:

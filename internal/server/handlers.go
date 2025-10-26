@@ -174,7 +174,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			logger.Log.Info("sending SSE message to client", "message", msg)
-			_, err := w.Write([]byte("data: " + msg + "\n\n"))
+			_, err := w.Write([]byte("event: message\ndata: " + msg + "\n\n"))
 			if err != nil {
 				logger.Log.Error("failed to write SSE message", "error", err)
 				return
