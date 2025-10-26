@@ -33,6 +33,7 @@ func Parse(source []byte) ([]byte, error) {
 		),
 		goldmark.WithRendererOptions(
 			gmhtml.WithUnsafe(),
+			gmhtml.WithHardWraps(),
 		),
 	)
 

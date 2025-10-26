@@ -63,6 +63,20 @@ func ScanDirectory(rootPath string, respectGitignore bool, ignorePatterns []stri
 	return tree, nil
 }
 
+func hasMarkdownDescendants(node *models.Node) bool {
+	if node.Type == models.NodeTypeFile {
+		return true
+	}
+
+	for _, child := range node.Children {
+		if hasMarkdownDescendants(child) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func scanNode(node *models.Node, rootPath string, gi *gitignore.GitIgnore) error {
 	absNodePath := filepath.Join(rootPath, node.Path)
 	entries, err := os.ReadDir(absNodePath)
@@ -98,13 +112,17 @@ func scanNode(node *models.Node, rootPath string, gi *gitignore.GitIgnore) error
 			Children: make([]*models.Node, 0),
 		}
 
-		node.AddChild(child)
-
 		if entry.IsDir() {
 			if err := scanNode(child, rootPath, gi); err != nil {
 				return err
 			}
+
+			if !hasMarkdownDescendants(child) {
+				continue
+			}
 		}
+
+		node.AddChild(child)
 	}
 
 	return nil
