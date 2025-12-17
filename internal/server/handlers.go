@@ -14,6 +14,10 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
 )
 
+func isHTMXRequest(r *http.Request) bool {
+	return r.Header.Get("HX-Request") == "true"
+}
+
 func (s *Server) setupRoutes() {
 	staticFS, err := embed.StaticFS()
 	if err != nil {
@@ -41,9 +45,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	tree := s.tree
 	s.treeMux.RUnlock()
 
-	isHTMX := r.Header.Get("HX-Request") == "true"
-
-	if isHTMX {
+	if isHTMXRequest(r) {
 		logger.Log.Debug("rendering HTMX home partial")
 		if err := templates.HomeContent(tree, s.config.WatchPath).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home content template", "error", err)
@@ -59,7 +61,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	filePath := strings.TrimPrefix(r.URL.Path, "/file/")
-	logger.Log.Info("markdown request", "path", filePath, "htmx", r.Header.Get("HX-Request") == "true")
+	logger.Log.Info("markdown request", "path", filePath, "htmx", isHTMXRequest(r))
 
 	if filePath == "" {
 		logger.Log.Warn("empty file path")
@@ -85,7 +87,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	breadcrumbs := buildBreadcrumbs(filePath)
 	title := filepath.Base(filePath)
-	isHTMX := r.Header.Get("HX-Request") == "true"
+	isHTMX := isHTMXRequest(r)
 
 	s.treeMux.RLock()
 	files := s.tree.FlattenMarkdownFiles()
