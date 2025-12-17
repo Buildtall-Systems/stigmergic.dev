@@ -4,8 +4,8 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, thm *theme.Theme) {
-	@components.Layout(title, thm) {
+templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, thm *theme.Theme, files []models.SearchableFile) {
+	@components.Layout(title, thm, files) {
 		@DirectoryContent(breadcrumbs, node, rootPath)
 	}
 }

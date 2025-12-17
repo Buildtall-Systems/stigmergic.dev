@@ -2,6 +2,7 @@ package models
 
 import (
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -16,6 +17,12 @@ const (
 	NodeTypeFile NodeType = iota
 	NodeTypeDirectory
 )
+
+type SearchableFile struct {
+	Name    string
+	Path    string
+	ModTime int64
+}
 
 type Node struct {
 	Name     string
@@ -97,4 +104,30 @@ func (t *Tree) findNode(node *Node, path string) *Node {
 	}
 
 	return nil
+}
+
+func (t *Tree) FlattenMarkdownFiles() []SearchableFile {
+	var files []SearchableFile
+	t.flattenMarkdownFilesRecursive(t.Root, &files)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime > files[j].ModTime
+	})
+	return files
+}
+
+func (t *Tree) flattenMarkdownFilesRecursive(node *Node, files *[]SearchableFile) {
+	if node.IsFile() && filepath.Ext(node.Name) == ".md" {
+		*files = append(*files, SearchableFile{
+			Name:    node.Name,
+			Path:    "/" + node.Path,
+			ModTime: node.ModTime.Unix(),
+		})
+		return
+	}
+
+	if node.IsDir() {
+		for _, child := range node.Children {
+			t.flattenMarkdownFilesRecursive(child, files)
+		}
+	}
 }

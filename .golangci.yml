@@ -1,0 +1,83 @@
+# buildtall.systems standard golangci-lint configuration
+# Derived from projects/logistikon/.golangci.yml with enhancements
+# Compatible with golangci-lint v2
+
+version: "2"
+
+run:
+  timeout: 5m
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      # Simplify code: gofmt -s
+      simplify: true
+    goimports:
+      # Group imports: stdlib, third-party, then Buildtall-Systems
+      local-prefixes:
+        - github.com/Buildtall-Systems
+
+linters:
+  # Selective whitelist approach for clarity and control
+  disable-all: true
+  enable:
+    # Core Go checks (staticcheck includes gosimple/stylecheck in v2)
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+    # Type safety (typecheck is implicit in v2)
+    - unconvert
+    # Security
+    - gosec
+    # Resource management
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+    # Code quality
+    - goconst
+    - misspell
+    - nolintlint
+    - prealloc
+
+linters-settings:
+  errcheck:
+    # Report about not checking errors in type assertions: `a, ok := b.(MyStruct)`
+    check-type-assertions: true
+    # Report about assignment to blank identifier: `_ = function()`
+    check-blank: true
+  govet:
+    # Enable all analyzers
+    enable-all: true
+  gosec:
+    # No exclusions - we want full security coverage
+    excludes: []
+  goconst:
+    # Minimum length of string to trigger
+    min-len: 3
+    # Minimum occurrences to trigger
+    min-occurrences: 3
+
+issues:
+  # Report all issues (no limits)
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # Relax errcheck in test files - common pattern, reduces noise
+    - path: _test\.go
+      linters:
+        - errcheck
+    # Allow hardcoded credentials in test files (test fixtures)
+    - path: _test\.go
+      linters:
+        - gosec
+      text: "Potential hardcoded credentials"
+    # Allow 0644 file permissions in test files (test fixtures)
+    - path: _test\.go
+      linters:
+        - gosec
+      text: "Expect WriteFile permissions"

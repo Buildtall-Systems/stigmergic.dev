@@ -226,3 +226,153 @@ func TestTreeFindInFileNode(t *testing.T) {
 		t.Error("expected nil when searching in file node, got a result")
 	}
 }
+
+func TestFlattenMarkdownFiles(t *testing.T) {
+	t.Parallel()
+
+	older := time.Now().Add(-2 * time.Hour)
+	newer := time.Now()
+
+	root := &Node{
+		Name:     "root",
+		Path:     ".",
+		Type:     NodeTypeDirectory,
+		Children: make([]*Node, 0),
+	}
+
+	file1 := &Node{
+		Name:    "readme.md",
+		Path:    "readme.md",
+		Type:    NodeTypeFile,
+		ModTime: older,
+	}
+
+	file2 := &Node{
+		Name:    "guide.md",
+		Path:    "guide.md",
+		Type:    NodeTypeFile,
+		ModTime: newer,
+	}
+
+	textFile := &Node{
+		Name:    "notes.txt",
+		Path:    "notes.txt",
+		Type:    NodeTypeFile,
+		ModTime: newer,
+	}
+
+	subdir := &Node{
+		Name:     "docs",
+		Path:     "docs",
+		Type:     NodeTypeDirectory,
+		Children: make([]*Node, 0),
+	}
+
+	file3 := &Node{
+		Name:    "api.md",
+		Path:    "docs/api.md",
+		Type:    NodeTypeFile,
+		ModTime: older,
+	}
+
+	root.AddChild(file1)
+	root.AddChild(file2)
+	root.AddChild(textFile)
+	root.AddChild(subdir)
+	subdir.AddChild(file3)
+
+	tree := &Tree{
+		Root:     root,
+		RootPath: "/test/root",
+	}
+
+	files := tree.FlattenMarkdownFiles()
+
+	if len(files) != 3 {
+		t.Fatalf("expected 3 markdown files, got %d", len(files))
+	}
+
+	if files[0].Name != "guide.md" {
+		t.Errorf("expected first file to be guide.md (newest), got %s", files[0].Name)
+	}
+
+	if files[1].Name != "readme.md" && files[1].Name != "api.md" {
+		t.Errorf("expected second file to be readme.md or api.md, got %s", files[1].Name)
+	}
+
+	if files[2].Name != "api.md" && files[2].Name != "readme.md" {
+		t.Errorf("expected third file to be api.md or readme.md, got %s", files[2].Name)
+	}
+
+	for _, f := range files {
+		if filepath.Ext(f.Name) != ".md" {
+			t.Errorf("expected only .md files, got %s", f.Name)
+		}
+	}
+}
+
+func TestFlattenMarkdownFilesEmpty(t *testing.T) {
+	t.Parallel()
+
+	root := &Node{
+		Name:     "root",
+		Path:     ".",
+		Type:     NodeTypeDirectory,
+		Children: make([]*Node, 0),
+	}
+
+	tree := &Tree{
+		Root:     root,
+		RootPath: "/test/root",
+	}
+
+	files := tree.FlattenMarkdownFiles()
+
+	if len(files) != 0 {
+		t.Fatalf("expected 0 markdown files, got %d", len(files))
+	}
+}
+
+func TestFlattenMarkdownFilesPaths(t *testing.T) {
+	t.Parallel()
+
+	root := &Node{
+		Name:     "root",
+		Path:     ".",
+		Type:     NodeTypeDirectory,
+		Children: make([]*Node, 0),
+	}
+
+	subdir := &Node{
+		Name:     "docs",
+		Path:     "docs",
+		Type:     NodeTypeDirectory,
+		Children: make([]*Node, 0),
+	}
+
+	file := &Node{
+		Name:    "guide.md",
+		Path:    "docs/guide.md",
+		Type:    NodeTypeFile,
+		ModTime: time.Now(),
+	}
+
+	root.AddChild(subdir)
+	subdir.AddChild(file)
+
+	tree := &Tree{
+		Root:     root,
+		RootPath: "/test/root",
+	}
+
+	files := tree.FlattenMarkdownFiles()
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	expectedPath := "/docs/guide.md"
+	if files[0].Path != expectedPath {
+		t.Errorf("expected path %s, got %s", expectedPath, files[0].Path)
+	}
+}

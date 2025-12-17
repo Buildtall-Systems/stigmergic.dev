@@ -39,7 +39,8 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	tree := s.tree
 	s.treeMux.RUnlock()
 
-	templates.Home(tree, s.config.WatchPath, s.theme).Render(r.Context(), w)
+	files := tree.FlattenMarkdownFiles()
+	templates.Home(tree, s.config.WatchPath, s.theme, files).Render(r.Context(), w)
 }
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +73,10 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	title := filepath.Base(filePath)
 	isHTMX := r.Header.Get("HX-Request") == "true"
 
+	s.treeMux.RLock()
+	files := s.tree.FlattenMarkdownFiles()
+	s.treeMux.RUnlock()
+
 	if info.IsDir() {
 		s.treeMux.RLock()
 		node := s.tree.Find(cleanPath)
@@ -88,7 +93,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w)
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme).Render(r.Context(), w)
+			templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files).Render(r.Context(), w)
 		}
 		return
 	}
@@ -114,7 +119,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		templates.MarkdownContent(breadcrumbs, string(html), s.config.WatchPath).Render(r.Context(), w)
 	} else {
 		logger.Log.Debug("rendering full page")
-		templates.Markdown(title, breadcrumbs, string(html), s.config.WatchPath, s.theme).Render(r.Context(), w)
+		templates.Markdown(title, breadcrumbs, string(html), s.config.WatchPath, s.theme, files).Render(r.Context(), w)
 	}
 }
 

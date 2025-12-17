@@ -1,0 +1,142 @@
+package components
+
+templ CommandPalette() {
+	<div x-data="commandPalette()" x-init="init()" @keydown.ctrl.k.window.prevent="togglePalette()">
+		<div x-cloak x-show="open" class="fixed inset-0 bg-black/50 z-40" @click="close()"></div>
+
+		<div x-cloak x-show="open" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-2xl" x-trap="open" @click.away="close()">
+			<div class="rounded-lg shadow-2xl" style="background-color: var(--bg-color); border: 1px solid var(--border-color);">
+				<div class="p-4 border-b" style="border-bottom-color: var(--border-color);">
+					<input
+						x-ref="searchInput"
+						type="text"
+						placeholder="Search markdown files... (Ctrl+K)"
+						x-model="query"
+						@input="filterFiles()"
+						@keydown.down="nextResult()"
+						@keydown.up="prevResult()"
+						@keydown.enter="selectResult()"
+						@keydown.escape="close()"
+						class="w-full px-0 py-2 bg-transparent outline-none"
+						style="color: var(--fg-color);"
+					/>
+				</div>
+
+				<div class="max-h-96 overflow-y-auto" x-ref="resultsList">
+					<template x-if="filteredFiles.length === 0">
+						<div class="p-4 text-center" style="color: var(--comment-color);">
+							<span x-show="query">No matches found</span>
+							<span x-show="!query">No markdown files</span>
+						</div>
+					</template>
+
+					<template x-for="(file, index) in filteredFiles" :key="file.Path">
+						<div
+							@click="selectIndex(index)"
+							@mouseover="selectedIndex = index"
+							:data-selected="selectedIndex === index"
+							:style="selectedIndex === index ? 'background-color: var(--selection-color);' : ''"
+							class="px-4 py-3 border-b cursor-pointer transition-colors"
+							style="border-bottom-color: var(--border-color);"
+						>
+							<div style="color: var(--fg-color);" x-text="file.Name"></div>
+							<div style="color: var(--comment-color); font-size: 0.875em;" x-text="file.Path"></div>
+						</div>
+					</template>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		function commandPalette() {
+			return {
+				open: false,
+				query: '',
+				allFiles: [],
+				filteredFiles: [],
+				selectedIndex: 0,
+
+				init() {
+					const filesEl = document.getElementById('markdown-files');
+					if (filesEl) {
+						this.allFiles = JSON.parse(filesEl.textContent);
+						this.filteredFiles = [...this.allFiles];
+					}
+				},
+
+				togglePalette() {
+					if (this.open) {
+						this.close();
+					} else {
+						this.open = true;
+						this.$nextTick(() => this.$refs.searchInput.focus());
+					}
+				},
+
+				close() {
+					this.open = false;
+					this.query = '';
+					this.selectedIndex = 0;
+					this.filterFiles();
+				},
+
+				filterFiles() {
+					if (!this.query.trim()) {
+						this.filteredFiles = [...this.allFiles];
+						this.selectedIndex = 0;
+						return;
+					}
+
+					const fuse = new Fuse(this.allFiles, {
+						keys: ['Name'],
+						threshold: 0.4,
+						includeScore: true
+					});
+
+					const results = fuse.search(this.query);
+					this.filteredFiles = results.map(r => r.item);
+					this.selectedIndex = 0;
+				},
+
+				nextResult() {
+					if (this.selectedIndex < this.filteredFiles.length - 1) {
+						this.selectedIndex++;
+						this.scrollToSelected();
+					}
+				},
+
+				prevResult() {
+					if (this.selectedIndex > 0) {
+						this.selectedIndex--;
+						this.scrollToSelected();
+					}
+				},
+
+				scrollToSelected() {
+					this.$nextTick(() => {
+						const container = this.$refs.resultsList;
+						const selected = container?.querySelector('[data-selected="true"]');
+						if (selected) {
+							selected.scrollIntoView({ block: 'nearest' });
+						}
+					});
+				},
+
+				selectResult() {
+					if (this.filteredFiles.length > 0) {
+						this.selectIndex(this.selectedIndex);
+					}
+				},
+
+				selectIndex(index) {
+					if (index >= 0 && index < this.filteredFiles.length) {
+						const file = this.filteredFiles[index];
+						this.close();
+						window.location.href = '/file' + file.Path;
+					}
+				}
+			}
+		}
+	</script>
+}
