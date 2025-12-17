@@ -119,7 +119,9 @@ func (s *Server) Start() error {
 	case err := <-errChan:
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		s.Shutdown(shutdownCtx)
+		if shutdownErr := s.Shutdown(shutdownCtx); shutdownErr != nil {
+			logger.Log.Error("shutdown error after server failure", "error", shutdownErr)
+		}
 		return err
 	case sig := <-sigChan:
 		logger.Log.Info("received shutdown signal", "signal", sig)

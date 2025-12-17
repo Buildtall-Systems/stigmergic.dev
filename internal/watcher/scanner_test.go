@@ -128,7 +128,7 @@ func TestScanDirectoryFile(t *testing.T) {
 
 	dir := testutil.CreateTempDir(t)
 	filePath := filepath.Join(dir, "file.txt")
-	if err := os.WriteFile(filePath, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("content"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to create test file: %v", err)
 	}
 

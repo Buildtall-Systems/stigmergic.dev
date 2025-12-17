@@ -24,22 +24,22 @@ func TestSecurityHeaders(t *testing.T) {
 	srv := NewServer(cfg)
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
 	url := fmt.Sprintf("http://localhost:%d/", port)
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec,noctx
 	if err != nil {
 		t.Fatalf("failed to connect to server: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("expected X-Content-Type-Options header to be nosniff, got %s", resp.Header.Get("X-Content-Type-Options"))
@@ -71,22 +71,22 @@ func TestRecoveryMiddleware(t *testing.T) {
 	})
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
 	url := fmt.Sprintf("http://localhost:%d/panic", port)
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec,noctx
 	if err != nil {
 		t.Fatalf("failed to connect to server: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Errorf("expected status 500, got %d", resp.StatusCode)

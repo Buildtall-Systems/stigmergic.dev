@@ -35,7 +35,7 @@ func TestCreateTestFile(t *testing.T) {
 	CreateTestFile(t, dir, filename, content)
 
 	path := filepath.Join(dir, filename)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		t.Fatalf("failed to read test file: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCreateTestFileWithSubdirectory(t *testing.T) {
 	CreateTestFile(t, dir, filename, content)
 
 	path := filepath.Join(dir, filename)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		t.Fatalf("failed to read nested test file: %v", err)
 	}

@@ -168,24 +168,24 @@ func (r *mathRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 
 func (r *mathRenderer) renderMathBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
-		w.WriteString("<div class=\"math-block\">\n$$\n")
+		_, _ = w.WriteString("<div class=\"math-block\">\n$$\n")
 		for i := 0; i < node.Lines().Len(); i++ {
 			line := node.Lines().At(i)
-			w.Write(line.Value(source))
+			_, _ = w.Write(line.Value(source))
 		}
-		w.WriteString("\n$$\n</div>\n")
+		_, _ = w.WriteString("\n$$\n</div>\n")
 	}
 	return ast.WalkContinue, nil
 }
 
 func (r *mathRenderer) renderMathInline(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
-		w.WriteString("<span class=\"math-inline\">$")
+		_, _ = w.WriteString("<span class=\"math-inline\">$")
 		for c := node.FirstChild(); c != nil; c = c.NextSibling() {
 			segment := c.(*ast.Text).Segment
-			w.Write(segment.Value(source))
+			_, _ = w.Write(segment.Value(source))
 		}
-		w.WriteString("$</span>")
+		_, _ = w.WriteString("$</span>")
 	}
 	return ast.WalkContinue, nil
 }
@@ -211,4 +211,3 @@ func (e *mathExtension) Extend(m goldmark.Markdown) {
 		),
 	)
 }
-

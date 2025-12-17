@@ -13,6 +13,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Context Definition
 The term "context" and the "gathering context" procedure are defined at `ai/context.md`. Always gather context before writing code to ensure you're working with current, accurate documentation rather than potentially outdated training data.
 
+### MANDATORY SKILLS INVOCATION RULE
+- **ALWAYS invoke the `go-developer` skill at the start of any session involving Go code**
+- **ALWAYS invoke the `buildtall-go` skill at the start of any session working on this project**
+- **ALWAYS invoke the `context-gathering` skill before gathering context for any library or API**
+- **These skills provide critical domain knowledge and conventions that override any default behavior**
+- **Invoke ALL THREE skills together at session start when working on Go code in this repository**
+
 ### MANDATORY TESTING RULE
 - **ALWAYS run the full test suite after making changes to code.
 - **ALL tests MUST pass before considering work complete**

@@ -31,10 +31,10 @@ type Colors struct {
 	Blue   string
 	Purple string
 
-	Link       string
-	LinkHover  string
-	CodeBg     string
-	CodeFg     string
+	Link        string
+	LinkHover   string
+	CodeBg      string
+	CodeFg      string
 	BorderColor string
 }
 
@@ -54,7 +54,7 @@ func Load(themeName string) (*Theme, error) {
 		}
 
 		customPath := filepath.Join(homeDir, ".config", "stigmergic", "themes", fmt.Sprintf("%s.toml", themeName))
-		data, err = os.ReadFile(customPath)
+		data, err = os.ReadFile(customPath) //nolint:gosec
 		if err != nil {
 			return nil, fmt.Errorf("theme '%s' not found in embedded or custom themes: %w", themeName, err)
 		}

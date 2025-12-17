@@ -40,7 +40,9 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	s.treeMux.RUnlock()
 
 	files := tree.FlattenMarkdownFiles()
-	templates.Home(tree, s.config.WatchPath, s.theme, files).Render(r.Context(), w)
+	if err := templates.Home(tree, s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
+		logger.Log.Error("failed to render home template", "error", err)
+	}
 }
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
@@ -90,10 +92,14 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 		if isHTMX {
 			logger.Log.Debug("rendering HTMX directory partial")
-			templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w)
+			if err := templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w); err != nil {
+				logger.Log.Error("failed to render directory content template", "error", err)
+			}
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files).Render(r.Context(), w)
+			if err := templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
+				logger.Log.Error("failed to render directory template", "error", err)
+			}
 		}
 		return
 	}
@@ -116,10 +122,14 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		templates.MarkdownContent(breadcrumbs, string(html), s.config.WatchPath).Render(r.Context(), w)
+		if err := templates.MarkdownContent(breadcrumbs, string(html), s.config.WatchPath).Render(r.Context(), w); err != nil {
+			logger.Log.Error("failed to render markdown content template", "error", err)
+		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		templates.Markdown(title, breadcrumbs, string(html), s.config.WatchPath, s.theme, files).Render(r.Context(), w)
+		if err := templates.Markdown(title, breadcrumbs, string(html), s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
+			logger.Log.Error("failed to render markdown template", "error", err)
+		}
 	}
 }
 
@@ -163,7 +173,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	defer s.removeClient(clientChan)
 
 	logger.Log.Debug("sending SSE connection confirmation")
-	w.Write([]byte(": connected\n\n"))
+	if _, err := w.Write([]byte(": connected\n\n")); err != nil {
+		logger.Log.Error("failed to write SSE connection confirmation", "error", err)
+		return
+	}
 	flusher.Flush()
 
 	ctx := r.Context()

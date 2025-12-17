@@ -15,9 +15,9 @@ func waitForServer(t *testing.T, port int) {
 	t.Helper()
 	url := fmt.Sprintf("http://localhost:%d/", port)
 	for i := 0; i < 50; i++ {
-		resp, err := http.Get(url)
+		resp, err := http.Get(url) //nolint:gosec,noctx
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -38,22 +38,22 @@ func TestStaticFileServing(t *testing.T) {
 	srv := NewServer(cfg)
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}()
 
 	waitForServer(t, port)
 
 	url := fmt.Sprintf("http://localhost:%d/static/js/htmx.min.js", port)
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec,noctx
 	if err != nil {
 		t.Fatalf("failed to get static file: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status 200, got %d", resp.StatusCode)
@@ -78,22 +78,22 @@ func TestStaticFileMissing(t *testing.T) {
 	srv := NewServer(cfg)
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}()
 
 	waitForServer(t, port)
 
 	url := fmt.Sprintf("http://localhost:%d/static/nonexistent.js", port)
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec,noctx
 	if err != nil {
 		t.Fatalf("failed to get static file: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", resp.StatusCode)
@@ -113,25 +113,24 @@ func TestStaticStylesDirectory(t *testing.T) {
 	srv := NewServer(cfg)
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}()
 
 	waitForServer(t, port)
 
 	url := fmt.Sprintf("http://localhost:%d/static/styles/output.css", port)
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec,noctx
 	if err != nil {
 		t.Fatalf("failed to get CSS file: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status 200 for CSS file, got %d", resp.StatusCode)
 	}
 }
-

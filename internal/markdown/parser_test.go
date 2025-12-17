@@ -224,7 +224,7 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 		expected []string
 	}{
 		{
-			name: "go code block",
+			name:  "go code block",
 			input: "```go\nfunc main() {\n}\n```",
 			expected: []string{
 				"<pre style=",
@@ -234,7 +234,7 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			},
 		},
 		{
-			name: "python code block",
+			name:  "python code block",
 			input: "```python\ndef hello():\n    pass\n```",
 			expected: []string{
 				"<pre style=",
@@ -244,7 +244,7 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			},
 		},
 		{
-			name: "javascript code block",
+			name:  "javascript code block",
 			input: "```javascript\nconst x = 42;\n```",
 			expected: []string{
 				"<pre style=",
@@ -466,4 +466,3 @@ func TestParseNostrMultipleNpubs(t *testing.T) {
 		t.Errorf("Expected exactly 2 nostr links, got %d", strings.Count(output, "<a href=\"nostr:"))
 	}
 }
-

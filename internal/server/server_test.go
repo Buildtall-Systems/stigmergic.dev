@@ -55,11 +55,11 @@ func TestServerStartAndShutdown(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	url := fmt.Sprintf("http://localhost:%d/", port)
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec,noctx
 	if err != nil {
 		t.Fatalf("failed to connect to server: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -91,7 +91,7 @@ func TestServerGracefulShutdown(t *testing.T) {
 	srv := NewServer(cfg)
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -117,7 +117,7 @@ func TestServerShutdownTimeout(t *testing.T) {
 	srv := NewServer(cfg)
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -127,7 +127,7 @@ func TestServerShutdownTimeout(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	srv.Shutdown(ctx)
+	_ = srv.Shutdown(ctx)
 }
 
 func TestServerRespondsToRequests(t *testing.T) {
@@ -145,33 +145,33 @@ func TestServerRespondsToRequests(t *testing.T) {
 	srv := NewServer(cfg)
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}()
 
 	waitForServer(t, port)
 
 	rootURL := fmt.Sprintf("http://localhost:%d/", port)
-	resp, err := http.Get(rootURL)
+	resp, err := http.Get(rootURL) //nolint:gosec,noctx
 	if err != nil {
 		t.Fatalf("failed to connect to server: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status 200 for /, got %d", resp.StatusCode)
 	}
 
 	notFoundURL := fmt.Sprintf("http://localhost:%d/nonexistent", port)
-	resp2, err := http.Get(notFoundURL)
+	resp2, err := http.Get(notFoundURL) //nolint:gosec,noctx
 	if err != nil {
 		t.Fatalf("failed to make request: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	if resp2.StatusCode != http.StatusNotFound {
 		t.Errorf("expected status 404 for /nonexistent, got %d", resp2.StatusCode)
@@ -343,12 +343,12 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 	srv := NewServer(cfg)
 
 	go func() {
-		srv.Start()
+		_ = srv.Start()
 	}()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}()
 
 	time.Sleep(100 * time.Millisecond)

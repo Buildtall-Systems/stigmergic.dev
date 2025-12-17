@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/fsnotify/fsnotify"
 	gitignore "github.com/sabhiram/go-gitignore"
+
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 )
 
 type EventType int
@@ -101,8 +102,8 @@ func (w *Watcher) Add(path string, respectGitignore bool, ignorePatterns []strin
 
 		if respectGitignore {
 			gitignorePath := filepath.Join(absPath, ".gitignore")
-			if file, err := os.Open(gitignorePath); err == nil {
-				defer file.Close()
+			if file, err := os.Open(gitignorePath); err == nil { //nolint:gosec
+				defer func() { _ = file.Close() }()
 				scanner := bufio.NewScanner(file)
 				lineCount := 0
 				for scanner.Scan() {
@@ -248,7 +249,9 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 		info, err := os.Stat(event.Name)
 		if err == nil && info.IsDir() {
 			logger.Log.Info("new directory created, adding watch", "path", event.Name)
-			w.addRecursive(event.Name)
+			if err := w.addRecursive(event.Name); err != nil {
+				logger.Log.Error("failed to add watch for new directory", "path", event.Name, "error", err)
+			}
 		}
 	}
 

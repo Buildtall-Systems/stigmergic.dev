@@ -4,13 +4,13 @@ import (
 	"bytes"
 
 	"github.com/alecthomas/chroma/v2/formatters/html"
+	nostr "github.com/github-tijlxyz/goldmark-nostr"
 	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"go.abhg.dev/goldmark/mermaid"
-	nostr "github.com/github-tijlxyz/goldmark-nostr"
 )
 
 func Parse(source []byte) ([]byte, error) {

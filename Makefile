@@ -1,4 +1,7 @@
-.PHONY: generate build test clean css
+.PHONY: generate build test clean css lint
+
+lint:
+	golangci-lint run ./...
 
 css:
 	tailwindcss -i ./internal/embed/web/static/styles/input.css -o ./internal/embed/web/static/styles/output.css --minify

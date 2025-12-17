@@ -16,7 +16,7 @@ func TestNewWatcher(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	if w == nil {
 		t.Fatal("expected watcher to be created, got nil")
@@ -38,7 +38,7 @@ func TestWatcherAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 
@@ -54,7 +54,7 @@ func TestWatcherAddNonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 	nonExistent := filepath.Join(dir, "nonexistent")
@@ -71,11 +71,11 @@ func TestWatcherAddFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 	filePath := filepath.Join(dir, "file.txt")
-	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -91,7 +91,7 @@ func TestWatcherRemove(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 
@@ -111,7 +111,7 @@ func TestWatcherRemoveNotWatched(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 
@@ -125,7 +125,7 @@ func TestWatcherCreateEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 
@@ -157,7 +157,7 @@ func TestWatcherCreateEvent(t *testing.T) {
 		}
 	}()
 
-	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -169,12 +169,12 @@ func TestWatcherWriteEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 	filePath := filepath.Join(dir, "test.txt")
 
-	if err := os.WriteFile(filePath, []byte("initial"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("initial"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -199,7 +199,7 @@ func TestWatcherWriteEvent(t *testing.T) {
 		}
 	}()
 
-	if err := os.WriteFile(filePath, []byte("updated"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("updated"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to update test file: %v", err)
 	}
 
@@ -211,12 +211,12 @@ func TestWatcherRemoveEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 	filePath := filepath.Join(dir, "test.txt")
 
-	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -253,12 +253,12 @@ func TestWatcherDebouncing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 	filePath := filepath.Join(dir, "test.txt")
 
-	if err := os.WriteFile(filePath, []byte("initial"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("initial"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -283,7 +283,7 @@ func TestWatcherDebouncing(t *testing.T) {
 	}()
 
 	for i := 0; i < 5; i++ {
-		if err := os.WriteFile(filePath, []byte("update"), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte("update"), 0644); err != nil { //nolint:gosec
 			t.Fatalf("failed to write file: %v", err)
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -301,11 +301,11 @@ func TestWatcherRecursiveWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 	subdir := filepath.Join(dir, "subdir")
-	if err := os.Mkdir(subdir, 0755); err != nil {
+	if err := os.Mkdir(subdir, 0755); err != nil { //nolint:gosec
 		t.Fatalf("failed to create subdir: %v", err)
 	}
 
@@ -337,7 +337,7 @@ func TestWatcherRecursiveWatch(t *testing.T) {
 		}
 	}()
 
-	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to create test file in subdir: %v", err)
 	}
 
@@ -349,7 +349,7 @@ func TestWatcherNewDirectoryWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 
@@ -358,7 +358,7 @@ func TestWatcherNewDirectoryWatch(t *testing.T) {
 	}
 
 	newDir := filepath.Join(dir, "newdir")
-	if err := os.Mkdir(newDir, 0755); err != nil {
+	if err := os.Mkdir(newDir, 0755); err != nil { //nolint:gosec
 		t.Fatalf("failed to create new directory: %v", err)
 	}
 
@@ -388,7 +388,7 @@ func TestWatcherNewDirectoryWatch(t *testing.T) {
 		}
 	}()
 
-	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to create test file in new dir: %v", err)
 	}
 
@@ -435,7 +435,7 @@ func TestWatcherRelativePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	dir := testutil.CreateTempDir(t)
 

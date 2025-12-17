@@ -6,9 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
+	gitignore "github.com/sabhiram/go-gitignore"
+
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
-	gitignore "github.com/sabhiram/go-gitignore"
 )
 
 func ScanDirectory(rootPath string, respectGitignore bool, ignorePatterns []string) (*models.Tree, error) {
@@ -31,8 +32,8 @@ func ScanDirectory(rootPath string, respectGitignore bool, ignorePatterns []stri
 
 	if respectGitignore {
 		gitignorePath := filepath.Join(absPath, ".gitignore")
-		if file, err := os.Open(gitignorePath); err == nil {
-			defer file.Close()
+		if file, err := os.Open(gitignorePath); err == nil { //nolint:gosec
+			defer func() { _ = file.Close() }()
 			scanner := bufio.NewScanner(file)
 			lineCount := 0
 			for scanner.Scan() {

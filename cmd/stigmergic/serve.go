@@ -6,17 +6,18 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Buildtall-Systems/stigmergic.dev/internal/server"
 	"github.com/spf13/cobra"
+
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/server"
 )
 
 func isPortAvailable(host string, port int) bool {
 	addr := fmt.Sprintf("%s:%d", host, port)
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp", addr) //nolint:noctx
 	if err != nil {
 		return false
 	}
-	listener.Close()
+	_ = listener.Close()
 	return true
 }
 
