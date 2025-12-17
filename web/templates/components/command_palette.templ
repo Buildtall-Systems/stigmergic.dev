@@ -10,9 +10,9 @@ templ CommandPalette() {
 					<input
 						x-ref="searchInput"
 						type="text"
-						placeholder="Search markdown files... (Ctrl+K)"
+						placeholder="Search files and commands... (Ctrl+K)"
 						x-model="query"
-						@input="filterFiles()"
+						@input="filter()"
 						@keydown.down="nextResult()"
 						@keydown.up="prevResult()"
 						@keydown.enter="selectResult()"
@@ -23,14 +23,14 @@ templ CommandPalette() {
 				</div>
 
 				<div class="max-h-96 overflow-y-auto" x-ref="resultsList">
-					<template x-if="filteredFiles.length === 0">
+					<template x-if="results.length === 0">
 						<div class="p-4 text-center" style="color: var(--comment-color);">
 							<span x-show="query">No matches found</span>
-							<span x-show="!query">No markdown files</span>
+							<span x-show="!query">No files</span>
 						</div>
 					</template>
 
-					<template x-for="(file, index) in filteredFiles" :key="file.Path">
+					<template x-for="(item, index) in results" :key="item.id">
 						<div
 							@click="selectIndex(index)"
 							@mouseover="selectedIndex = index"
@@ -39,8 +39,11 @@ templ CommandPalette() {
 							class="px-4 py-3 border-b cursor-pointer transition-colors"
 							style="border-bottom-color: var(--border-color);"
 						>
-							<div style="color: var(--fg-color);" x-text="file.Name"></div>
-							<div style="color: var(--comment-color); font-size: 0.875em;" x-text="file.Path"></div>
+							<div class="flex items-center gap-2">
+								<span x-show="item.type === 'command'" style="color: var(--purple-color);">&gt;</span>
+								<span style="color: var(--fg-color);" x-text="item.name"></span>
+							</div>
+							<div x-show="item.description" style="color: var(--comment-color); font-size: 0.875em;" x-text="item.description"></div>
 						</div>
 					</template>
 				</div>
@@ -54,15 +57,45 @@ templ CommandPalette() {
 				open: false,
 				query: '',
 				allFiles: [],
-				filteredFiles: [],
+				commands: [
+					{ id: 'cmd:home', type: 'command', name: 'Home', description: 'Go to index page', action: () => window.location.href = '/' }
+				],
+				results: [],
 				selectedIndex: 0,
 
 				init() {
+					this.loadFiles()
+					document.body.addEventListener('htmx:afterSwap', () => this.refreshFiles())
+				},
+
+				loadFiles() {
 					const filesEl = document.getElementById('markdown-files');
 					if (filesEl) {
-						this.allFiles = JSON.parse(filesEl.textContent);
-						this.filteredFiles = [...this.allFiles];
+						this.allFiles = JSON.parse(filesEl.textContent).map(f => ({
+							id: 'file:' + f.Path,
+							type: 'file',
+							name: f.Name,
+							description: f.Path,
+							path: f.Path
+						}));
 					}
+					this.results = [...this.allFiles];
+				},
+
+				refreshFiles() {
+					fetch('/api/files')
+						.then(res => res.json())
+						.then(files => {
+							this.allFiles = files.map(f => ({
+								id: 'file:' + f.Path,
+								type: 'file',
+								name: f.Name,
+								description: f.Path,
+								path: f.Path
+							}));
+							this.filter();
+						})
+						.catch(err => console.error('Failed to refresh files:', err));
 				},
 
 				togglePalette() {
@@ -78,29 +111,32 @@ templ CommandPalette() {
 					this.open = false;
 					this.query = '';
 					this.selectedIndex = 0;
-					this.filterFiles();
+					this.filter();
 				},
 
-				filterFiles() {
+				filter() {
 					if (!this.query.trim()) {
-						this.filteredFiles = [...this.allFiles];
+						this.results = [...this.allFiles];
 						this.selectedIndex = 0;
 						return;
 					}
 
-					const fuse = new Fuse(this.allFiles, {
-						keys: ['Name'],
+					const allItems = [...this.commands, ...this.allFiles];
+					const fuse = new Fuse(allItems, {
+						keys: ['name', 'description'],
 						threshold: 0.4,
 						includeScore: true
 					});
 
-					const results = fuse.search(this.query);
-					this.filteredFiles = results.map(r => r.item);
+					const searchResults = fuse.search(this.query);
+					const commands = searchResults.filter(r => r.item.type === 'command').map(r => r.item);
+					const files = searchResults.filter(r => r.item.type === 'file').map(r => r.item);
+					this.results = [...commands, ...files];
 					this.selectedIndex = 0;
 				},
 
 				nextResult() {
-					if (this.selectedIndex < this.filteredFiles.length - 1) {
+					if (this.selectedIndex < this.results.length - 1) {
 						this.selectedIndex++;
 						this.scrollToSelected();
 					}
@@ -124,16 +160,20 @@ templ CommandPalette() {
 				},
 
 				selectResult() {
-					if (this.filteredFiles.length > 0) {
+					if (this.results.length > 0) {
 						this.selectIndex(this.selectedIndex);
 					}
 				},
 
 				selectIndex(index) {
-					if (index >= 0 && index < this.filteredFiles.length) {
-						const file = this.filteredFiles[index];
+					if (index >= 0 && index < this.results.length) {
+						const item = this.results[index];
 						this.close();
-						window.location.href = '/file' + file.Path;
+						if (item.type === 'command') {
+							item.action();
+						} else {
+							window.location.href = '/file' + item.path;
+						}
 					}
 				}
 			}

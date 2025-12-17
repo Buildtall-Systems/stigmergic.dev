@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,6 +26,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/", s.handleHome)
 	s.mux.HandleFunc("/file/", s.handleMarkdown)
 	s.mux.HandleFunc("/events", s.handleSSE)
+	s.mux.HandleFunc("/api/files", s.handleFilesAPI)
 
 	logger.Log.Info("routes configured")
 }
@@ -39,9 +41,19 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	tree := s.tree
 	s.treeMux.RUnlock()
 
-	files := tree.FlattenMarkdownFiles()
-	if err := templates.Home(tree, s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
-		logger.Log.Error("failed to render home template", "error", err)
+	isHTMX := r.Header.Get("HX-Request") == "true"
+
+	if isHTMX {
+		logger.Log.Debug("rendering HTMX home partial")
+		if err := templates.HomeContent(tree, s.config.WatchPath).Render(r.Context(), w); err != nil {
+			logger.Log.Error("failed to render home content template", "error", err)
+		}
+	} else {
+		files := tree.FlattenMarkdownFiles()
+		logger.Log.Debug("rendering full home page")
+		if err := templates.Home(tree, s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
+			logger.Log.Error("failed to render home template", "error", err)
+		}
 	}
 }
 
@@ -200,5 +212,17 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 			logger.Log.Debug("SSE message flushed")
 		}
+	}
+}
+
+func (s *Server) handleFilesAPI(w http.ResponseWriter, r *http.Request) {
+	s.treeMux.RLock()
+	files := s.tree.FlattenMarkdownFiles()
+	s.treeMux.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(files); err != nil {
+		logger.Log.Error("failed to encode files JSON", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

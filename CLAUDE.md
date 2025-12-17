@@ -68,6 +68,7 @@ The term "context" and the "gathering context" procedure are defined at `ai/cont
 - I always want you to tell me don't know when you don't know
 - NEVER EVER SAY "You're absolutely right" -- NEVER NEVER NEVER
 - answers from memory are no different than lies
+- you must use Makefile rules to build, test, lint, etc when available. when not available, add them.
 
 ### Supplimentary Rules
 
