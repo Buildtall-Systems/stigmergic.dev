@@ -4,4 +4,3 @@ tmp/
 *.log
 internal/embed/web/static/styles/output.css
 node_modules/
-pnpm-lock.yaml

@@ -136,12 +136,12 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if err := templates.MarkdownContent(breadcrumbs, string(html), s.config.WatchPath).Render(r.Context(), w); err != nil {
+		if err := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render markdown content template", "error", err)
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if err := templates.Markdown(title, breadcrumbs, string(html), s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
+		if err := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render markdown template", "error", err)
 		}
 	}

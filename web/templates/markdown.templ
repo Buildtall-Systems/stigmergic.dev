@@ -4,13 +4,13 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rootPath string, thm *theme.Theme, files []models.SearchableFile) {
+templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, thm *theme.Theme, files []models.SearchableFile) {
 	@components.Layout(title, thm, files) {
-		@MarkdownContent(breadcrumbs, content, rootPath)
+		@MarkdownContent(breadcrumbs, content, rawContent, rootPath)
 	}
 }
 
-templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rootPath string) {
+templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string) {
 	<div class="space-y-6">
 		if len(breadcrumbs) > 0 {
 			<nav class="breadcrumb" aria-label="Breadcrumb">
@@ -35,8 +35,19 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rootPath 
 				</ol>
 			</nav>
 		}
-		<article class="prose prose-headings:font-bold prose-a:no-underline hover:prose-a:underline max-w-none">
-			@templ.Raw(content)
-		</article>
+		<div x-data="rawToggle()">
+			<div class="flex justify-end mb-4">
+				<button
+					@click="toggle()"
+					class="px-3 py-1 text-sm rounded transition-colors"
+					style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color); color: var(--fg-color);"
+					x-text="buttonText"
+				></button>
+			</div>
+			<article x-show="!showRaw" class="prose prose-headings:font-bold prose-a:no-underline hover:prose-a:underline max-w-none">
+				@templ.Raw(content)
+			</article>
+			<pre x-show="showRaw" x-cloak class="overflow-x-auto whitespace-pre-wrap rounded-md p-4" style="background-color: var(--code-bg-color); color: var(--code-fg-color);">{ rawContent }</pre>
+		</div>
 	</div>
 }
