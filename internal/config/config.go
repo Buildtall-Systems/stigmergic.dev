@@ -16,6 +16,7 @@ type Config struct {
 	RespectGitignore bool
 	IgnorePatterns   []string
 	Theme            string
+	RecentFilesCount int
 }
 
 func Load(cfgFile string) (*Config, error) {
@@ -26,6 +27,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("loglevel", "ERROR")
 	v.SetDefault("respectgitignore", true)
 	v.SetDefault("theme", "iceberg-dark")
+	v.SetDefault("recentfilescount", 5)
 	v.SetDefault("ignorepatterns", []string{
 		".git",
 		"node_modules",

@@ -4,14 +4,15 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Home(tree *models.Tree, rootPath string, thm *theme.Theme, files []models.SearchableFile) {
+templ Home(tree *models.Tree, rootPath string, thm *theme.Theme, files []models.SearchableFile, recentFiles []models.SearchableFile) {
 	@components.Layout("Home", thm, files) {
-		@HomeContent(tree, rootPath)
+		@HomeContent(tree, rootPath, recentFiles)
 	}
 }
 
-templ HomeContent(tree *models.Tree, rootPath string) {
+templ HomeContent(tree *models.Tree, rootPath string, recentFiles []models.SearchableFile) {
 	<div class="space-y-4">
+		@components.RecentlyUpdated(recentFiles)
 		<h2 class="text-xl font-semibold">{ rootPath }</h2>
 		if tree == nil || tree.Root == nil {
 			<p style="color: var(--comment-color);">No markdown files found.</p>

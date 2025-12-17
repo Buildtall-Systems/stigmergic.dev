@@ -19,9 +19,10 @@ const (
 )
 
 type SearchableFile struct {
-	Name    string
-	Path    string
-	ModTime int64
+	Name         string
+	Path         string
+	ModTime      int64
+	RelativeTime string
 }
 
 type Node struct {

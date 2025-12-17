@@ -1,0 +1,45 @@
+package components
+
+import (
+	"strings"
+
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+)
+
+templ RecentlyUpdated(files []models.SearchableFile) {
+	if len(files) > 0 {
+		<div class="mb-6 rounded-lg p-4" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">
+			<h3 class="text-lg font-medium mb-3" style="color: var(--keyword-color);">
+				Recently Updated
+			</h3>
+			<ul class="space-y-1">
+				for _, f := range files {
+					<li
+						class="px-3 py-2 rounded-md transition-colors cursor-pointer"
+						style="--hover-bg: var(--selection-color);"
+						onmouseover="this.style.backgroundColor=getComputedStyle(this).getPropertyValue('--hover-bg')"
+						onmouseout="this.style.backgroundColor='transparent'"
+					>
+						<a
+							href={ templ.SafeURL("/file" + f.Path) }
+							hx-get={ "/file" + f.Path }
+							hx-target="main"
+							hx-swap="innerHTML"
+							hx-push-url="true"
+							style="color: var(--string-color);"
+						>
+							{ trimMdExtension(f.Name) }
+						</a>
+						<span style="color: var(--comment-color);">
+							{ " · " }{ f.RelativeTime }
+						</span>
+					</li>
+				}
+			</ul>
+		</div>
+	}
+}
+
+func trimMdExtension(name string) string {
+	return strings.TrimSuffix(name, ".md")
+}

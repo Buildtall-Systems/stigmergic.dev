@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/embed"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/timeutil"
 	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
 )
 
@@ -45,18 +47,39 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	tree := s.tree
 	s.treeMux.RUnlock()
 
+	files := tree.FlattenMarkdownFiles()
+	recentFiles := s.computeRecentFiles(files)
+
 	if isHTMXRequest(r) {
 		logger.Log.Debug("rendering HTMX home partial")
-		if err := templates.HomeContent(tree, s.config.WatchPath).Render(r.Context(), w); err != nil {
+		if err := templates.HomeContent(tree, s.config.WatchPath, recentFiles).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home content template", "error", err)
 		}
 	} else {
-		files := tree.FlattenMarkdownFiles()
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(tree, s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
+		if err := templates.Home(tree, s.config.WatchPath, s.theme, files, recentFiles).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
 	}
+}
+
+func (s *Server) computeRecentFiles(files []models.SearchableFile) []models.SearchableFile {
+	count := s.config.RecentFilesCount
+	if count <= 0 {
+		return nil
+	}
+	if len(files) < count {
+		count = len(files)
+	}
+
+	recentFiles := make([]models.SearchableFile, count)
+	copy(recentFiles, files[:count])
+
+	for i := range recentFiles {
+		recentFiles[i].RelativeTime = timeutil.RelativeTime(time.Unix(recentFiles[i].ModTime, 0))
+	}
+
+	return recentFiles
 }
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {

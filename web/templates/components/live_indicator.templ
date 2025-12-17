@@ -13,11 +13,25 @@ templ LiveIndicator() {
 		></span>
 	</div>
 	<script>
+		window.sseConnectionState = window.sseConnectionState || 'connecting'
+
+		document.body.addEventListener('htmx:sseOpen', () => {
+			window.sseConnectionState = 'connected'
+		})
+		document.body.addEventListener('htmx:sseError', () => {
+			window.sseConnectionState = 'reconnecting'
+		})
+		document.body.addEventListener('htmx:sseClose', () => {
+			window.sseConnectionState = 'disconnected'
+		})
+
 		function liveIndicator() {
 			return {
-				state: 'connecting',
+				state: window.sseConnectionState,
 
 				init() {
+					this.state = window.sseConnectionState
+
 					document.body.addEventListener('htmx:sseOpen', () => {
 						this.state = 'connected'
 					})
