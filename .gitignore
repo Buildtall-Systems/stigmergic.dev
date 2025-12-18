@@ -2,5 +2,4 @@ tmp/
 /stigmergic
 *_templ.go
 *.log
-internal/embed/web/static/styles/output.css
 node_modules/

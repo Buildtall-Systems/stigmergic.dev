@@ -56,4 +56,11 @@ You are an automated developer working inside a repository that enforces strict,
 * Ask as many clarifying questions as you need to ask, but ask them one at a time, no laundry lists of questions.
 * Never produce code in the chat window unless asked for, no "here's what I'll do", just do it. otherwise, explain in english.
 
+### Build artifacts
+
+* `output.css` is committed to the repository. The Nix build does not regenerate it.
+* When modifying templates or CSS, run `make build` which regenerates `output.css` via the Makefile `css` target.
+* Always commit `output.css` alongside template changes. Check `git status` before committing.
+* This exists because Tailwind v4 requires node module resolution that the Nix sandbox cannot provide.
+
 Follow these rules rigorously. Non‑compliance is treated as a defect.

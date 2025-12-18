@@ -37,10 +37,9 @@
           src = ./.;
           vendorHash = null;
 
-          nativeBuildInputs = [ pkgs.templ pkgs.tailwindcss ];
+          nativeBuildInputs = [ pkgs.templ ];
 
           preBuild = ''
-            tailwindcss -i ./internal/embed/web/static/styles/input.css -o ./internal/embed/web/static/styles/output.css --minify
             templ generate
           '';
         };
