@@ -41,3 +41,23 @@ Files modified:
 - `internal/server/handlers.go` - Pass string(content) as rawContent to template calls
 
 Verification: `make generate && make build && make test && make lint` - all pass (0 lint issues, all tests pass).
+
+## 2025-12-18
+
+Upgraded Tailwind CSS from v3.4.1 to v4.1.18 using official upgrade tool.
+
+Migration changes:
+- CSS syntax: `@tailwind base/components/utilities` → `@import 'tailwindcss'`
+- Custom components: `@layer components` → `@utility` directives
+- Class renames: `outline-none` → `outline-hidden`, `shadow-sm` → `shadow-xs`, `rounded` → `rounded-sm`
+- Modifier order: `hover:prose-a:underline` → `prose-a:hover:underline`
+- Added `@config` directive pointing to tailwind.config.js
+- Installed `@tailwindcss/cli` package (v4 CLI is separate from core)
+- Updated Makefile to use `pnpm exec tailwindcss` instead of direct `tailwindcss`
+- Added border-color compatibility layer for v3→v4 default change
+
+Build performance: CSS now compiles in ~239ms (v4 speed improvement).
+
+Files changed: Makefile, package.json, pnpm-lock.yaml, input.css (both copies), 5 template files.
+
+Verification: `make build && make test && make lint` - all pass.

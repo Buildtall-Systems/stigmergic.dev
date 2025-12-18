@@ -44,7 +44,7 @@ templ Tree(node *models.Node) {
 				} else {
 					<a
 						href={ templ.SafeURL("/file/" + templ.EscapeString(child.Path)) }
-						class="tree-item group focus:outline-none"
+						class="tree-item group focus:outline-hidden"
 						hx-get={ "/file/" + templ.EscapeString(child.Path) }
 						hx-target="main"
 						hx-swap="innerHTML"

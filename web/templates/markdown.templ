@@ -39,12 +39,12 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawConten
 			<div class="flex justify-end mb-4">
 				<button
 					@click="toggle()"
-					class="px-3 py-1 text-sm rounded transition-colors"
+					class="px-3 py-1 text-sm rounded-sm transition-colors"
 					style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color); color: var(--fg-color);"
 					x-text="buttonText"
 				></button>
 			</div>
-			<article x-show="!showRaw" class="prose prose-headings:font-bold prose-a:no-underline hover:prose-a:underline max-w-none">
+			<article x-show="!showRaw" class="prose prose-headings:font-bold prose-a:no-underline prose-a:hover:underline max-w-none">
 				@templ.Raw(content)
 			</article>
 			<pre x-show="showRaw" x-cloak class="overflow-x-auto whitespace-pre-wrap rounded-md p-4" style="background-color: var(--code-bg-color); color: var(--code-fg-color);">{ rawContent }</pre>

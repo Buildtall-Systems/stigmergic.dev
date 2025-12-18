@@ -4,7 +4,7 @@ lint:
 	golangci-lint run ./...
 
 css:
-	tailwindcss -i ./internal/embed/web/static/styles/input.css -o ./internal/embed/web/static/styles/output.css --minify
+	pnpm exec tailwindcss -i ./internal/embed/web/static/styles/input.css -o ./internal/embed/web/static/styles/output.css --minify
 
 generate:
 	templ generate

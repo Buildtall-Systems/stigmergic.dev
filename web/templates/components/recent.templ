@@ -23,7 +23,7 @@ templ RecentlyUpdated(files []models.SearchableFile) {
 							hx-swap="innerHTML"
 							hx-push-url="true"
 							data-nav-item
-							class="block px-3 py-2 rounded-md transition-colors cursor-pointer focus:outline-none"
+							class="block px-3 py-2 rounded-md transition-colors cursor-pointer focus:outline-hidden"
 							style="--hover-bg: var(--selection-color);"
 							onmouseover="this.style.backgroundColor=getComputedStyle(this).getPropertyValue('--hover-bg')"
 							onmouseout="this.style.backgroundColor=''"
