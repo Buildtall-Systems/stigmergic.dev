@@ -61,3 +61,22 @@ Build performance: CSS now compiles in ~239ms (v4 speed improvement).
 Files changed: Makefile, package.json, pnpm-lock.yaml, input.css (both copies), 5 template files.
 
 Verification: `make build && make test && make lint` - all pass.
+
+---
+
+Upgraded command palette visual design to match Alpine.js documentation style.
+
+Five-phase implementation:
+1. Added IconSearch, IconClose, IconReturn to icons.templ
+2. Updated search header with magnifying glass icon (left) and close button (right)
+3. Restructured results with category headers ("Commands", "Files"), item icons (terminal for commands, document for files), and return arrow on selected item using hidden template pattern
+4. Added keyboard hints footer (↵ to select, ↓↑ to navigate, esc to close)
+5. Implemented Fuse.js match highlighting with bold matched characters
+
+Technical approach: Hidden `<template>` elements render icons once via templ; Alpine.js reads innerHTML at runtime. Single source of truth for icons, no duplication.
+
+Files modified:
+- `web/templates/components/icons.templ` - Added 3 new icon components
+- `web/templates/components/command_palette.templ` - Complete UI restructure with categories, icons, footer, highlighting
+
+Verification: `make build && make test && make lint` - all pass (0 lint issues).

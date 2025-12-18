@@ -6,46 +6,107 @@ templ CommandPalette() {
 
 		<div x-cloak x-show="open" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-2xl" x-trap="open" @click.away="close()">
 			<div class="rounded-lg shadow-2xl" style="background-color: var(--bg-color); border: 1px solid var(--border-color);">
-				<div class="p-4 border-b" style="border-bottom-color: var(--border-color);">
+				<div class="p-4 border-b flex items-center gap-3" style="border-bottom-color: var(--border-color);">
+					@IconSearch("w-5 h-5 flex-shrink-0", "color: var(--comment-color);")
 					<input
 						x-ref="searchInput"
 						type="text"
-						placeholder="Search files and commands... (Ctrl+K)"
+						placeholder="Search files and commands..."
 						x-model="query"
 						@input="filter()"
 						@keydown.down="nextResult()"
 						@keydown.up="prevResult()"
 						@keydown.enter="selectResult()"
 						@keydown.escape="close()"
-						class="w-full px-0 py-2 bg-transparent outline-hidden"
+						class="flex-1 bg-transparent outline-hidden"
 						style="color: var(--fg-color);"
 					/>
+					<button @click="close()" class="flex-shrink-0 p-1 rounded hover:opacity-80 transition-opacity" style="color: var(--comment-color);">
+						@IconClose("w-5 h-5", "")
+					</button>
 				</div>
+
+				<template id="icon-file">
+					@IconFile("w-5 h-5 flex-shrink-0", "")
+				</template>
+				<template id="icon-command">
+					@IconTerminal("w-5 h-5 flex-shrink-0", "")
+				</template>
+				<template id="icon-return">
+					@IconReturn("w-4 h-4", "")
+				</template>
 
 				<div class="max-h-96 overflow-y-auto" x-ref="resultsList">
 					<template x-if="results.length === 0">
 						<div class="p-4 text-center" style="color: var(--comment-color);">
 							<span x-show="query">No matches found</span>
-							<span x-show="!query">No files</span>
+							<span x-show="!query">Type to search files and commands</span>
 						</div>
 					</template>
 
-					<template x-for="(item, index) in results" :key="item.id">
-						<div
-							@click="selectIndex(index)"
-							@mouseover="selectedIndex = index"
-							:data-selected="selectedIndex === index"
-							:style="selectedIndex === index ? 'background-color: var(--selection-color);' : ''"
-							class="px-4 py-3 border-b cursor-pointer transition-colors"
-							style="border-bottom-color: var(--border-color);"
-						>
-							<div class="flex items-center gap-2">
-								<span x-show="item.type === 'command'" style="color: var(--purple-color);">&gt;</span>
-								<span style="color: var(--fg-color);" x-text="item.name"></span>
+					<template x-if="groupedResults.commands.length > 0">
+						<div>
+							<div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--cyan-color); background-color: var(--bg-alt-color);">
+								Commands
 							</div>
-							<div x-show="item.description" style="color: var(--comment-color); font-size: 0.875em;" x-text="item.description"></div>
+							<template x-for="(item, index) in results.filter(r => r.type === 'command')" :key="item.id">
+								<div
+									@click="selectByItem(item)"
+									@mouseover="selectedIndex = results.indexOf(item)"
+									:data-selected="selectedIndex === results.indexOf(item)"
+									:style="selectedIndex === results.indexOf(item) ? 'background-color: var(--selection-color);' : ''"
+									class="px-4 py-3 cursor-pointer transition-colors flex items-center gap-3"
+								>
+									<span x-html="getIcon('command')" style="color: var(--purple-color);"></span>
+									<div class="flex-1 min-w-0">
+										<div style="color: var(--fg-color);" x-html="highlightMatch(item)"></div>
+										<div x-show="item.description" style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-text="item.description"></div>
+									</div>
+									<span x-show="selectedIndex === results.indexOf(item)" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
+								</div>
+							</template>
 						</div>
 					</template>
+
+					<template x-if="groupedResults.files.length > 0">
+						<div>
+							<div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--cyan-color); background-color: var(--bg-alt-color);">
+								Files
+							</div>
+							<template x-for="(item, index) in results.filter(r => r.type === 'file')" :key="item.id">
+								<div
+									@click="selectByItem(item)"
+									@mouseover="selectedIndex = results.indexOf(item)"
+									:data-selected="selectedIndex === results.indexOf(item)"
+									:style="selectedIndex === results.indexOf(item) ? 'background-color: var(--selection-color);' : ''"
+									class="px-4 py-3 cursor-pointer transition-colors flex items-center gap-3"
+								>
+									<span x-html="getIcon('file')" style="color: var(--comment-color);"></span>
+									<div class="flex-1 min-w-0">
+										<div style="color: var(--fg-color);" x-html="highlightMatch(item)"></div>
+										<div style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-text="item.description"></div>
+									</div>
+									<span x-show="selectedIndex === results.indexOf(item)" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
+								</div>
+							</template>
+						</div>
+					</template>
+				</div>
+
+				<div class="px-4 py-3 border-t flex items-center justify-center gap-6 text-xs" style="border-top-color: var(--border-color); color: var(--comment-color);">
+					<span class="flex items-center gap-1">
+						<kbd class="px-1.5 py-0.5 rounded" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">↵</kbd>
+						<span>to select</span>
+					</span>
+					<span class="flex items-center gap-1">
+						<kbd class="px-1.5 py-0.5 rounded" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">↓</kbd>
+						<kbd class="px-1.5 py-0.5 rounded" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">↑</kbd>
+						<span>to navigate</span>
+					</span>
+					<span class="flex items-center gap-1">
+						<kbd class="px-1.5 py-0.5 rounded" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">esc</kbd>
+						<span>to close</span>
+					</span>
 				</div>
 			</div>
 		</div>
@@ -62,6 +123,28 @@ templ CommandPalette() {
 				],
 				results: [],
 				selectedIndex: 0,
+
+				get groupedResults() {
+					const commands = this.results.filter(r => r.type === 'command');
+					const files = this.results.filter(r => r.type === 'file');
+					return { commands, files };
+				},
+
+				getIcon(type) {
+					const id = type === 'command' ? 'icon-command' : 'icon-file';
+					return document.getElementById(id).innerHTML;
+				},
+
+				getReturnIcon() {
+					return document.getElementById('icon-return').innerHTML;
+				},
+
+				selectByItem(item) {
+					const index = this.results.indexOf(item);
+					if (index >= 0) {
+						this.selectIndex(index);
+					}
+				},
 
 				init() {
 					this.loadFiles()
@@ -116,7 +199,7 @@ templ CommandPalette() {
 
 				filter() {
 					if (!this.query.trim()) {
-						this.results = [...this.allFiles];
+						this.results = [...this.allFiles].map(f => ({ ...f, matches: null }));
 						this.selectedIndex = 0;
 						return;
 					}
@@ -125,14 +208,46 @@ templ CommandPalette() {
 					const fuse = new Fuse(allItems, {
 						keys: ['name', 'description'],
 						threshold: 0.4,
-						includeScore: true
+						includeScore: true,
+						includeMatches: true
 					});
 
 					const searchResults = fuse.search(this.query);
-					const commands = searchResults.filter(r => r.item.type === 'command').map(r => r.item);
-					const files = searchResults.filter(r => r.item.type === 'file').map(r => r.item);
+					const commands = searchResults.filter(r => r.item.type === 'command').map(r => ({ ...r.item, matches: r.matches }));
+					const files = searchResults.filter(r => r.item.type === 'file').map(r => ({ ...r.item, matches: r.matches }));
 					this.results = [...commands, ...files];
 					this.selectedIndex = 0;
+				},
+
+				highlightMatch(item) {
+					if (!item.matches) {
+						return this.escapeHtml(item.name);
+					}
+
+					const nameMatch = item.matches.find(m => m.key === 'name');
+					if (!nameMatch) {
+						return this.escapeHtml(item.name);
+					}
+
+					const text = item.name;
+					const indices = nameMatch.indices;
+					let result = '';
+					let lastIndex = 0;
+
+					for (const [start, end] of indices) {
+						result += this.escapeHtml(text.slice(lastIndex, start));
+						result += '<strong>' + this.escapeHtml(text.slice(start, end + 1)) + '</strong>';
+						lastIndex = end + 1;
+					}
+					result += this.escapeHtml(text.slice(lastIndex));
+
+					return result;
+				},
+
+				escapeHtml(text) {
+					const div = document.createElement('div');
+					div.textContent = text;
+					return div.innerHTML;
 				},
 
 				nextResult() {
