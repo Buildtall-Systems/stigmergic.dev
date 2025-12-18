@@ -13,7 +13,7 @@ templ CommandPalette() {
 						type="text"
 						placeholder="Search files and commands..."
 						x-model="query"
-						@input="filter()"
+						@input="debouncedFilter()"
 						@keydown.down="nextResult()"
 						@keydown.up="prevResult()"
 						@keydown.enter="selectResult()"
@@ -49,12 +49,12 @@ templ CommandPalette() {
 							<div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--cyan-color); background-color: var(--bg-alt-color);">
 								Commands
 							</div>
-							<template x-for="(item, index) in results.filter(r => r.type === 'command')" :key="item.id">
+							<template x-for="item in groupedResults.commands" :key="item.id">
 								<div
-									@click="selectByItem(item)"
-									@mouseover="selectedIndex = results.indexOf(item)"
-									:data-selected="selectedIndex === results.indexOf(item)"
-									:style="selectedIndex === results.indexOf(item) ? 'background-color: var(--selection-color);' : ''"
+									@click="selectIndex(item.resultIndex)"
+									@mouseover="selectedIndex = item.resultIndex"
+									:data-selected="selectedIndex === item.resultIndex"
+									:style="selectedIndex === item.resultIndex ? 'background-color: var(--selection-color);' : ''"
 									class="px-4 py-3 cursor-pointer transition-colors flex items-center gap-3"
 								>
 									<span x-html="getIcon('command')" style="color: var(--purple-color);"></span>
@@ -62,7 +62,7 @@ templ CommandPalette() {
 										<div style="color: var(--fg-color);" x-html="highlightMatch(item)"></div>
 										<div x-show="item.description" style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-text="item.description"></div>
 									</div>
-									<span x-show="selectedIndex === results.indexOf(item)" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
+									<span x-show="selectedIndex === item.resultIndex" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
 								</div>
 							</template>
 						</div>
@@ -73,12 +73,12 @@ templ CommandPalette() {
 							<div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--cyan-color); background-color: var(--bg-alt-color);">
 								Files
 							</div>
-							<template x-for="(item, index) in results.filter(r => r.type === 'file')" :key="item.id">
+							<template x-for="item in groupedResults.files" :key="item.id">
 								<div
-									@click="selectByItem(item)"
-									@mouseover="selectedIndex = results.indexOf(item)"
-									:data-selected="selectedIndex === results.indexOf(item)"
-									:style="selectedIndex === results.indexOf(item) ? 'background-color: var(--selection-color);' : ''"
+									@click="selectIndex(item.resultIndex)"
+									@mouseover="selectedIndex = item.resultIndex"
+									:data-selected="selectedIndex === item.resultIndex"
+									:style="selectedIndex === item.resultIndex ? 'background-color: var(--selection-color);' : ''"
 									class="px-4 py-3 cursor-pointer transition-colors flex items-center gap-3"
 								>
 									<span x-html="getIcon('file')" style="color: var(--comment-color);"></span>
@@ -86,7 +86,7 @@ templ CommandPalette() {
 										<div style="color: var(--fg-color);" x-html="highlightMatch(item)"></div>
 										<div style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-text="item.description"></div>
 									</div>
-									<span x-show="selectedIndex === results.indexOf(item)" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
+									<span x-show="selectedIndex === item.resultIndex" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
 								</div>
 							</template>
 						</div>
@@ -125,30 +125,25 @@ templ CommandPalette() {
 				selectedIndex: 0,
 
 				get groupedResults() {
-					const commands = this.results.filter(r => r.type === 'command');
-					const files = this.results.filter(r => r.type === 'file');
-					return { commands, files };
+					return this._groupedResults || { commands: [], files: [] };
 				},
 
 				getIcon(type) {
-					const id = type === 'command' ? 'icon-command' : 'icon-file';
-					return document.getElementById(id).innerHTML;
+					return this._iconCache[type];
 				},
 
 				getReturnIcon() {
-					return document.getElementById('icon-return').innerHTML;
-				},
-
-				selectByItem(item) {
-					const index = this.results.indexOf(item);
-					if (index >= 0) {
-						this.selectIndex(index);
-					}
+					return this._iconCache.return;
 				},
 
 				init() {
-					this.loadFiles()
-					document.body.addEventListener('htmx:afterSwap', () => this.refreshFiles())
+					this._iconCache = {
+						command: document.getElementById('icon-command').innerHTML,
+						file: document.getElementById('icon-file').innerHTML,
+						return: document.getElementById('icon-return').innerHTML
+					};
+					this.loadFiles();
+					document.body.addEventListener('htmx:afterSwap', () => this.refreshFiles());
 				},
 
 				loadFiles() {
@@ -162,7 +157,22 @@ templ CommandPalette() {
 							path: f.Path
 						}));
 					}
-					this.results = [...this.allFiles];
+					this.rebuildIndex();
+					this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
+					this._groupedResults = {
+						commands: [],
+						files: this.results
+					};
+				},
+
+				rebuildIndex() {
+					const allItems = [...this.commands, ...this.allFiles];
+					this.fuse = new Fuse(allItems, {
+						keys: ['name', 'description'],
+						threshold: 0.4,
+						includeScore: true,
+						includeMatches: true
+					});
 				},
 
 				refreshFiles() {
@@ -176,7 +186,13 @@ templ CommandPalette() {
 								description: f.Path,
 								path: f.Path
 							}));
-							this.filter();
+							this.rebuildIndex();
+							if (this.query.trim()) {
+								this.filter();
+							} else {
+								this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
+								this._groupedResults = { commands: [], files: this.results };
+							}
 						})
 						.catch(err => console.error('Failed to refresh files:', err));
 				},
@@ -194,28 +210,31 @@ templ CommandPalette() {
 					this.open = false;
 					this.query = '';
 					this.selectedIndex = 0;
-					this.filter();
+					this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
+					this._groupedResults = { commands: [], files: this.results };
+				},
+
+				debouncedFilter() {
+					clearTimeout(this._filterTimeout);
+					this._filterTimeout = setTimeout(() => this.filter(), 150);
 				},
 
 				filter() {
 					if (!this.query.trim()) {
-						this.results = [...this.allFiles].map(f => ({ ...f, matches: null }));
+						this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
+						this._groupedResults = { commands: [], files: this.results };
 						this.selectedIndex = 0;
 						return;
 					}
 
-					const allItems = [...this.commands, ...this.allFiles];
-					const fuse = new Fuse(allItems, {
-						keys: ['name', 'description'],
-						threshold: 0.4,
-						includeScore: true,
-						includeMatches: true
-					});
-
-					const searchResults = fuse.search(this.query);
+					const searchResults = this.fuse.search(this.query, { limit: 50 });
 					const commands = searchResults.filter(r => r.item.type === 'command').map(r => ({ ...r.item, matches: r.matches }));
 					const files = searchResults.filter(r => r.item.type === 'file').map(r => ({ ...r.item, matches: r.matches }));
-					this.results = [...commands, ...files];
+					this.results = [...commands, ...files].map((item, i) => ({ ...item, resultIndex: i }));
+					this._groupedResults = {
+						commands: this.results.filter(r => r.type === 'command'),
+						files: this.results.filter(r => r.type === 'file')
+					};
 					this.selectedIndex = 0;
 				},
 
@@ -245,9 +264,11 @@ templ CommandPalette() {
 				},
 
 				escapeHtml(text) {
-					const div = document.createElement('div');
-					div.textContent = text;
-					return div.innerHTML;
+					return text
+						.replace(/&/g, '&amp;')
+						.replace(/</g, '&lt;')
+						.replace(/>/g, '&gt;')
+						.replace(/"/g, '&quot;');
 				},
 
 				nextResult() {
