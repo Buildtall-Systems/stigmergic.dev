@@ -1,6 +1,7 @@
 package components
 
 import (
+	"path"
 	"strings"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
@@ -14,25 +15,33 @@ templ RecentlyUpdated(files []models.SearchableFile) {
 			</h3>
 			<ul class="space-y-1">
 				for _, f := range files {
-					<li
-						class="px-3 py-2 rounded-md transition-colors cursor-pointer"
-						style="--hover-bg: var(--selection-color);"
-						onmouseover="this.style.backgroundColor=getComputedStyle(this).getPropertyValue('--hover-bg')"
-						onmouseout="this.style.backgroundColor='transparent'"
-					>
+					<li>
 						<a
 							href={ templ.SafeURL("/file" + f.Path) }
 							hx-get={ "/file" + f.Path }
 							hx-target="main"
 							hx-swap="innerHTML"
 							hx-push-url="true"
-							style="color: var(--string-color);"
+							data-nav-item
+							class="block px-3 py-2 rounded-md transition-colors cursor-pointer focus:outline-none"
+							style="--hover-bg: var(--selection-color);"
+							onmouseover="this.style.backgroundColor=getComputedStyle(this).getPropertyValue('--hover-bg')"
+							onmouseout="this.style.backgroundColor=''"
+							onfocus="this.style.backgroundColor=getComputedStyle(this).getPropertyValue('--hover-bg')"
+							onblur="this.style.backgroundColor=''"
 						>
-							{ trimMdExtension(f.Name) }
+							<span style="color: var(--string-color);">
+								{ trimMdExtension(f.Name) }
+							</span>
+							if dir := getDir(f.Path); dir != "/" {
+								<span class="text-xs ml-2" style="color: var(--comment-color); opacity: 0.7;">
+									{ dir }
+								</span>
+							}
+							<span style="color: var(--comment-color);">
+								{ " · " }{ f.RelativeTime }
+							</span>
 						</a>
-						<span style="color: var(--comment-color);">
-							{ " · " }{ f.RelativeTime }
-						</span>
 					</li>
 				}
 			</ul>
@@ -42,4 +51,8 @@ templ RecentlyUpdated(files []models.SearchableFile) {
 
 func trimMdExtension(name string) string {
 	return strings.TrimSuffix(name, ".md")
+}
+
+func getDir(filePath string) string {
+	return path.Dir(filePath)
 }

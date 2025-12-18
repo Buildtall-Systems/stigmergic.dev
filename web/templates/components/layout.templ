@@ -62,8 +62,14 @@ func themeCSS(thm *theme.Theme) string {
 	.tree-item-icon {
 		color: var(--comment-color);
 	}
-	.tree-item:hover {
+	.tree-item:hover,
+	.tree-item:focus {
 		background-color: var(--selection-color);
+	}
+	[data-nav-item]:hover,
+	[data-nav-item]:focus {
+		background-color: var(--selection-color);
+		border-radius: 0.375rem;
 	}
 	.prose {
 		color: var(--fg-color);
@@ -330,17 +336,63 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile) {
 					}
 				}
 
+				function initKeyboardNav() {
+					document.querySelectorAll('[data-nav-item]').forEach(function(item) {
+						item.style.backgroundColor = ''
+					})
+					var firstItem = document.querySelector('[data-nav-item]')
+					if (firstItem) {
+						firstItem.focus()
+					}
+				}
+
+				function handleNavKeydown(evt) {
+					if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return
+					var active = document.activeElement
+					if (!active || !active.hasAttribute('data-nav-item')) return
+
+					var items = Array.from(document.querySelectorAll('[data-nav-item]'))
+					var idx = items.indexOf(active)
+					if (idx === -1) return
+
+					evt.preventDefault()
+					var nextIdx
+					if (evt.key === 'ArrowDown') {
+						nextIdx = idx + 1 < items.length ? idx + 1 : 0
+					} else {
+						nextIdx = idx - 1 >= 0 ? idx - 1 : items.length - 1
+					}
+					items[nextIdx].focus()
+				}
+
 				document.addEventListener("DOMContentLoaded", function() {
 					renderMath(document.body);
 					initCodeCopyButtons();
+					initKeyboardNav();
+					document.addEventListener('keydown', handleNavKeydown);
 
 					document.body.addEventListener('htmx:afterSwap', function(evt) {
 						renderMath(evt.detail.target);
 						initCodeCopyButtons();
+						if (evt.detail.target.id === 'main' && window.location.pathname === '/') {
+							initKeyboardNav();
+						}
 					});
 
 					document.body.addEventListener('sse:message', function(evt) {
 						htmx.ajax('GET', window.location.pathname, {target: '#main', swap: 'innerHTML'});
+					});
+
+					window.addEventListener('pageshow', function(evt) {
+						if (evt.persisted && window.location.pathname === '/') {
+							initKeyboardNav();
+						}
+					});
+
+					document.body.addEventListener('htmx:historyRestore', function() {
+						if (window.location.pathname === '/') {
+							initKeyboardNav();
+						}
 					});
 				});
 			</script>

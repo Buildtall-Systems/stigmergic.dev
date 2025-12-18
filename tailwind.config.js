@@ -5,6 +5,9 @@ module.exports = {
   ],
   theme: {
     extend: {
+      colors: {
+        selection: 'var(--selection-color)',
+      },
       typography: {
         DEFAULT: {
           css: {
