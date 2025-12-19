@@ -63,4 +63,21 @@ You are an automated developer working inside a repository that enforces strict,
 * Always commit `output.css` alongside template changes. Check `git status` before committing.
 * This exists because Tailwind v4 requires node module resolution that the Nix sandbox cannot provide.
 
+### Ship it
+
+When the operator says "ship it", execute the following git-flow release sequence:
+
+**From develop branch:**
+1. Commit any uncommitted work to develop
+2. Push develop to origin
+3. Merge develop onto master
+4. Push master to origin
+
+**From a feature branch:**
+1. Commit any uncommitted work to the feature branch
+2. Merge feature branch to develop
+3. Push develop to origin
+4. Merge develop onto master
+5. Push master to origin
+
 Follow these rules rigorously. Non‑compliance is treated as a defect.

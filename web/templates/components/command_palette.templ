@@ -220,14 +220,29 @@ templ CommandPalette() {
 				},
 
 				filter() {
-					if (!this.query.trim()) {
+					const q = this.query.trim();
+
+					if (!q) {
 						this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
 						this._groupedResults = { commands: [], files: this.results };
 						this.selectedIndex = 0;
 						return;
 					}
 
-					const searchResults = this.fuse.search(this.query, { limit: 50 });
+					if (q.length === 1) {
+						const lower = q.toLowerCase();
+						const commands = this.commands.filter(c => c.name.toLowerCase().startsWith(lower));
+						const files = this.allFiles.filter(f => f.name.toLowerCase().startsWith(lower));
+						this.results = [...commands, ...files].slice(0, 50).map((item, i) => ({ ...item, matches: null, resultIndex: i }));
+						this._groupedResults = {
+							commands: this.results.filter(r => r.type === 'command'),
+							files: this.results.filter(r => r.type === 'file')
+						};
+						this.selectedIndex = 0;
+						return;
+					}
+
+					const searchResults = this.fuse.search(q, { limit: 50 });
 					const commands = searchResults.filter(r => r.item.type === 'command').map(r => ({ ...r.item, matches: r.matches }));
 					const files = searchResults.filter(r => r.item.type === 'file').map(r => ({ ...r.item, matches: r.matches }));
 					this.results = [...commands, ...files].map((item, i) => ({ ...item, resultIndex: i }));

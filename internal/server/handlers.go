@@ -47,7 +47,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	tree := s.tree
 	s.treeMux.RUnlock()
 
-	files := tree.FlattenMarkdownFiles()
+	files := s.cachedFiles.Load().([]models.SearchableFile)
 	recentFiles := s.computeRecentFiles(files)
 
 	if isHTMXRequest(r) {
@@ -112,9 +112,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	title := filepath.Base(filePath)
 	isHTMX := isHTMXRequest(r)
 
-	s.treeMux.RLock()
-	files := s.tree.FlattenMarkdownFiles()
-	s.treeMux.RUnlock()
+	files := s.cachedFiles.Load().([]models.SearchableFile)
 
 	if info.IsDir() {
 		s.treeMux.RLock()
@@ -241,9 +239,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFilesAPI(w http.ResponseWriter, r *http.Request) {
-	s.treeMux.RLock()
-	files := s.tree.FlattenMarkdownFiles()
-	s.treeMux.RUnlock()
+	files := s.cachedFiles.Load().([]models.SearchableFile)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(files); err != nil {

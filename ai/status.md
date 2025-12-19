@@ -80,3 +80,31 @@ Files modified:
 - `web/templates/components/command_palette.templ` - Complete UI restructure with categories, icons, footer, highlighting
 
 Verification: `make build && make test && make lint` - all pass (0 lint issues).
+
+## 2025-12-19
+
+Implemented performance optimization eliminating multi-second delays on page load and command palette input.
+
+**Phase 1: Server-side file list caching**
+- Added `atomic.Value cachedFiles` field to Server struct for lock-free reads
+- Initialize cache with `FlattenMarkdownFiles()` result on server startup
+- Refresh cache atomically in `updateTree()` when watcher detects file changes
+- Updated 3 handlers (`handleHome`, `handleMarkdown`, `handleFilesAPI`) to use cached load instead of calling `FlattenMarkdownFiles()` per-request
+
+**Phase 2: Client-side query optimization**
+- Updated command palette `filter()` function for single-character queries
+- 1-char queries: fast prefix-only matching (no Fuse.js fuzzy search)
+- 2+ char queries: standard Fuse.js fuzzy search
+- Eliminates exponential fuzzy matching cost on single characters
+
+**Performance impact** (tested with 5000 files):
+- Page load: O(n log n) per request → O(1) cache lookup
+- Command palette 1-char: exponential fuzzy → linear prefix filter
+- Cache updates: atomic store on file system changes via SSE
+
+Files modified:
+- `internal/server/server.go` - Added atomic.Value field, init, updateTree refresh
+- `internal/server/handlers.go` - 3 handlers now use cached files
+- `web/templates/components/command_palette.templ` - Single-char prefix matching
+
+Verification: `make test && make lint && make build` - all pass (0 lint issues).

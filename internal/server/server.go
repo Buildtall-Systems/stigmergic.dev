@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -19,18 +20,19 @@ import (
 )
 
 type Server struct {
-	httpServer *http.Server
-	config     *config.Config
-	mux        *http.ServeMux
-	tree       *models.Tree
-	treeMux    sync.RWMutex
-	watcher    *watcher.Watcher
-	theme      *theme.Theme
-	clients    map[chan string]bool
-	clientsMux sync.RWMutex
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
+	httpServer  *http.Server
+	config      *config.Config
+	mux         *http.ServeMux
+	tree        *models.Tree
+	treeMux     sync.RWMutex
+	cachedFiles atomic.Value
+	watcher     *watcher.Watcher
+	theme       *theme.Theme
+	clients     map[chan string]bool
+	clientsMux  sync.RWMutex
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -89,6 +91,8 @@ func NewServer(cfg *config.Config) *Server {
 		ctx:        ctx,
 		cancel:     cancel,
 	}
+
+	s.cachedFiles.Store(tree.FlattenMarkdownFiles())
 
 	s.wg.Add(1)
 	go s.broadcastEvents()
@@ -252,5 +256,7 @@ func (s *Server) updateTree() {
 	s.treeMux.Lock()
 	s.tree = newTree
 	s.treeMux.Unlock()
+
+	s.cachedFiles.Store(newTree.FlattenMarkdownFiles())
 	logger.Log.Info("directory tree updated successfully")
 }
