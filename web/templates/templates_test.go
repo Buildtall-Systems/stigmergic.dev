@@ -41,7 +41,7 @@ func TestHomeRendersWithoutTree(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}).Render(context.Background(), &sb)
+	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestHomeRendersWithEmptyTree(t *testing.T) {
 
 	tree := &models.Tree{}
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}

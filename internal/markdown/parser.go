@@ -25,6 +25,7 @@ func Parse(source []byte) ([]byte, error) {
 			),
 			&mermaid.Extender{
 				RenderMode: mermaid.RenderModeClient,
+				NoScript:   true,
 			},
 			nostr.New(nostr.WithNostrLink("nostr:%s")),
 		),

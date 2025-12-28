@@ -232,6 +232,13 @@ func TestServerUpdateTree(t *testing.T) {
 
 	srv := NewServer(cfg)
 
+	// Wait for background scan to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.WaitForIndexReady(ctx); err != nil {
+		t.Fatalf("timed out waiting for index: %v", err)
+	}
+
 	srv.treeMux.RLock()
 	initialNode := srv.tree.Find(filepath.Join(tmpDir, "initial.md"))
 	srv.treeMux.RUnlock()
@@ -270,6 +277,13 @@ func TestServerUpdateTreeConcurrent(t *testing.T) {
 
 	srv := NewServer(cfg)
 
+	// Wait for background scan to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.WaitForIndexReady(ctx); err != nil {
+		t.Fatalf("timed out waiting for index: %v", err)
+	}
+
 	done := make(chan bool)
 	go func() {
 		for i := 0; i < 100; i++ {
@@ -307,6 +321,13 @@ func TestServerUpdateTreeOnInvalidPath(t *testing.T) {
 	}
 
 	srv := NewServer(cfg)
+
+	// Wait for background scan to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.WaitForIndexReady(ctx); err != nil {
+		t.Fatalf("timed out waiting for index: %v", err)
+	}
 
 	srv.treeMux.Lock()
 	srv.config.WatchPath = "/nonexistent/path"
@@ -351,7 +372,12 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 		_ = srv.Shutdown(ctx)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for background scan to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.WaitForIndexReady(ctx); err != nil {
+		t.Fatalf("timed out waiting for index: %v", err)
+	}
 
 	srv.treeMux.RLock()
 	initialNode := srv.tree.Find(filepath.Join(tmpDir, "new-file.md"))

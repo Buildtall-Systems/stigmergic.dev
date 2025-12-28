@@ -108,3 +108,73 @@ Files modified:
 - `web/templates/components/command_palette.templ` - Single-char prefix matching
 
 Verification: `make test && make lint && make build` - all pass (0 lint issues).
+
+---
+
+Implemented background filesystem indexing to eliminate server startup blocking.
+
+**Phase 1: Background scan infrastructure**
+- Added `indexReady atomic.Bool` field to Server struct
+- `NewServer()` now spawns `initialScan()` goroutine instead of blocking on scan
+- Added `broadcastIndexReady()` to send SSE "index-ready" event when scan completes
+- Added `IsIndexReady()` and `WaitForIndexReady(ctx)` methods for state queries
+- Updated tests to use `WaitForIndexReady()` for synchronous behavior
+
+**Phase 2: Template indexReady parameter threading**
+- Removed superfluous `boolToString()` helper, using `strconv.FormatBool()` instead
+- Added `indexReady bool` parameter to: `Layout`, `Home`, `HomeContent`, `Directory`, `Markdown`
+- Added `data-index-ready` attribute to body tag
+- Handlers now call `s.IsIndexReady()` and pass to all template calls
+
+**Phase 3: Client-side SSE handling**
+- Layout SSE handler now detects "index-ready" message, updates body attribute, dispatches custom event
+- Command palette tracks `indexReady` state from body dataset
+- Empty state shows "Indexing..." vs "No matches found" vs "Type to search"
+
+**Phase 4: RecentlyUpdated component**
+- Added `indexReady bool` parameter to `RecentlyUpdated` template
+- Shows "Indexing..." state when scan not complete
+- HomeContent tree display also shows "Indexing..." when not ready
+
+Files modified:
+- `internal/server/server.go` - Background scan infrastructure
+- `internal/server/server_test.go` - Test synchronization
+- `internal/server/handlers.go` - Pass indexReady to templates
+- `web/templates/components/layout.templ` - SSE handling, removed boolToString
+- `web/templates/components/command_palette.templ` - indexReady state and UI
+- `web/templates/components/recent.templ` - indexReady parameter
+- `web/templates/home.templ` - indexReady threading
+- `web/templates/directory.templ` - indexReady parameter
+- `web/templates/markdown.templ` - indexReady parameter
+- `web/templates/templates_test.go` - Updated test calls
+
+Verification: `make test && make lint && make build` - all pass (0 lint issues).
+
+## 2025-12-20
+
+Implemented "Toggle Gitignore" command for runtime control of .gitignore respect.
+
+**Problem**: User running stigmergic in directory with `ai/` in .gitignore couldn't see markdown files in that directory. Previously required CLI flag `--respect-gitignore=false`.
+
+**Solution**: Runtime-toggleable setting via command palette.
+
+**Implementation**:
+1. Added `respectGitignore atomic.Bool` to Server struct, initialized from config
+2. `updateTree()` and `initialScan()` now read from atomic bool instead of config
+3. Added `ToggleRespectGitignore()` method with atomic compare-and-swap, triggers rescan + SSE reload broadcast
+4. Added `GET /api/gitignore` and `POST /api/gitignore/toggle` endpoints
+5. Command palette now includes "Toggle Gitignore" command with dynamic description showing current state
+6. Command fetches initial state on init, updates after each toggle
+
+Session-only persistence: setting resets to config default on server restart.
+
+Files modified:
+- `internal/server/server.go` - Atomic bool field, toggle method, broadcast helper
+- `internal/server/handlers.go` - Two new API endpoints, routes
+- `web/templates/components/command_palette.templ` - Dynamic command with toggle action
+
+Verification: `make test && make lint && make build` - all pass (0 lint issues).
+
+## 2025-12-23
+
+Added items to `ai/todo.md`, good simple features to add

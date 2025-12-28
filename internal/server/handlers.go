@@ -33,6 +33,8 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/file/", s.handleMarkdown)
 	s.mux.HandleFunc("/events", s.handleSSE)
 	s.mux.HandleFunc("/api/files", s.handleFilesAPI)
+	s.mux.HandleFunc("/api/gitignore", s.handleGitignoreStatus)
+	s.mux.HandleFunc("/api/gitignore/toggle", s.handleToggleGitignore)
 
 	logger.Log.Info("routes configured")
 }
@@ -50,14 +52,16 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	files := s.cachedFiles.Load().([]models.SearchableFile)
 	recentFiles := s.computeRecentFiles(files)
 
+	indexReady := s.IsIndexReady()
+
 	if isHTMXRequest(r) {
 		logger.Log.Debug("rendering HTMX home partial")
-		if err := templates.HomeContent(tree, s.config.WatchPath, recentFiles).Render(r.Context(), w); err != nil {
+		if err := templates.HomeContent(tree, s.config.WatchPath, recentFiles, indexReady).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home content template", "error", err)
 		}
 	} else {
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(tree, s.config.WatchPath, s.theme, files, recentFiles).Render(r.Context(), w); err != nil {
+		if err := templates.Home(tree, s.config.WatchPath, s.theme, files, recentFiles, indexReady).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
 	}
@@ -113,6 +117,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	isHTMX := isHTMXRequest(r)
 
 	files := s.cachedFiles.Load().([]models.SearchableFile)
+	indexReady := s.IsIndexReady()
 
 	if info.IsDir() {
 		s.treeMux.RLock()
@@ -132,7 +137,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			if err := templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
+			if err := templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files, indexReady).Render(r.Context(), w); err != nil {
 				logger.Log.Error("failed to render directory template", "error", err)
 			}
 		}
@@ -162,7 +167,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if err := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, s.theme, files).Render(r.Context(), w); err != nil {
+		if err := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, s.theme, files, indexReady).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render markdown template", "error", err)
 		}
 	}
@@ -244,6 +249,31 @@ func (s *Server) handleFilesAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(files); err != nil {
 		logger.Log.Error("failed to encode files JSON", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleToggleGitignore(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	newValue := s.ToggleRespectGitignore()
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]bool{"respectGitignore": newValue}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Log.Error("failed to encode toggle response", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleGitignoreStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]bool{"respectGitignore": s.IsRespectingGitignore()}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Log.Error("failed to encode gitignore status", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

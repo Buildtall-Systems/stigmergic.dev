@@ -20,19 +20,21 @@ import (
 )
 
 type Server struct {
-	httpServer  *http.Server
-	config      *config.Config
-	mux         *http.ServeMux
-	tree        *models.Tree
-	treeMux     sync.RWMutex
-	cachedFiles atomic.Value
-	watcher     *watcher.Watcher
-	theme       *theme.Theme
-	clients     map[chan string]bool
-	clientsMux  sync.RWMutex
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
+	httpServer       *http.Server
+	config           *config.Config
+	mux              *http.ServeMux
+	tree             *models.Tree
+	treeMux          sync.RWMutex
+	cachedFiles      atomic.Value
+	indexReady       atomic.Bool
+	respectGitignore atomic.Bool
+	watcher          *watcher.Watcher
+	theme            *theme.Theme
+	clients          map[chan string]bool
+	clientsMux       sync.RWMutex
+	ctx              context.Context
+	cancel           context.CancelFunc
+	wg               sync.WaitGroup
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -49,14 +51,8 @@ func NewServer(cfg *config.Config) *Server {
 		IdleTimeout: 60 * time.Second,
 	}
 
-	logger.Log.Info("scanning directory", "path", cfg.WatchPath, "respect_gitignore", cfg.RespectGitignore, "ignore_patterns", len(cfg.IgnorePatterns))
-	tree, err := watcher.ScanDirectory(cfg.WatchPath, cfg.RespectGitignore, cfg.IgnorePatterns)
-	if err != nil {
-		logger.Log.Error("failed to scan directory", "error", err)
-		tree = &models.Tree{}
-	} else {
-		logger.Log.Info("directory scanned successfully")
-	}
+	// Initialize with empty tree - background scan will populate it
+	tree := &models.Tree{}
 
 	w, err := watcher.NewWatcher()
 	if err != nil {
@@ -92,10 +88,12 @@ func NewServer(cfg *config.Config) *Server {
 		cancel:     cancel,
 	}
 
-	s.cachedFiles.Store(tree.FlattenMarkdownFiles())
+	s.cachedFiles.Store([]models.SearchableFile{})
+	s.respectGitignore.Store(cfg.RespectGitignore)
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.broadcastEvents()
+	go s.initialScan()
 
 	s.setupRoutes()
 
@@ -246,8 +244,9 @@ func (s *Server) removeClient(client chan string) {
 }
 
 func (s *Server) updateTree() {
-	logger.Log.Info("rescanning directory tree", "path", s.config.WatchPath)
-	newTree, err := watcher.ScanDirectory(s.config.WatchPath, s.config.RespectGitignore, s.config.IgnorePatterns)
+	respectGitignore := s.respectGitignore.Load()
+	logger.Log.Info("rescanning directory tree", "path", s.config.WatchPath, "respect_gitignore", respectGitignore)
+	newTree, err := watcher.ScanDirectory(s.config.WatchPath, respectGitignore, s.config.IgnorePatterns)
 	if err != nil {
 		logger.Log.Error("failed to rescan directory", "error", err)
 		return
@@ -259,4 +258,87 @@ func (s *Server) updateTree() {
 
 	s.cachedFiles.Store(newTree.FlattenMarkdownFiles())
 	logger.Log.Info("directory tree updated successfully")
+}
+
+func (s *Server) initialScan() {
+	defer s.wg.Done()
+	respectGitignore := s.respectGitignore.Load()
+	logger.Log.Info("starting background directory scan", "path", s.config.WatchPath, "respect_gitignore", respectGitignore, "ignore_patterns", len(s.config.IgnorePatterns))
+
+	newTree, err := watcher.ScanDirectory(s.config.WatchPath, respectGitignore, s.config.IgnorePatterns)
+	if err != nil {
+		logger.Log.Error("background scan failed", "error", err)
+		s.indexReady.Store(true) // Mark ready even on failure so UI doesn't hang
+		return
+	}
+
+	s.treeMux.Lock()
+	s.tree = newTree
+	s.treeMux.Unlock()
+
+	s.cachedFiles.Store(newTree.FlattenMarkdownFiles())
+	s.indexReady.Store(true)
+	logger.Log.Info("background scan complete, index ready")
+
+	s.broadcastIndexReady()
+}
+
+func (s *Server) broadcastIndexReady() {
+	s.clientsMux.RLock()
+	clientCount := len(s.clients)
+	logger.Log.Info("broadcasting index-ready to clients", "count", clientCount)
+	for client := range s.clients {
+		select {
+		case client <- "index-ready":
+			logger.Log.Debug("sent index-ready to client")
+		default:
+			logger.Log.Warn("client channel full, skipping index-ready")
+		}
+	}
+	s.clientsMux.RUnlock()
+}
+
+func (s *Server) IsIndexReady() bool {
+	return s.indexReady.Load()
+}
+
+func (s *Server) IsRespectingGitignore() bool {
+	return s.respectGitignore.Load()
+}
+
+func (s *Server) ToggleRespectGitignore() bool {
+	for {
+		current := s.respectGitignore.Load()
+		newVal := !current
+		if s.respectGitignore.CompareAndSwap(current, newVal) {
+			logger.Log.Info("toggled respect gitignore", "new_value", newVal)
+			s.updateTree()
+			s.broadcastReload()
+			return newVal
+		}
+	}
+}
+
+func (s *Server) broadcastReload() {
+	s.clientsMux.RLock()
+	for client := range s.clients {
+		select {
+		case client <- "reload":
+		default:
+		}
+	}
+	s.clientsMux.RUnlock()
+}
+
+// WaitForIndexReady blocks until the background index scan completes or ctx is cancelled.
+// Primarily intended for tests that need synchronous behavior.
+func (s *Server) WaitForIndexReady(ctx context.Context) error {
+	for !s.indexReady.Load() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	return nil
 }
