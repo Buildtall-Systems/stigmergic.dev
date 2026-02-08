@@ -45,6 +45,11 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.config.DefaultFile != "" && !isHTMXRequest(r) {
+		http.Redirect(w, r, "/file/"+s.config.DefaultFile, http.StatusFound)
+		return
+	}
+
 	s.treeMux.RLock()
 	tree := s.tree
 	s.treeMux.RUnlock()
