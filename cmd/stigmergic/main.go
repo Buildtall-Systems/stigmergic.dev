@@ -18,6 +18,7 @@ var (
 	host             string
 	logLevel         string
 	respectGitignore bool
+	defaultFile      string
 	loadedConfig     *config.Config
 )
 
@@ -47,6 +48,9 @@ beautifully through a local web server with real-time updates.`,
 		if cmd.Flags().Changed("respect-gitignore") {
 			loadedConfig.RespectGitignore = respectGitignore
 		}
+		if cmd.Flags().Changed("default-file") {
+			loadedConfig.DefaultFile = defaultFile
+		}
 
 		logger.Init(loadedConfig.LogLevel)
 
@@ -66,6 +70,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&host, "host", "localhost", "server host")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "ERROR", "log level (DEBUG, INFO, WARN, ERROR)")
 	rootCmd.PersistentFlags().BoolVar(&respectGitignore, "respect-gitignore", true, "respect .gitignore patterns")
+	rootCmd.PersistentFlags().StringVar(&defaultFile, "default-file", "", "file to display on homepage (relative to watch path)")
 
 	rootCmd.AddCommand(serveCmd)
 }
