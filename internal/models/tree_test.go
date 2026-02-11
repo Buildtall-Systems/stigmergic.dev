@@ -305,7 +305,7 @@ func TestFlattenMarkdownFiles(t *testing.T) {
 	}
 
 	for _, f := range files {
-		if filepath.Ext(f.Name) != ".md" { //nolint:goconst
+		if filepath.Ext(f.Name) != MarkdownExt {
 			t.Errorf("expected only .md files, got %s", f.Name)
 		}
 	}

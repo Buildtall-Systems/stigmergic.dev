@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/auth"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
@@ -35,6 +36,9 @@ type Server struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
 	wg               sync.WaitGroup
+	sessionManager   *auth.SessionManager
+	allowedPubkeys   []string
+	serverURL        string
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -43,6 +47,29 @@ func NewServer(cfg *config.Config) *Server {
 	handler := loggingMiddleware(mux)
 	handler = recoveryMiddleware(handler)
 	handler = securityMiddleware(handler)
+
+	var sm *auth.SessionManager
+	var allowedPubkeys []string
+	var serverURL string
+
+	if cfg.Auth.Enabled {
+		var err error
+		allowedPubkeys, err = auth.NormalizePubkeys(cfg.Auth.AllowedNpubs)
+		if err != nil {
+			logger.Log.Error("invalid pubkey in allowlist", "error", err)
+			panic(fmt.Sprintf("invalid pubkey in auth allowlist: %v", err))
+		}
+
+		sm, err = auth.NewSessionManager(cfg.Auth.SessionSecret, cfg.Auth.SessionMaxAge)
+		if err != nil {
+			logger.Log.Error("failed to create session manager", "error", err)
+			panic(fmt.Sprintf("failed to create session manager: %v", err))
+		}
+
+		serverURL = fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
+		handler = auth.Middleware(sm)(handler)
+		logger.Log.Info("auth enabled", "allowed_pubkeys", len(allowedPubkeys))
+	}
 
 	srv := &http.Server{
 		Addr:        fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
@@ -77,15 +104,18 @@ func NewServer(cfg *config.Config) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &Server{
-		httpServer: srv,
-		config:     cfg,
-		mux:        mux,
-		tree:       tree,
-		watcher:    w,
-		theme:      thm,
-		clients:    make(map[chan string]bool),
-		ctx:        ctx,
-		cancel:     cancel,
+		httpServer:     srv,
+		config:         cfg,
+		mux:            mux,
+		tree:           tree,
+		watcher:        w,
+		theme:          thm,
+		clients:        make(map[chan string]bool),
+		ctx:            ctx,
+		cancel:         cancel,
+		sessionManager: sm,
+		allowedPubkeys: allowedPubkeys,
+		serverURL:      serverURL,
 	}
 
 	s.cachedFiles.Store([]models.SearchableFile{})

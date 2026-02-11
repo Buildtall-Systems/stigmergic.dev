@@ -16,6 +16,8 @@ type NodeType int
 const (
 	NodeTypeFile NodeType = iota
 	NodeTypeDirectory
+
+	MarkdownExt = ".md"
 )
 
 type SearchableFile struct {
@@ -61,7 +63,7 @@ func (n *Node) IsFile() bool {
 
 func (n *Node) ContainsMarkdown() bool {
 	if n.IsFile() {
-		return filepath.Ext(n.Name) == ".md"
+		return filepath.Ext(n.Name) == MarkdownExt
 	}
 
 	for _, child := range n.Children {
@@ -117,7 +119,7 @@ func (t *Tree) FlattenMarkdownFiles() []SearchableFile {
 }
 
 func (t *Tree) flattenMarkdownFilesRecursive(node *Node, files *[]SearchableFile) {
-	if node.IsFile() && filepath.Ext(node.Name) == ".md" {
+	if node.IsFile() && filepath.Ext(node.Name) == MarkdownExt {
 		*files = append(*files, SearchableFile{
 			Name:    node.Name,
 			Path:    "/" + node.Path,

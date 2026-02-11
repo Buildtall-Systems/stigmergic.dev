@@ -39,6 +39,7 @@ type Watcher struct {
 	wg             sync.WaitGroup
 	debounceMap    map[string]*time.Timer
 	debounceMutex  sync.Mutex
+	debounceWg     sync.WaitGroup
 	watchedDirs    map[string]bool
 	watchMutex     sync.RWMutex
 	gitignore      *gitignore.GitIgnore
@@ -192,12 +193,16 @@ func (w *Watcher) Close() error {
 	w.cancel()
 
 	w.debounceMutex.Lock()
-	for _, timer := range w.debounceMap {
-		timer.Stop()
+	for key, timer := range w.debounceMap {
+		if timer.Stop() {
+			w.debounceWg.Done()
+		}
+		delete(w.debounceMap, key)
 	}
 	w.debounceMutex.Unlock()
 
 	w.wg.Wait()
+	w.debounceWg.Wait()
 
 	err := w.watcher.Close()
 
@@ -266,10 +271,14 @@ func (w *Watcher) debounceEvent(event Event) {
 
 	if timer, exists := w.debounceMap[key]; exists {
 		logger.Log.Debug("debouncing repeated event", "key", key)
-		timer.Stop()
+		if timer.Stop() {
+			w.debounceWg.Done()
+		}
 	}
 
+	w.debounceWg.Add(1)
 	w.debounceMap[key] = time.AfterFunc(w.debounceWindow, func() {
+		defer w.debounceWg.Done()
 		logger.Log.Info("sending debounced event", "type", event.Type, "path", event.Path)
 		select {
 		case w.Events <- event:
