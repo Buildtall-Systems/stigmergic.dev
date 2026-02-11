@@ -66,7 +66,11 @@ func NewServer(cfg *config.Config) *Server {
 			panic(fmt.Sprintf("failed to create session manager: %v", err))
 		}
 
-		serverURL = fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
+		if cfg.BaseURL != "" {
+			serverURL = cfg.BaseURL
+		} else {
+			serverURL = fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
+		}
 		handler = auth.Middleware(sm)(handler)
 		logger.Log.Info("auth enabled", "allowed_pubkeys", len(allowedPubkeys))
 	}
