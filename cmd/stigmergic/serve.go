@@ -31,6 +31,12 @@ func findAvailablePort(host string, startPort int, maxAttempts int) (int, error)
 	return 0, fmt.Errorf("no available port found after %d attempts starting from %d", maxAttempts, startPort)
 }
 
+var enableAuth bool
+
+func init() {
+	serveCmd.Flags().BoolVar(&enableAuth, "auth", false, "enable Nostr authentication (requires allowed_npubs in config)")
+}
+
 var serveCmd = &cobra.Command{
 	Use:   "serve [path]",
 	Short: "Start the markdown server",
@@ -58,6 +64,10 @@ If no path is provided, the current directory is used.`,
 		}
 
 		loadedConfig.WatchPath = absPath
+
+		if cmd.Flags().Changed("auth") {
+			loadedConfig.Auth.Enabled = enableAuth
+		}
 
 		portExplicitlySet := cmd.Flags().Changed("port")
 		if !portExplicitlySet {

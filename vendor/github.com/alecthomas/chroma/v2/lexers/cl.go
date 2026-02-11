@@ -121,7 +121,7 @@ var (
 		"search", "second", "set", "set-difference",
 		"set-dispatch-macro-character", "set-exclusive-or",
 		"set-macro-character", "set-pprint-dispatch", "set-syntax-from-char",
-		"seventh", "shadow-sm", "shadowing-import", "shared-initialize",
+		"seventh", "shadow", "shadowing-import", "shared-initialize",
 		"short-site-name", "signal", "signum", "simple-bit-vector-p",
 		"simple-condition-format-arguments", "simple-condition-format-control",
 		"simple-string-p", "simple-vector-p", "sin", "sinh", "sixth", "sleep",

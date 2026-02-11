@@ -1,0 +1,87 @@
+package templates
+
+import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
+
+templ Login(serverURL string) {
+	@components.LoginLayout() {
+		<div class="container">
+			@components.BuildtallLogo()
+			<h1>stigmergic</h1>
+			<p class="subtitle">Sign in with your Nostr identity</p>
+			<div id="no-extension" style="display:none">
+				<div class="error-msg">No Nostr signer extension detected. Install a NIP-07 compatible extension like Alby or nos2x.</div>
+			</div>
+			<div id="login-area">
+				<button id="login-btn" class="btn" onclick="doLogin()">Sign in with Nostr</button>
+				<div id="status"></div>
+			</div>
+			<p class="info">
+				Authentication uses
+				<a href="https://github.com/nostr-protocol/nips/blob/master/98.md" target="_blank" rel="noopener">NIP-98</a>
+				via your browser extension.
+			</p>
+		</div>
+		@templ.JSONScript("server-url", serverURL)
+		<script>
+		(function(){
+			var serverURL = JSON.parse(document.getElementById("server-url").textContent);
+			var btn = document.getElementById("login-btn");
+			var status = document.getElementById("status");
+
+			function init() {
+				if (window.nostr) {
+					btn.disabled = false;
+					return;
+				}
+				document.getElementById("no-extension").style.display = "block";
+				btn.disabled = true;
+			}
+
+			btn.disabled = true;
+			if (document.readyState === "complete") {
+				setTimeout(init, 100);
+			} else {
+				window.addEventListener("load", function(){ setTimeout(init, 100); });
+			}
+
+			window.doLogin = async function() {
+				btn.disabled = true;
+				status.innerHTML = '<span class="spinner"></span>Requesting signature\u2026';
+
+				try {
+					var params = new URLSearchParams(window.location.search);
+					var redirect = params.get("redirect") || "/";
+					var verifyURL = serverURL + "/auth/verify";
+
+					var event = {
+						kind: 27235,
+						created_at: Math.floor(Date.now() / 1000),
+						tags: [["u", verifyURL], ["method", "POST"]],
+						content: ""
+					};
+
+					var signed = await window.nostr.signEvent(event);
+
+					var resp = await fetch(verifyURL + "?redirect=" + encodeURIComponent(redirect), {
+						method: "POST",
+						headers: {"Content-Type": "application/json"},
+						body: JSON.stringify({event: signed})
+					});
+
+					var data = await resp.json();
+					if (data.ok) {
+						status.textContent = "Authenticated. Redirecting\u2026";
+						window.location.href = data.redirect || "/";
+					} else {
+						status.innerHTML = '<div class="error-msg">' + (data.error || "Authentication failed") + '</div>';
+						btn.disabled = false;
+					}
+				} catch(e) {
+					status.innerHTML = '<div class="error-msg">' + (e.message || "Signing cancelled or failed") + '</div>';
+					btn.disabled = false;
+				}
+			};
+		})();
+		</script>
+	}
+}
