@@ -166,7 +166,7 @@ func TestDefaultFileRedirect(t *testing.T) {
 	}
 
 	url := fmt.Sprintf("http://localhost:%d/", port)
-	resp, err := client.Get(url) //nolint:gosec,noctx
+	resp, err := client.Get(url) //nolint:noctx
 	if err != nil {
 		t.Fatalf("failed to get homepage: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestNoDefaultFileNoRedirect(t *testing.T) {
 	}
 
 	url := fmt.Sprintf("http://localhost:%d/", port)
-	resp, err := client.Get(url) //nolint:gosec,noctx
+	resp, err := client.Get(url) //nolint:noctx
 	if err != nil {
 		t.Fatalf("failed to get homepage: %v", err)
 	}

@@ -202,3 +202,35 @@ Files modified:
 - `web/templates/components/layout.templ` - Added `copyPath()` Alpine.js function, extended `rawToggle()` with `showLineNumbers` state and `loadRawContent()` method
 
 Verification: `make generate && make lint && make build` - all pass (0 lint issues).
+
+## 2026-02-11
+
+Implemented optional NIP-98 Nostr authentication (GitHub issue #2).
+
+**New package: `internal/auth/`**
+- `nostr.go` - NIP-98 kind 27235 event verification, pubkey normalization (hex/npub), allowlist checking
+- `session.go` - HMAC-signed stateless session cookies (`pubkey.expiryMillis.signature`), millisecond precision
+- `middleware.go` - Auth middleware: passes through `/auth/*` and `/static/*`, redirects unauthenticated to login with redirect param, stores pubkey in request context
+- `handlers.go` - LoginHandler (GET renders templ), VerifyHandler (POST validates NIP-98 + allowlist + sets cookie), LogoutHandler (POST clears cookie + redirects)
+- Full test coverage: 33 tests across 4 test files, all passing with race detector
+
+**New templates**
+- `web/templates/login.templ` - Login page with NIP-07 browser extension integration (window.nostr)
+- `web/templates/components/login_layout.templ` - Minimal standalone layout for login (no SSE/command palette)
+
+**Config & CLI**
+- `internal/config/config.go` - Added `AuthConfig` struct (enabled, allowed_npubs, session_secret, session_max_age)
+- `cmd/stigmergic/serve.go` - Added `--auth` CLI flag override
+
+**Integration**
+- `internal/server/server.go` - Conditional auth middleware wrapping, pubkey normalization at startup (fail-fast), session manager initialization
+- `internal/server/handlers.go` - Conditional auth route registration (`/auth/login`, `/auth/verify`, `/auth/logout`)
+
+**Bug fix: watcher race condition (pre-existing)**
+- `internal/watcher/watcher.go` - Added `debounceWg sync.WaitGroup` to track in-flight `time.AfterFunc` goroutines. `Close()` now properly stops timers (balancing WaitGroup for stopped timers) and waits for in-flight callbacks before closing channels. Eliminates race between `debounceEvent` timer goroutine and `Close()` channel teardown.
+
+**Other lint fixes (pre-existing)**
+- `internal/models/tree.go` - Extracted `MarkdownExt` constant for repeated `.md` string
+- `internal/models/tree_test.go` - Replaced string literals with `MarkdownExt` constant
+
+Verification: `make lint && make test && make build` — all pass (0 lint issues, 0 test failures, race-clean).

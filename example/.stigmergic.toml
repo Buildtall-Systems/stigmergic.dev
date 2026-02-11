@@ -1,0 +1,10 @@
+port = 8080
+host = "localhost"
+theme = "iceberg-dark"
+
+[auth]
+enabled = true
+allowed_npubs = [
+  "npub1mkq63wkt4v94cvq869njlwpszwpmf62c84p3sdvc2ptjy04jnzjs20r4tx",
+]
+session_max_age = "24h"

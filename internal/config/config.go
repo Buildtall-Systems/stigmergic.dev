@@ -8,6 +8,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+type AuthConfig struct {
+	Enabled       bool
+	AllowedNpubs  []string `mapstructure:"allowed_npubs"`
+	SessionSecret string   `mapstructure:"session_secret"`
+	SessionMaxAge string   `mapstructure:"session_max_age"`
+}
+
 type Config struct {
 	Port             int
 	Host             string
@@ -18,6 +25,7 @@ type Config struct {
 	Theme            string
 	RecentFilesCount int
 	DefaultFile      string
+	Auth             AuthConfig
 }
 
 func Load(cfgFile string) (*Config, error) {
@@ -46,6 +54,11 @@ func Load(cfgFile string) (*Config, error) {
 		"__pycache__",
 		"*.pyc",
 	})
+
+	v.SetDefault("auth.enabled", false)
+	v.SetDefault("auth.allowed_npubs", []string{})
+	v.SetDefault("auth.session_secret", "")
+	v.SetDefault("auth.session_max_age", "24h")
 
 	v.SetEnvPrefix("STIGMERGIC")
 	v.AutomaticEnv()
