@@ -53,6 +53,11 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.config.DefaultFile != "" && !isHTMXRequest(r) {
+		http.Redirect(w, r, "/file/"+s.config.DefaultFile, http.StatusFound)
+		return
+	}
+
 	s.treeMux.RLock()
 	tree := s.tree
 	s.treeMux.RUnlock()
@@ -168,17 +173,29 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	relativePath := computeBuildtallRelativePath(s.config.WatchPath, filePath)
+
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if err := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath).Render(r.Context(), w); err != nil {
+		if err := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render markdown content template", "error", err)
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if err := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, s.theme, files, indexReady).Render(r.Context(), w); err != nil {
+		if err := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render markdown template", "error", err)
 		}
 	}
+}
+
+func computeBuildtallRelativePath(watchPath, filePath string) string {
+	buildtallRoot := filepath.Join(os.Getenv("HOME"), "git", "buildtall.systems")
+	fullPath := filepath.Join(watchPath, filePath)
+	relPath, err := filepath.Rel(buildtallRoot, fullPath)
+	if err != nil {
+		return filePath
+	}
+	return relPath
 }
 
 func buildBreadcrumbs(path string) []models.Breadcrumb {

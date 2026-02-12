@@ -18,12 +18,14 @@ type AuthConfig struct {
 type Config struct {
 	Port             int
 	Host             string
+	BaseURL          string `mapstructure:"base_url"`
 	WatchPath        string
 	LogLevel         string
 	RespectGitignore bool
 	IgnorePatterns   []string
 	Theme            string
 	RecentFilesCount int
+	DefaultFile      string
 	Auth             AuthConfig
 }
 
@@ -36,6 +38,8 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("respectgitignore", true)
 	v.SetDefault("theme", "iceberg-dark")
 	v.SetDefault("recentfilescount", 5)
+	v.SetDefault("base_url", "")
+	v.SetDefault("defaultfile", "")
 	v.SetDefault("ignorepatterns", []string{
 		".git",
 		"node_modules",

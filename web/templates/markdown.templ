@@ -4,39 +4,67 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, thm *theme.Theme, files []models.SearchableFile, indexReady bool) {
+templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, files []models.SearchableFile, indexReady bool) {
 	@components.Layout(title, thm, files, indexReady) {
-		@MarkdownContent(breadcrumbs, content, rawContent, rootPath)
+		@MarkdownContent(breadcrumbs, content, rawContent, rootPath, relativePath)
 	}
 }
 
-templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string) {
+templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string) {
 	<div class="space-y-6">
 		if len(breadcrumbs) > 0 {
 			<nav class="breadcrumb" aria-label="Breadcrumb">
-				<ol class="flex items-center space-x-2">
-					<li class="inline-flex items-center">
-						<a href="/" class="font-medium transition-colors">
-							{ rootPath }
-						</a>
-					</li>
-					for i, crumb := range breadcrumbs {
-						<li>
-							<div class="flex items-center">
-								<span class="breadcrumb-separator mx-2" style="color: var(--comment-color);">/</span>
-								if i == len(breadcrumbs) - 1 {
-									<span class="font-medium">{ crumb.Name }</span>
-								} else {
-									<a href={ templ.SafeURL(crumb.Path) } class="font-medium transition-colors" style="color: var(--comment-color);">{ crumb.Name }</a>
-								}
-							</div>
+				<div class="flex items-center justify-between gap-4">
+					<ol class="flex items-center space-x-2">
+						<li class="inline-flex items-center">
+							<a href="/" class="font-medium transition-colors">
+								{ rootPath }
+							</a>
 						</li>
-					}
-				</ol>
+						for i, crumb := range breadcrumbs {
+							<li>
+								<div class="flex items-center">
+									<span class="breadcrumb-separator mx-2" style="color: var(--comment-color);">/</span>
+									if i == len(breadcrumbs) - 1 {
+										<span class="font-medium">{ crumb.Name }</span>
+									} else {
+										<a href={ templ.SafeURL(crumb.Path) } class="font-medium transition-colors" style="color: var(--comment-color);">{ crumb.Name }</a>
+									}
+								</div>
+							</li>
+						}
+					</ol>
+					<div x-data={ "copyPath('" + relativePath + "')" }>
+						<button
+							@click="copy()"
+							class="p-1 rounded-sm transition-colors"
+							style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);"
+							:style="copied ? 'color: var(--green-color)' : 'color: var(--comment-color)'"
+							:title="copied ? 'Copied!' : 'Copy path'"
+						>
+							<span x-show="!copied">
+								@components.IconCopy("w-4 h-4", "")
+							</span>
+							<span x-show="copied" x-cloak>
+								@components.IconCheck("w-4 h-4", "")
+							</span>
+						</button>
+					</div>
+				</div>
 			</nav>
 		}
+		@templ.JSONScript("raw-content-data", rawContent)
 		<div x-data="rawToggle()">
-			<div class="flex justify-end mb-4">
+			<div class="flex justify-end gap-2 mb-4">
+				<button
+					x-show="showRaw"
+					@pointerdown="showLineNumbers = true"
+					@pointerup="showLineNumbers = false"
+					@pointerleave="showLineNumbers = false"
+					class="px-3 py-1 text-sm rounded-sm transition-colors"
+					style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);"
+					:style="showLineNumbers ? 'color: var(--green-color)' : 'color: var(--fg-color)'"
+				>Lines</button>
 				<button
 					@click="toggle()"
 					class="px-3 py-1 text-sm rounded-sm transition-colors"
@@ -47,7 +75,27 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawConten
 			<article x-show="!showRaw" class="prose prose-headings:font-bold prose-a:no-underline prose-a:hover:underline max-w-none">
 				@templ.Raw(content)
 			</article>
-			<pre x-show="showRaw" x-cloak class="overflow-x-auto whitespace-pre-wrap rounded-md p-4" style="background-color: var(--code-bg-color); color: var(--code-fg-color);">{ rawContent }</pre>
+			<div x-show="showRaw" x-cloak class="overflow-x-auto rounded-md" style="background-color: var(--code-bg-color);">
+				<table class="w-full" style="border-collapse: collapse;">
+					<tbody>
+						<template x-for="(line, index) in lines" :key="index">
+							<tr>
+								<td
+									x-show="showLineNumbers"
+									class="select-none text-right pr-4 pl-2 py-0"
+									style="color: var(--line-number-color); font-family: monospace; font-size: 0.875rem; vertical-align: top; user-select: none; min-width: 3rem;"
+									x-text="index + 1"
+								></td>
+								<td
+									class="py-0 w-full"
+									style="color: var(--code-fg-color); font-family: monospace; font-size: 0.875rem; white-space: pre-wrap; word-break: break-word;"
+									x-text="line || ' '"
+								></td>
+							</tr>
+						</template>
+					</tbody>
+				</table>
+			</div>
 		</div>
 	</div>
 }

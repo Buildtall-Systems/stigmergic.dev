@@ -133,6 +133,38 @@ func TestLoadNoFileUsesDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultFileFromConfig(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	configContent := `defaultfile = "index.md"
+`
+	testutil.CreateTestFile(t, dir, ".stigmergic.toml", configContent)
+
+	cfgPath := filepath.Join(dir, ".stigmergic.toml")
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.DefaultFile != "index.md" {
+		t.Errorf("expected defaultfile index.md, got %s", cfg.DefaultFile)
+	}
+}
+
+func TestLoadDefaultFileEmpty(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.DefaultFile != "" {
+		t.Errorf("expected empty defaultfile by default, got %s", cfg.DefaultFile)
+	}
+}
+
 func TestAuthConfigDefaults(t *testing.T) {
 	t.Parallel()
 

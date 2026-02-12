@@ -179,6 +179,30 @@ Verification: `make test && make lint && make build` - all pass (0 lint issues).
 
 Added items to `ai/todo.md`, good simple features to add
 
+## 2026-01-05
+
+Implemented two features from `ai/todo.md`:
+
+**Feature 1: Copy Relative Path Button**
+- Added button in breadcrumb area to copy file path relative to `~/git/buildtall.systems`
+- Server computes relative path via `computeBuildtallRelativePath()` function
+- Button shows copy icon, switches to check icon (green) when copied
+- Added `IconCopy` and `IconCheck` to icons.templ
+
+**Feature 2: Momentary Line Numbers Button**
+- Added "Lines" button that appears when viewing raw source
+- Hold button to show line numbers, release to hide (pointerdown/pointerup/pointerleave handlers)
+- Line numbers styled with theme's `--line-number-color` variable
+- Raw content now rendered as table for proper line number alignment
+- Content loaded via `templ.JSONScript` and parsed in Alpine.js `init()`
+
+Files modified:
+- `internal/server/handlers.go` - Added `computeBuildtallRelativePath()`, pass `relativePath` to templates
+- `web/templates/markdown.templ` - Added `relativePath` parameter, copy button, line numbers table structure
+- `web/templates/components/layout.templ` - Added `copyPath()` Alpine.js function, extended `rawToggle()` with `showLineNumbers` state and `loadRawContent()` method
+
+Verification: `make generate && make lint && make build` - all pass (0 lint issues).
+
 ## 2026-02-11
 
 Implemented optional NIP-98 Nostr authentication (GitHub issue #2).
@@ -195,7 +219,7 @@ Implemented optional NIP-98 Nostr authentication (GitHub issue #2).
 - `web/templates/components/login_layout.templ` - Minimal standalone layout for login (no SSE/command palette)
 
 **Config & CLI**
-- `internal/config/config.go` - Added `AuthConfig` struct (enabled, allowed_pubkeys, session_secret, session_max_age)
+- `internal/config/config.go` - Added `AuthConfig` struct (enabled, allowed_npubs, session_secret, session_max_age)
 - `cmd/stigmergic/serve.go` - Added `--auth` CLI flag override
 
 **Integration**
