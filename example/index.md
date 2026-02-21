@@ -32,6 +32,22 @@ Stigmergic does exactly this. Point it at a directory, and you have a live docum
 
 ---
 
+## Explore This Demo Site
+
+- [Features](features.md) — complete feature overview with examples
+- [Installation Guide](installation.md) — install options and setup details
+- [Architecture](architecture.md) — how Stigmergic is structured internally
+- [Demo Walkthrough](demo.md) — practical usage examples
+
+## Project Links
+
+- [GitHub Repository](https://github.com/Buildtall-Systems/stigmergic.dev)
+- [Releases](https://github.com/Buildtall-Systems/stigmergic.dev/releases)
+- [Latest Release Downloads](https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest)
+- [Issues](https://github.com/Buildtall-Systems/stigmergic.dev/issues)
+
+---
+
 ## Quick Start
 
 ### Download
@@ -120,4 +136,4 @@ No JavaScript frameworks. No build pipeline for your content. Just markdown file
 
 *Stigmergic is named after the biological phenomenon where organisms coordinate through environmental traces — ants leaving pheromones, termites building mounds. Your markdown files are the traces. Stigmergic makes them visible.*
 
-[Source Code](https://github.com/Buildtall-Systems/stigmergic.dev) · [Buildtall Systems](https://buildtall.systems)
+[GitHub Repository](https://github.com/Buildtall-Systems/stigmergic.dev) · [Releases](https://github.com/Buildtall-Systems/stigmergic.dev/releases) · [Buildtall Systems](https://buildtall.systems)
