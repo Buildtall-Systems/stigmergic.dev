@@ -1,16 +1,42 @@
-# stigmergic
+# Stigmergic
 
-A dynamic markdown watcher and renderer for developers working with voluminous markdown documentation.
+**A fast, beautiful markdown viewer with live reload.**
 
-Stigmergic watches a directory tree for markdown files and serves them through a local HTTP server with real-time updates. Built for agentic coding workflows, research collections, and documentation-heavy projects.
+Stigmergic watches a directory of markdown files and serves them through a local web server. Files update in real-time as you edit them. Navigation happens instantly. Everything just works.
 
-## Download
+---
 
-Pre-built binaries are available for every release on GitHub.
+## Why Stigmergic?
 
-### Quick Install
+You have markdown files. Lots of them. Project docs, research notes, AI-generated documentation, meeting notes, a personal wiki. You want to *read* them — not in a code editor, not in a terminal, but rendered beautifully with proper typography, syntax highlighting, and diagrams.
 
-Download the latest release for your platform:
+Stigmergic does exactly this. Point it at a directory, and you have a live documentation site in seconds.
+
+---
+
+## What You Get
+
+**Live Reload** — Edit a file, see it update instantly. No refresh needed. Powered by Server-Sent Events.
+
+**Command Palette** — Press `Ctrl+K` to search across all your files. Fuzzy matching finds what you need fast.
+
+**Syntax Highlighting** — Code blocks in any language, highlighted with the Nord color scheme.
+
+**Math & Diagrams** — LaTeX equations via KaTeX. Flowcharts and sequence diagrams via Mermaid. Write them in markdown, see them rendered.
+
+**Nostr Links** — Native rendering of `nostr:` protocol URLs. npubs, notes, and events become clickable links.
+
+**Directory Browsing** — Your file tree becomes your navigation. Folders expand. Files render. Simple.
+
+**Themes** — Ships with Iceberg Dark and Light. Create your own with a TOML file.
+
+---
+
+## Quick Start
+
+### Download
+
+Pre-built binaries are available for every release:
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
@@ -20,90 +46,78 @@ Download the latest release for your platform:
 | macOS | Intel | [stigmergic_darwin_amd64.tar.gz](https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/stigmergic_darwin_amd64.tar.gz) |
 | Windows | x86_64 | [stigmergic_windows_amd64.zip](https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/stigmergic_windows_amd64.zip) |
 
-### Manual Install
-
-1. Download the archive for your platform from the table above
-2. Extract it:
+Extract and move to your `PATH`:
 
 ```bash
 # Linux / macOS
 tar xzf stigmergic_*.tar.gz
+sudo mv stigmergic /usr/local/bin/
 
 # Windows (PowerShell)
 Expand-Archive stigmergic_*.zip -DestinationPath .
 ```
 
-3. Move the binary to a directory on your `PATH`:
-
-```bash
-# Linux / macOS
-sudo mv stigmergic /usr/local/bin/
-
-# Or, without root:
-mv stigmergic ~/.local/bin/
-```
-
-4. Verify the installation:
-
-```bash
-stigmergic --version
-```
-
-### Verify Checksums
-
-Each release includes a `checksums.txt` file signed with SHA-256. To verify your download:
+Verify checksums against the release's `checksums.txt`:
 
 ```bash
 curl -sL https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/checksums.txt -o checksums.txt
 sha256sum --check --ignore-missing checksums.txt
 ```
 
-### Alternative Install Methods
-
-**Nix Flake** (declarative, reproducible):
+### Install (alternative methods)
 
 ```bash
+# Nix (recommended)
 nix profile install github:Buildtall-Systems/stigmergic.dev
-```
 
-**Go Install** (requires Go toolchain):
-
-```bash
+# Go
 go install github.com/Buildtall-Systems/stigmergic.dev/cmd/stigmergic@latest
+
+# From source
+git clone https://github.com/Buildtall-Systems/stigmergic.dev
+cd stigmergic.dev
+make build
 ```
 
-## Usage
-
-Point stigmergic at any directory containing markdown files:
+### Run
 
 ```bash
-stigmergic serve ./docs
+stigmergic serve /path/to/your/markdown
 ```
 
-Then open `http://localhost:8080` in your browser. Files are watched in real-time — edits appear instantly.
+Server starts at `http://localhost:8080`. Port adjusts automatically if occupied.
 
-### Options
+### Configure (optional)
 
+Create `.stigmergic.toml` in your project or `~/.config/stigmergic/config.toml`:
+
+```toml
+port = 8080
+host = "localhost"
+theme = "iceberg-dark"
+default_file = "README.md"
 ```
--p, --port           Server port (default: 8080)
-    --host           Bind address (default: localhost)
--c, --config         Configuration file path
-    --log-level      DEBUG, INFO, WARN, ERROR (default: ERROR)
-    --respect-gitignore  Use .gitignore patterns (default: true)
-    --default-file   File to display on homepage
-```
 
-## Features
+---
 
-- **Live Reload** via Server-Sent Events
-- **Syntax Highlighting** with Chroma (Nord theme)
-- **Math Rendering** with KaTeX
-- **Mermaid Diagrams** for flowcharts and sequence diagrams
-- **Nostr Protocol Links** rendered natively
-- **Command Palette** for fast file navigation
-- **Theme System** with custom theme support
-- **.gitignore Aware** filtering by default
+## Use Cases
 
-## Source
+- **Agentic coding workflows** — AI tools generate mountains of markdown. Stigmergic makes it readable.
+- **Research notes** — Browse and search collections of notes with live updates as you write.
+- **Project documentation** — Real-time preview without a build step.
+- **Personal wiki** — File-based, no database, version-controlled with git.
+- **Knowledge bases** — Navigate large collections with the command palette.
 
-[github.com/Buildtall-Systems/stigmergic.dev](https://github.com/Buildtall-Systems/stigmergic.dev)
+---
+
+## Built With
+
+Go, [HTMX](https://htmx.org), [Templ](https://templ.guide), [Goldmark](https://github.com/yuin/goldmark), [Tailwind CSS](https://tailwindcss.com), [KaTeX](https://katex.org), [Mermaid](https://mermaid.js.org).
+
+No JavaScript frameworks. No build pipeline for your content. Just markdown files and a Go binary.
+
+---
+
+*Stigmergic is named after the biological phenomenon where organisms coordinate through environmental traces — ants leaving pheromones, termites building mounds. Your markdown files are the traces. Stigmergic makes them visible.*
+
+[Source Code](https://github.com/Buildtall-Systems/stigmergic.dev) · [Buildtall Systems](https://buildtall.systems)
