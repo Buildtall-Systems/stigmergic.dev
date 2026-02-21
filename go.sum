@@ -196,6 +196,8 @@ github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc h1:+
 github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc/go.mod h1:ovIvrum6DQJA4QsJSovrkC4saKHQVs7TvcaeO8AIl5I=
 go.abhg.dev/goldmark/mermaid v0.6.0 h1:VvkYFWuOjD6cmSBVJpLAtzpVCGM1h0B7/DQ9IzERwzY=
 go.abhg.dev/goldmark/mermaid v0.6.0/go.mod h1:uMc+PcnIH2NVL7zjH10Q1wr7hL3+4n4jUMifhyBYB9I=
+go.abhg.dev/goldmark/wikilink v0.6.0 h1:SKZANgMD7GMbaU0kBKTh52Ea9k3A3Y5ZifHoEPC1fuo=
+go.abhg.dev/goldmark/wikilink v0.6.0/go.mod h1:Sfaovp00aAVJ5khqIeDTTgkIfZrcurmJGlbntCJUbJY=
 go.yaml.in/yaml/v3 v3.0.4 h1:tfq32ie2Jv2UxXFdLJdh3jXuOzWiL1fo0bu/FbuKpbc=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
 golang.org/x/arch v0.15.0 h1:QtOrQd0bTUnhNVNndMpLHNWrDmYzZ2KDqSrEymqInZw=
