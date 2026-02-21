@@ -20,6 +20,7 @@
             templ
             tailwindcss
             nodejs
+            goreleaser
           ];
 
           shellHook = ''

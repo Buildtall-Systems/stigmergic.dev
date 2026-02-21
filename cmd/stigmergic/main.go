@@ -10,7 +10,9 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 )
 
-const version = "0.1.0"
+// version is set via ldflags at build time by goreleaser.
+// Falls back to "dev" for local builds.
+var version = "dev"
 
 var (
 	cfgFile          string
