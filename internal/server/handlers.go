@@ -118,7 +118,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := os.Stat(cleanPath)
+	info, err := os.Stat(cleanPath) //nolint:gosec // G703: path already validated via filepath.Clean + HasPrefix guard above
 	if err != nil {
 		logger.Log.Warn("path not found", "path", cleanPath, "error", err)
 		http.NotFound(w, r)
@@ -157,7 +157,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := os.ReadFile(cleanPath)
+	content, err := os.ReadFile(cleanPath) //nolint:gosec // G703: path already validated via filepath.Clean + HasPrefix guard above
 	if err != nil {
 		logger.Log.Warn("file not found", "path", cleanPath, "error", err)
 		http.NotFound(w, r)
