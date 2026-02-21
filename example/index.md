@@ -12,12 +12,6 @@ You have markdown files. Lots of them. Project docs, research notes, AI-generate
 
 Stigmergic does exactly this. Point it at a directory, and you have a live documentation site in seconds.
 
-```bash
-stigmergic serve ./docs
-```
-
-That's it. Open your browser. Start reading.
-
 ---
 
 ## What You Get
@@ -40,7 +34,37 @@ That's it. Open your browser. Start reading.
 
 ## Quick Start
 
-### Install
+### Download
+
+Pre-built binaries are available for every release:
+
+| Platform | Architecture | Download |
+|----------|-------------|----------|
+| Linux | x86_64 | [stigmergic_linux_amd64.tar.gz](https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/stigmergic_linux_amd64.tar.gz) |
+| Linux | ARM64 | [stigmergic_linux_arm64.tar.gz](https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/stigmergic_linux_arm64.tar.gz) |
+| macOS | Apple Silicon | [stigmergic_darwin_arm64.tar.gz](https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/stigmergic_darwin_arm64.tar.gz) |
+| macOS | Intel | [stigmergic_darwin_amd64.tar.gz](https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/stigmergic_darwin_amd64.tar.gz) |
+| Windows | x86_64 | [stigmergic_windows_amd64.zip](https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/stigmergic_windows_amd64.zip) |
+
+Extract and move to your `PATH`:
+
+```bash
+# Linux / macOS
+tar xzf stigmergic_*.tar.gz
+sudo mv stigmergic /usr/local/bin/
+
+# Windows (PowerShell)
+Expand-Archive stigmergic_*.zip -DestinationPath .
+```
+
+Verify checksums against the release's `checksums.txt`:
+
+```bash
+curl -sL https://github.com/Buildtall-Systems/stigmergic.dev/releases/latest/download/checksums.txt -o checksums.txt
+sha256sum --check --ignore-missing checksums.txt
+```
+
+### Install (alternative methods)
 
 ```bash
 # Nix (recommended)
