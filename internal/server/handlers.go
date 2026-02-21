@@ -166,7 +166,8 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	logger.Log.Debug("file read successfully", "path", cleanPath, "size", len(content))
 
-	html, err := markdown.Parse(content)
+	resolver := markdown.NewTreeResolver(files)
+	html, err := markdown.Parse(content, resolver)
 	if err != nil {
 		logger.Log.Error("markdown parse failed", "error", err)
 		http.Error(w, "Failed to parse markdown", http.StatusInternalServerError)
