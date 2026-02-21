@@ -18,7 +18,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(lrw, r)
 
 		duration := time.Since(start)
-		log.Printf("%s %s %d %v", r.Method, r.URL.Path, lrw.statusCode, duration) //nolint:gosec // G706: fixed format string, no user-controlled format specifiers
+		log.Printf("%s %s %d %v", r.Method, r.URL.Path, lrw.statusCode, duration)
 	})
 }
 
@@ -26,7 +26,7 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Printf("PANIC on %s %s: %v", r.Method, r.URL.Path, err) //nolint:gosec // G706: fixed format string, no user-controlled format specifiers
+				log.Printf("PANIC on %s %s: %v", r.Method, r.URL.Path, err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			}
 		}()

@@ -216,7 +216,7 @@ func TestDefaultFileNoRedirectForHTMX(t *testing.T) {
 	req, _ := http.NewRequest("GET", url, nil) //nolint:noctx
 	req.Header.Set("HX-Request", "true")
 
-	resp, err := client.Do(req) //nolint:gosec // G704: URL is constructed from local test server port, not user input
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to get homepage with HTMX: %v", err)
 	}

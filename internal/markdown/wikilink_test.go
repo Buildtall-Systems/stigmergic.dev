@@ -182,6 +182,39 @@ func TestWikilinkIntegrationUnresolved(t *testing.T) {
 	}
 }
 
+func TestWikilinkIntegrationFragment(t *testing.T) {
+	t.Parallel()
+
+	r := NewTreeResolver(testFiles())
+
+	t.Run("page with heading fragment", func(t *testing.T) {
+		t.Parallel()
+		html, err := Parse([]byte("See [[Simple Note#Overview]] for details."), r)
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		output := string(html)
+		if !strings.Contains(output, `/file/Simple%20Note.md#Overview">`) {
+			t.Errorf("expected href with fragment in output:\n%s", output)
+		}
+		if !strings.Contains(output, "</a>") {
+			t.Errorf("expected closing anchor tag in output:\n%s", output)
+		}
+	})
+
+	t.Run("self-link fragment", func(t *testing.T) {
+		t.Parallel()
+		html, err := Parse([]byte("Jump to [[#Section]] below."), r)
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		output := string(html)
+		if !strings.Contains(output, `href="#Section"`) {
+			t.Errorf("expected self-link fragment href in output:\n%s", output)
+		}
+	})
+}
+
 func TestWikilinkIntegrationAlias(t *testing.T) {
 	t.Parallel()
 
