@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -101,7 +102,7 @@ func (s *Server) computeRecentFiles(files []models.SearchableFile) []models.Sear
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	filePath := strings.TrimPrefix(r.URL.Path, "/file/")
-	logger.Log.Info("markdown request", "path", filePath, "htmx", isHTMXRequest(r))
+	logger.Log.Info("file request", "path", filePath, "htmx", isHTMXRequest(r))
 
 	if filePath == "" {
 		logger.Log.Warn("empty file path")
@@ -109,18 +110,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fullPath := filepath.Join(s.config.WatchPath, filePath)
+	// os.DirFS rejects paths containing ".." or starting with "/",
+	// eliminating path traversal by construction.
+	watchFS := os.DirFS(s.config.WatchPath)
 
-	cleanPath := filepath.Clean(fullPath)
-	if !strings.HasPrefix(cleanPath, s.config.WatchPath) {
-		logger.Log.Warn("path traversal attempt", "requested", filePath, "clean", cleanPath)
-		http.NotFound(w, r)
-		return
-	}
-
-	info, err := os.Stat(cleanPath) //nolint:gosec // G703: path already validated via filepath.Clean + HasPrefix guard above
+	info, err := fs.Stat(watchFS, filePath)
 	if err != nil {
-		logger.Log.Warn("path not found", "path", cleanPath, "error", err)
+		logger.Log.Warn("path not found", "path", filePath, "error", err)
 		http.NotFound(w, r)
 		return
 	}
@@ -133,12 +129,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	indexReady := s.IsIndexReady()
 
 	if info.IsDir() {
+		absPath := filepath.Join(s.config.WatchPath, filePath)
 		s.treeMux.RLock()
-		node := s.tree.Find(cleanPath)
+		node := s.tree.Find(absPath)
 		s.treeMux.RUnlock()
 
 		if node == nil {
-			logger.Log.Warn("directory node not found in tree", "path", cleanPath)
+			logger.Log.Warn("directory node not found in tree", "path", absPath)
 			http.NotFound(w, r)
 			return
 		}
@@ -157,14 +154,21 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := os.ReadFile(cleanPath) //nolint:gosec // G703: path already validated via filepath.Clean + HasPrefix guard above
+	// Serve non-markdown files directly (images, PDFs, etc.)
+	if filepath.Ext(filePath) != models.MarkdownExt {
+		logger.Log.Debug("serving static asset", "path", filePath)
+		http.ServeFileFS(w, r, watchFS, filePath)
+		return
+	}
+
+	content, err := fs.ReadFile(watchFS, filePath)
 	if err != nil {
-		logger.Log.Warn("file not found", "path", cleanPath, "error", err)
+		logger.Log.Warn("file read failed", "path", filePath, "error", err)
 		http.NotFound(w, r)
 		return
 	}
 
-	logger.Log.Debug("file read successfully", "path", cleanPath, "size", len(content))
+	logger.Log.Debug("file read successfully", "path", filePath, "size", len(content))
 
 	resolver := markdown.NewTreeResolver(files)
 	html, err := markdown.Parse(content, resolver)

@@ -11,7 +11,7 @@ import (
 type AuthConfig struct {
 	Enabled       bool
 	AllowedNpubs  []string `mapstructure:"allowed_npubs"`
-	SessionSecret string   `mapstructure:"session_secret"` //nolint:gosec // G117: field must be exported for viper mapstructure binding
+	SessionSecret string   `mapstructure:"session_secret" json:"-"`
 	SessionMaxAge string   `mapstructure:"session_max_age"`
 }
 

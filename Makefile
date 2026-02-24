@@ -13,7 +13,7 @@ help:
 	@printf "  make release   (L%s) - Cut a new GitHub release via goreleaser\n" "$$(grep -n '^release:' Makefile | cut -d: -f1)"
 
 lint:
-	golangci-lint run --max-issues-per-linter=1 --max-same-issues=1 ./...
+	golangci-lint run ./...
 
 css:
 	pnpm exec tailwindcss -i ./internal/embed/web/static/styles/input.css -o ./internal/embed/web/static/styles/output.css --minify
