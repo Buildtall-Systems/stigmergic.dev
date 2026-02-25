@@ -9,24 +9,24 @@ import (
 )
 
 type AuthConfig struct {
-	Enabled       bool
-	AllowedNpubs  []string `mapstructure:"allowed_npubs"`
 	SessionSecret string   `mapstructure:"session_secret" json:"-"`
 	SessionMaxAge string   `mapstructure:"session_max_age"`
+	AllowedNpubs  []string `mapstructure:"allowed_npubs"`
+	Enabled       bool
 }
 
 type Config struct {
-	Port             int
 	Host             string
 	BaseURL          string `mapstructure:"base_url"`
 	WatchPath        string
 	LogLevel         string
-	RespectGitignore bool
-	IgnorePatterns   []string
 	Theme            string
-	RecentFilesCount int
 	DefaultFile      string
+	IgnorePatterns   []string
 	Auth             AuthConfig
+	Port             int
+	RecentFilesCount int
+	RespectGitignore bool
 }
 
 func Load(cfgFile string) (*Config, error) {

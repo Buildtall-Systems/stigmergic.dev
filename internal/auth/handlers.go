@@ -15,9 +15,9 @@ type verifyRequest struct {
 }
 
 type verifyResponse struct {
-	OK       bool   `json:"ok"`
 	Redirect string `json:"redirect,omitempty"`
 	Error    string `json:"error,omitempty"`
+	OK       bool   `json:"ok"`
 }
 
 func LoginHandler(serverURL string) http.HandlerFunc {

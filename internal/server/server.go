@@ -25,20 +25,20 @@ type Server struct {
 	config           *config.Config
 	mux              *http.ServeMux
 	tree             *models.Tree
-	treeMux          sync.RWMutex
 	cachedFiles      atomic.Value
-	indexReady       atomic.Bool
-	respectGitignore atomic.Bool
 	watcher          *watcher.Watcher
 	theme            *theme.Theme
 	clients          map[chan string]bool
-	clientsMux       sync.RWMutex
 	ctx              context.Context
 	cancel           context.CancelFunc
-	wg               sync.WaitGroup
 	sessionManager   *auth.SessionManager
-	allowedPubkeys   []string
 	serverURL        string
+	allowedPubkeys   []string
+	treeMux          sync.RWMutex
+	clientsMux       sync.RWMutex
+	wg               sync.WaitGroup
+	indexReady       atomic.Bool
+	respectGitignore atomic.Bool
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -92,9 +92,9 @@ func NewServer(cfg *config.Config) *Server {
 	}
 
 	logger.Log.Info("adding watch path", "path", cfg.WatchPath)
-	if err := w.Add(cfg.WatchPath, cfg.RespectGitignore, cfg.IgnorePatterns); err != nil {
-		logger.Log.Error("failed to watch directory", "error", err)
-		panic(fmt.Sprintf("failed to watch directory: %v", err))
+	if addErr := w.Add(cfg.WatchPath, cfg.RespectGitignore, cfg.IgnorePatterns); addErr != nil {
+		logger.Log.Error("failed to watch directory", "error", addErr)
+		panic(fmt.Sprintf("failed to watch directory: %v", addErr))
 	}
 
 	logger.Log.Info("loading theme", "theme", cfg.Theme)

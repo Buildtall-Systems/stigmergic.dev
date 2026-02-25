@@ -32,7 +32,7 @@ func ScanDirectory(rootPath string, respectGitignore bool, ignorePatterns []stri
 
 	if respectGitignore {
 		gitignorePath := filepath.Join(absPath, ".gitignore")
-		if file, err := os.Open(gitignorePath); err == nil { //nolint:gosec
+		if file, err := os.Open(filepath.Clean(gitignorePath)); err == nil {
 			defer func() { _ = file.Close() }()
 			scanner := bufio.NewScanner(file)
 			lineCount := 0

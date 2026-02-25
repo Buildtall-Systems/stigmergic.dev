@@ -96,9 +96,9 @@ func normalize(s string) string {
 // <span class="wikilink-unresolved">.
 type WikilinkRenderer struct {
 	Resolver wikilink.Resolver
+	hasDest  sync.Map // *wikilink.Node → struct{}
 
-	once    sync.Once
-	hasDest sync.Map // *wikilink.Node → struct{}
+	once sync.Once
 }
 
 func (r *WikilinkRenderer) init() {

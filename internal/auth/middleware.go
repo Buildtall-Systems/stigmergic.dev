@@ -40,7 +40,10 @@ func Middleware(sm *SessionManager) func(http.Handler) http.Handler {
 }
 
 func PubkeyFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(pubkeyContextKey).(string)
+	v, ok := ctx.Value(pubkeyContextKey).(string)
+	if !ok {
+		return ""
+	}
 	return v
 }
 

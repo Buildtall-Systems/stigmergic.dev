@@ -311,7 +311,7 @@ func TestWatchDirImageServing(t *testing.T) {
 	t.Parallel()
 
 	dir := testutil.CreateTempDir(t)
-	if err := os.WriteFile(filepath.Join(dir, "image.png"), minimalPNG, 0644); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(dir, "image.png"), minimalPNG, 0644); err != nil {
 		t.Fatalf("failed to write PNG: %v", err)
 	}
 
@@ -403,7 +403,7 @@ func TestWatchDirAssetInSubdirectory(t *testing.T) {
 		t.Fatalf("failed to create subdir: %v", err)
 	}
 	svgContent := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>`)
-	if err := os.WriteFile(filepath.Join(subDir, "diagram.svg"), svgContent, 0644); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(subDir, "diagram.svg"), svgContent, 0644); err != nil {
 		t.Fatalf("failed to write SVG: %v", err)
 	}
 

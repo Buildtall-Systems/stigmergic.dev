@@ -26,8 +26,8 @@ const (
 )
 
 type Event struct {
-	Type EventType
 	Path string
+	Type EventType
 }
 
 type Watcher struct {
@@ -36,14 +36,14 @@ type Watcher struct {
 	Errors         chan error
 	ctx            context.Context
 	cancel         context.CancelFunc
-	wg             sync.WaitGroup
 	debounceMap    map[string]*time.Timer
-	debounceMutex  sync.Mutex
-	debounceWg     sync.WaitGroup
 	watchedDirs    map[string]bool
-	watchMutex     sync.RWMutex
 	gitignore      *gitignore.GitIgnore
 	rootPath       string
+	watchMutex     sync.RWMutex
+	wg             sync.WaitGroup
+	debounceMutex  sync.Mutex
+	debounceWg     sync.WaitGroup
 	debounceWindow time.Duration
 }
 
@@ -103,7 +103,7 @@ func (w *Watcher) Add(path string, respectGitignore bool, ignorePatterns []strin
 
 		if respectGitignore {
 			gitignorePath := filepath.Join(absPath, ".gitignore")
-			if file, err := os.Open(gitignorePath); err == nil { //nolint:gosec
+			if file, err := os.Open(filepath.Clean(gitignorePath)); err == nil {
 				defer func() { _ = file.Close() }()
 				scanner := bufio.NewScanner(file)
 				lineCount := 0
@@ -128,7 +128,10 @@ func (w *Watcher) Add(path string, respectGitignore bool, ignorePatterns []strin
 }
 
 func (w *Watcher) addRecursive(path string) error {
-	relPath, _ := filepath.Rel(w.rootPath, path)
+	relPath, err := filepath.Rel(w.rootPath, path)
+	if err != nil {
+		return fmt.Errorf("failed to compute relative path: %w", err)
+	}
 	if w.gitignore != nil && w.gitignore.MatchesPath(relPath) {
 		logger.Log.Debug("skipping ignored path", "path", relPath)
 		return nil
@@ -143,12 +146,12 @@ func (w *Watcher) addRecursive(path string) error {
 	w.watchedDirs[path] = true
 	w.watchMutex.Unlock()
 
-	if err := w.watcher.Add(path); err != nil {
+	if watchErr := w.watcher.Add(path); watchErr != nil {
 		w.watchMutex.Lock()
 		delete(w.watchedDirs, path)
 		w.watchMutex.Unlock()
-		logger.Log.Error("failed to add watch", "path", path, "error", err)
-		return fmt.Errorf("failed to watch path: %w", err)
+		logger.Log.Error("failed to add watch", "path", path, "error", watchErr)
+		return fmt.Errorf("failed to watch path: %w", watchErr)
 	}
 
 	logger.Log.Info("watching path", "path", path)

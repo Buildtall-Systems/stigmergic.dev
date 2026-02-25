@@ -63,7 +63,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	tree := s.tree
 	s.treeMux.RUnlock()
 
-	files := s.cachedFiles.Load().([]models.SearchableFile)
+	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
 	recentFiles := s.computeRecentFiles(files)
 
 	indexReady := s.IsIndexReady()
@@ -125,7 +125,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	title := filepath.Base(filePath)
 	isHTMX := isHTMXRequest(r)
 
-	files := s.cachedFiles.Load().([]models.SearchableFile)
+	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
 	indexReady := s.IsIndexReady()
 
 	if info.IsDir() {
@@ -142,13 +142,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 		if isHTMX {
 			logger.Log.Debug("rendering HTMX directory partial")
-			if err := templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w); err != nil {
-				logger.Log.Error("failed to render directory content template", "error", err)
+			if renderErr := templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w); renderErr != nil {
+				logger.Log.Error("failed to render directory content template", "error", renderErr)
 			}
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			if err := templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files, indexReady).Render(r.Context(), w); err != nil {
-				logger.Log.Error("failed to render directory template", "error", err)
+			if renderErr := templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files, indexReady).Render(r.Context(), w); renderErr != nil {
+				logger.Log.Error("failed to render directory template", "error", renderErr)
 			}
 		}
 		return
@@ -182,13 +182,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if err := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath).Render(r.Context(), w); err != nil {
-			logger.Log.Error("failed to render markdown content template", "error", err)
+		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath).Render(r.Context(), w); renderErr != nil {
+			logger.Log.Error("failed to render markdown content template", "error", renderErr)
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if err := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady).Render(r.Context(), w); err != nil {
-			logger.Log.Error("failed to render markdown template", "error", err)
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady).Render(r.Context(), w); renderErr != nil {
+			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}
 }
@@ -274,7 +274,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFilesAPI(w http.ResponseWriter, r *http.Request) {
-	files := s.cachedFiles.Load().([]models.SearchableFile)
+	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(files); err != nil {

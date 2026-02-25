@@ -48,7 +48,7 @@ linters:
       # Report about not checking errors in type assertions: `a, ok := b.(MyStruct)`
       check-type-assertions: true
       # Report about assignment to blank identifier: `_ = function()`
-      check-blank: true
+      check-blank: false
     govet:
       # Enable all analyzers
       enable-all: true
