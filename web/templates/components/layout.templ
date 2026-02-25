@@ -92,6 +92,11 @@ func themeCSS(thm *theme.Theme) string {
 		--tw-prose-th-borders: var(--border-color);
 		--tw-prose-td-borders: var(--border-color);
 	}
+	.prose img {
+		border-radius: 0.375rem;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+		border: 1px solid var(--border-color);
+	}
 	.prose code::before,
 	.prose code::after {
 		content: none;

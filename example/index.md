@@ -4,6 +4,8 @@
 
 Stigmergic watches a directory of markdown files and serves them through a local web server. Files update in real-time as you edit them. Navigation happens instantly. Everything just works.
 
+![Stigmergic rendering markdown with the Iceberg Dark theme](img/stigmergic.png)
+
 ---
 
 ## Why Stigmergic?
@@ -19,6 +21,8 @@ Stigmergic does exactly this. Point it at a directory, and you have a live docum
 **Live Reload** — Edit a file, see it update instantly. No refresh needed. Powered by Server-Sent Events.
 
 **Command Palette** — Press `Ctrl+K` to search across all your files. Fuzzy matching finds what you need fast.
+
+![Command palette searching files and commands](img/stigmergic-command.png)
 
 **Syntax Highlighting** — Code blocks in any language, highlighted with the Nord color scheme.
 
