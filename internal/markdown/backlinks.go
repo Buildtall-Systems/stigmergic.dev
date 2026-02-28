@@ -3,6 +3,7 @@ package markdown
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -73,6 +74,13 @@ func BuildBacklinkIndex(rootPath string, files []models.SearchableFile) models.B
 
 			return ast.WalkContinue, nil
 		})
+	}
+
+	for target, entries := range index {
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].SourceTitle < entries[j].SourceTitle
+		})
+		index[target] = entries
 	}
 
 	return index
