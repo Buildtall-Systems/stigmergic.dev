@@ -171,7 +171,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	logger.Log.Debug("file read successfully", "path", filePath, "size", len(content))
 
 	resolver := markdown.NewTreeResolver(files)
-	html, err := markdown.Parse(content, resolver)
+	html, meta, err := markdown.Parse(content, resolver)
 	if err != nil {
 		logger.Log.Error("markdown parse failed", "error", err)
 		http.Error(w, "Failed to parse markdown", http.StatusInternalServerError)
@@ -185,12 +185,12 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, fileBacklinks).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, fileBacklinks, meta).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown content template", "error", renderErr)
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady, fileBacklinks).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady, fileBacklinks, meta).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}
