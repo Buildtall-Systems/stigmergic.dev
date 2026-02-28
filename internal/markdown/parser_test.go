@@ -41,7 +41,7 @@ func TestParseBasicMarkdown(t *testing.T) {
 		{
 			name:     "link",
 			input:    "[text](https://example.com)",
-			expected: "<a href=\"https://example.com\">text</a>",
+			expected: "<a href=\"https://example.com\" target=\"_blank\" rel=\"noopener noreferrer\">text</a>",
 		},
 		{
 			name:     "unordered list",
@@ -114,7 +114,7 @@ Link to [example](https://example.com).
 		"<h3 id=\"subsection\">Subsection</h3>",
 		"<strong>bold</strong>",
 		"<em>italic</em>",
-		"<a href=\"https://example.com\">example</a>",
+		"<a href=\"https://example.com\" target=\"_blank\" rel=\"noopener noreferrer\">example</a>",
 		"<ul>",
 		"<li>Item 1</li>",
 		"<pre style=",
@@ -374,8 +374,55 @@ func TestParseGFMLinkify(t *testing.T) {
 	}
 
 	output := string(result)
-	if !strings.Contains(output, "<a href=\"https://example.com\">https://example.com</a>") {
+	if !strings.Contains(output, "<a href=\"https://example.com\" target=\"_blank\" rel=\"noopener noreferrer\">https://example.com</a>") {
 		t.Errorf("Expected auto-linked URL in output\nGot:\n%s", output)
+	}
+}
+
+func TestParseExternalLinksNewTab(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "https link opens in new tab",
+			input:    "[Go](https://go.dev/)",
+			expected: `<a href="https://go.dev/" target="_blank" rel="noopener noreferrer">Go</a>`,
+		},
+		{
+			name:     "http link opens in new tab",
+			input:    "[old](http://example.com)",
+			expected: `<a href="http://example.com" target="_blank" rel="noopener noreferrer">old</a>`,
+		},
+		{
+			name:     "relative link stays in same tab",
+			input:    "[readme](/file/readme.md)",
+			expected: `<a href="/file/readme.md">readme</a>`,
+		},
+		{
+			name:     "anchor link stays in same tab",
+			input:    "[section](#overview)",
+			expected: `<a href="#overview">section</a>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := Parse([]byte(tt.input), nil)
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+
+			output := strings.TrimSpace(string(result))
+			if !strings.Contains(output, tt.expected) {
+				t.Errorf("\nInput:    %q\nExpected: %q\nGot:      %q", tt.input, tt.expected, output)
+			}
+		})
 	}
 }
 

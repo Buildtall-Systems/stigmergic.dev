@@ -41,6 +41,7 @@ func Parse(source []byte, resolver wikilink.Resolver) ([]byte, error) {
 	rendererOpts := []renderer.Option{
 		gmhtml.WithUnsafe(),
 		gmhtml.WithHardWraps(),
+		renderer.WithNodeRenderers(util.Prioritized(&LinkRenderer{}, 500)),
 	}
 
 	if resolver != nil {
