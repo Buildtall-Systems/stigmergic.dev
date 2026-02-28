@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "katex": "0.16.22",
-    "mermaid": "^11.12.2"
+    "mermaid": "^11.12.3"
   }
 }
