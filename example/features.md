@@ -4,7 +4,7 @@
 
 Stigmergic uses [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) to push file changes to your browser. When you save a file, the rendered view updates immediately — no manual refresh, no polling.
 
-The watcher uses `fsnotify` with event debouncing to avoid redundant updates. It respects `.gitignore` patterns by default, so build artifacts and `node_modules` won't trigger reloads.
+The watcher uses [`fsnotify`](https://github.com/fsnotify/fsnotify) with event debouncing to avoid redundant updates. It respects `.gitignore` patterns by default, so build artifacts and `node_modules` won't trigger reloads.
 
 ## Command Palette
 
@@ -14,7 +14,7 @@ This is the fastest way to navigate large documentation sets. No need to browse 
 
 ## Markdown Rendering
 
-Full [CommonMark](https://commonmark.org/) compliance plus GitHub Flavored Markdown extensions:
+Full [CommonMark](https://commonmark.org/) compliance plus [GitHub Flavored Markdown](https://github.github.com/gfm/) extensions:
 
 - **Tables** — pipe-delimited tables render as styled HTML
 - **Task lists** — `- [x]` and `- [ ]` render as checkboxes
@@ -23,7 +23,7 @@ Full [CommonMark](https://commonmark.org/) compliance plus GitHub Flavored Markd
 
 ## Syntax Highlighting
 
-Code blocks with language annotations get syntax highlighting via [Chroma](https://github.com/alecthomas/chroma) with the Nord theme:
+Code blocks with language annotations get syntax highlighting via [Chroma](https://github.com/alecthomas/chroma) with the [Nord](https://www.nordtheme.com/) theme:
 
 ```python
 def fibonacci(n):

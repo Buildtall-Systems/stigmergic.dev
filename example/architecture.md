@@ -1,6 +1,6 @@
 # Architecture
 
-Stigmergic is a single Go binary with no runtime dependencies. Everything is embedded at compile time.
+Stigmergic is a single [Go](https://go.dev/) binary with no runtime dependencies. Everything is embedded at compile time.
 
 ## How It Works
 
@@ -57,9 +57,9 @@ sequenceDiagram
 | CLI | [Cobra](https://github.com/spf13/cobra) | Command parsing |
 | Config | [Viper](https://github.com/spf13/viper) | Hierarchical config (flags > env > file > defaults) |
 | Watcher | [fsnotify](https://github.com/fsnotify/fsnotify) | File system events with debouncing |
-| Server | Go `net/http` | HTTP server with middleware stack |
+| Server | Go [`net/http`](https://pkg.go.dev/net/http) | HTTP server with middleware stack |
 | Markdown | [Goldmark](https://github.com/yuin/goldmark) | CommonMark + GFM + extensions |
-| Highlighting | [Chroma](https://github.com/alecthomas/chroma) | Syntax highlighting (Nord theme) |
+| Highlighting | [Chroma](https://github.com/alecthomas/chroma) | Syntax highlighting ([Nord](https://www.nordtheme.com/) theme) |
 | Templates | [Templ](https://templ.guide) | Type-safe HTML generation |
 | Frontend | [HTMX](https://htmx.org) | Partial page updates |
 | Styling | [Tailwind CSS](https://tailwindcss.com) | Utility-first CSS (compiled at build time) |
@@ -72,7 +72,7 @@ sequenceDiagram
 
 **HTMX over SPA.** Navigation uses HTMX partial page updates instead of a JavaScript SPA framework. This means the server renders HTML, the browser swaps content, and there's no client-side routing or state management. Pages work without JavaScript (degraded but functional).
 
-**Embedded assets.** Static files (CSS, JS, fonts) are embedded in the binary using Go's `embed` package. One binary, nothing to configure, nothing to lose.
+**Embedded assets.** Static files (CSS, JS, fonts) are embedded in the binary using Go's [`embed`](https://pkg.go.dev/embed) package. One binary, nothing to configure, nothing to lose.
 
 **Security by default.** Path traversal protection, security headers, and read-only filesystem access. Stigmergic never writes to your files.
 

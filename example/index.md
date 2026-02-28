@@ -18,21 +18,21 @@ Stigmergic does exactly this. Point it at a directory, and you have a live docum
 
 ## What You Get
 
-**Live Reload** — Edit a file, see it update instantly. No refresh needed. Powered by Server-Sent Events.
+**Live Reload** — Edit a file, see it update instantly. No refresh needed. Powered by [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events).
 
 **Command Palette** — Press `Ctrl+K` to search across all your files. Fuzzy matching finds what you need fast.
 
 ![Command palette searching files and commands](img/stigmergic-command.png)
 
-**Syntax Highlighting** — Code blocks in any language, highlighted with the Nord color scheme.
+**Syntax Highlighting** — Code blocks in any language, highlighted with the [Nord](https://www.nordtheme.com/) color scheme.
 
-**Math & Diagrams** — LaTeX equations via KaTeX. Flowcharts and sequence diagrams via Mermaid. Write them in markdown, see them rendered.
+**Math & Diagrams** — LaTeX equations via [KaTeX](https://katex.org/). Flowcharts and sequence diagrams via [Mermaid](https://mermaid.js.org/). Write them in markdown, see them rendered.
 
 **Nostr Links** — Native rendering of `nostr:` protocol URLs. npubs, notes, and events become clickable links.
 
 **Directory Browsing** — Your file tree becomes your navigation. Folders expand. Files render. Simple.
 
-**Themes** — Ships with Iceberg Dark and Light. Create your own with a TOML file.
+**Themes** — Ships with Iceberg Dark and Light. Create your own with a [TOML](https://toml.io/) file.
 
 ---
 
@@ -116,7 +116,7 @@ default_file = "README.md"
 
 ## Built With
 
-Go, [HTMX](https://htmx.org), [Templ](https://templ.guide), [Goldmark](https://github.com/yuin/goldmark), [Tailwind CSS](https://tailwindcss.com), [KaTeX](https://katex.org), [Mermaid](https://mermaid.js.org).
+[Go](https://go.dev/), [HTMX](https://htmx.org), [Templ](https://templ.guide), [Goldmark](https://github.com/yuin/goldmark), [Tailwind CSS](https://tailwindcss.com), [KaTeX](https://katex.org), [Mermaid](https://mermaid.js.org).
 
 No JavaScript frameworks. No build pipeline for your content. Just markdown files and a Go binary.
 
