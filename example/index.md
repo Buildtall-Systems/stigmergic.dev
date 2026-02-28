@@ -104,6 +104,15 @@ default_file = "README.md"
 
 ---
 
+## Learn More
+
+- [[features]] — Full list of capabilities with examples
+- [[installation]] — Download, install, and configure
+- [[architecture]] — How it works under the hood
+- [[demo]] — Comprehensive markdown rendering showcase
+
+---
+
 ## Use Cases
 
 - **Agentic coding workflows** — AI tools generate mountains of markdown. Stigmergic makes it readable.
