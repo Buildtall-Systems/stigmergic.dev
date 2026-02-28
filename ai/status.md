@@ -270,3 +270,9 @@ Implemented wikilink backlinks (GitHub issue #9).
 PR: https://github.com/Buildtall-Systems/stigmergic.dev/pull/11 (branch `feature/wikilink-backlinks` → `develop`)
 
 Verification: `make generate && make lint && make test && make build` — all pass.
+
+---
+
+Released v0.2.0: https://github.com/Buildtall-Systems/stigmergic.dev/releases/tag/v0.2.0
+
+Binaries: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64. Built via goreleaser (nix-shell). Merged develop → master, tagged, pushed.
