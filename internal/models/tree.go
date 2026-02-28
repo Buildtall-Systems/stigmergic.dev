@@ -23,16 +23,16 @@ const (
 type SearchableFile struct {
 	Name         string
 	Path         string
-	ModTime      int64
 	RelativeTime string
+	ModTime      int64
 }
 
 type Node struct {
 	Name     string
 	Path     string
-	Type     NodeType
 	ModTime  time.Time
 	Children []*Node
+	Type     NodeType
 }
 
 type Tree struct {
@@ -41,7 +41,10 @@ type Tree struct {
 }
 
 func NewTree(rootPath string) *Tree {
-	absPath, _ := filepath.Abs(rootPath)
+	absPath, err := filepath.Abs(rootPath)
+	if err != nil {
+		absPath = rootPath
+	}
 	return &Tree{
 		RootPath: absPath,
 		Root: &Node{
@@ -83,7 +86,10 @@ func (n *Node) AddChild(child *Node) {
 }
 
 func (t *Tree) Find(path string) *Node {
-	absPath, _ := filepath.Abs(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil
+	}
 	relPath, err := filepath.Rel(t.RootPath, absPath)
 	if err != nil {
 		return nil

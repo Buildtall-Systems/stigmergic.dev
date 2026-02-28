@@ -54,7 +54,7 @@ func Load(themeName string) (*Theme, error) {
 		}
 
 		customPath := filepath.Join(homeDir, ".config", "stigmergic", "themes", fmt.Sprintf("%s.toml", themeName))
-		data, err = os.ReadFile(customPath) //nolint:gosec
+		data, err = os.ReadFile(filepath.Clean(customPath))
 		if err != nil {
 			return nil, fmt.Errorf("theme '%s' not found in embedded or custom themes: %w", themeName, err)
 		}

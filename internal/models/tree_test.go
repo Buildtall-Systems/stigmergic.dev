@@ -190,9 +190,6 @@ func TestNodeModTime(t *testing.T) {
 
 	now := time.Now()
 	node := &Node{
-		Name:    "test.md",
-		Path:    "/test/test.md",
-		Type:    NodeTypeFile,
 		ModTime: now,
 	}
 

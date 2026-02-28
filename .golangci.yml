@@ -43,41 +43,46 @@ linters:
     - misspell
     - nolintlint
     - prealloc
-
-linters-settings:
-  errcheck:
-    # Report about not checking errors in type assertions: `a, ok := b.(MyStruct)`
-    check-type-assertions: true
-    # Report about assignment to blank identifier: `_ = function()`
-    check-blank: true
-  govet:
-    # Enable all analyzers
-    enable-all: true
-  gosec:
-    # No exclusions - we want full security coverage
-    excludes: []
-  goconst:
-    # Minimum length of string to trigger
-    min-len: 3
-    # Minimum occurrences to trigger
-    min-occurrences: 3
+  settings:
+    errcheck:
+      # Report about not checking errors in type assertions: `a, ok := b.(MyStruct)`
+      check-type-assertions: true
+      # Report about assignment to blank identifier: `_ = function()`
+      check-blank: false
+    govet:
+      # Enable all analyzers
+      enable-all: true
+    gosec:
+      # No exclusions - we want full security coverage
+      excludes: []
+    goconst:
+      # Minimum length of string to trigger
+      min-len: 3
+      # Minimum occurrences to trigger
+      min-occurrences: 3
+  exclusions:
+    rules:
+      # Relax errcheck in test files - common pattern, reduces noise
+      - path: _test\.go
+        linters:
+          - errcheck
+      # Allow hardcoded credentials in test files (test fixtures)
+      - path: _test\.go
+        linters:
+          - gosec
+        text: "Potential hardcoded credentials"
+      # Allow 0644 file permissions in test files (test fixtures)
+      - path: _test\.go
+        linters:
+          - gosec
+        text: "Expect WriteFile permissions"
+      # Allow SSRF taint in test files (localhost test servers are not SSRF targets)
+      - path: _test\.go
+        linters:
+          - gosec
+        text: "SSRF via taint analysis"
 
 issues:
   # Report all issues (no limits)
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    # Relax errcheck in test files - common pattern, reduces noise
-    - path: _test\.go
-      linters:
-        - errcheck
-    # Allow hardcoded credentials in test files (test fixtures)
-    - path: _test\.go
-      linters:
-        - gosec
-      text: "Potential hardcoded credentials"
-    # Allow 0644 file permissions in test files (test fixtures)
-    - path: _test\.go
-      linters:
-        - gosec
-      text: "Expect WriteFile permissions"

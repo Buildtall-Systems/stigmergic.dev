@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -13,7 +14,7 @@ import (
 
 func isPortAvailable(host string, port int) bool {
 	addr := fmt.Sprintf("%s:%d", host, port)
-	listener, err := net.Listen("tcp", addr) //nolint:noctx
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return false
 	}

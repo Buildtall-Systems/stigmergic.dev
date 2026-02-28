@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -62,7 +63,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	tree := s.tree
 	s.treeMux.RUnlock()
 
-	files := s.cachedFiles.Load().([]models.SearchableFile)
+	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
 	recentFiles := s.computeRecentFiles(files)
 
 	indexReady := s.IsIndexReady()
@@ -101,7 +102,7 @@ func (s *Server) computeRecentFiles(files []models.SearchableFile) []models.Sear
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	filePath := strings.TrimPrefix(r.URL.Path, "/file/")
-	logger.Log.Info("markdown request", "path", filePath, "htmx", isHTMXRequest(r))
+	logger.Log.Info("file request", "path", filePath, "htmx", isHTMXRequest(r))
 
 	if filePath == "" {
 		logger.Log.Warn("empty file path")
@@ -109,18 +110,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fullPath := filepath.Join(s.config.WatchPath, filePath)
+	// os.DirFS rejects paths containing ".." or starting with "/",
+	// eliminating path traversal by construction.
+	watchFS := os.DirFS(s.config.WatchPath)
 
-	cleanPath := filepath.Clean(fullPath)
-	if !strings.HasPrefix(cleanPath, s.config.WatchPath) {
-		logger.Log.Warn("path traversal attempt", "requested", filePath, "clean", cleanPath)
-		http.NotFound(w, r)
-		return
-	}
-
-	info, err := os.Stat(cleanPath)
+	info, err := fs.Stat(watchFS, filePath)
 	if err != nil {
-		logger.Log.Warn("path not found", "path", cleanPath, "error", err)
+		logger.Log.Warn("path not found", "path", filePath, "error", err)
 		http.NotFound(w, r)
 		return
 	}
@@ -129,44 +125,53 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	title := filepath.Base(filePath)
 	isHTMX := isHTMXRequest(r)
 
-	files := s.cachedFiles.Load().([]models.SearchableFile)
+	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
 	indexReady := s.IsIndexReady()
 
 	if info.IsDir() {
+		absPath := filepath.Join(s.config.WatchPath, filePath)
 		s.treeMux.RLock()
-		node := s.tree.Find(cleanPath)
+		node := s.tree.Find(absPath)
 		s.treeMux.RUnlock()
 
 		if node == nil {
-			logger.Log.Warn("directory node not found in tree", "path", cleanPath)
+			logger.Log.Warn("directory node not found in tree", "path", absPath)
 			http.NotFound(w, r)
 			return
 		}
 
 		if isHTMX {
 			logger.Log.Debug("rendering HTMX directory partial")
-			if err := templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w); err != nil {
-				logger.Log.Error("failed to render directory content template", "error", err)
+			if renderErr := templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w); renderErr != nil {
+				logger.Log.Error("failed to render directory content template", "error", renderErr)
 			}
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			if err := templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files, indexReady).Render(r.Context(), w); err != nil {
-				logger.Log.Error("failed to render directory template", "error", err)
+			if renderErr := templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files, indexReady).Render(r.Context(), w); renderErr != nil {
+				logger.Log.Error("failed to render directory template", "error", renderErr)
 			}
 		}
 		return
 	}
 
-	content, err := os.ReadFile(cleanPath)
+	// Serve non-markdown files directly (images, PDFs, etc.)
+	if filepath.Ext(filePath) != models.MarkdownExt {
+		logger.Log.Debug("serving static asset", "path", filePath)
+		http.ServeFileFS(w, r, watchFS, filePath)
+		return
+	}
+
+	content, err := fs.ReadFile(watchFS, filePath)
 	if err != nil {
-		logger.Log.Warn("file not found", "path", cleanPath, "error", err)
+		logger.Log.Warn("file read failed", "path", filePath, "error", err)
 		http.NotFound(w, r)
 		return
 	}
 
-	logger.Log.Debug("file read successfully", "path", cleanPath, "size", len(content))
+	logger.Log.Debug("file read successfully", "path", filePath, "size", len(content))
 
-	html, err := markdown.Parse(content)
+	resolver := markdown.NewTreeResolver(files)
+	html, err := markdown.Parse(content, resolver)
 	if err != nil {
 		logger.Log.Error("markdown parse failed", "error", err)
 		http.Error(w, "Failed to parse markdown", http.StatusInternalServerError)
@@ -177,13 +182,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if err := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath).Render(r.Context(), w); err != nil {
-			logger.Log.Error("failed to render markdown content template", "error", err)
+		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath).Render(r.Context(), w); renderErr != nil {
+			logger.Log.Error("failed to render markdown content template", "error", renderErr)
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if err := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady).Render(r.Context(), w); err != nil {
-			logger.Log.Error("failed to render markdown template", "error", err)
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady).Render(r.Context(), w); renderErr != nil {
+			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}
 }
@@ -269,7 +274,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFilesAPI(w http.ResponseWriter, r *http.Request) {
-	files := s.cachedFiles.Load().([]models.SearchableFile)
+	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(files); err != nil {

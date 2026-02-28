@@ -34,7 +34,7 @@ Or use with `nix develop` for a dev environment that includes stigmergic.
 
 ## Go Install
 
-Requires Go 1.24+:
+Requires [Go](https://go.dev/) 1.24+:
 
 ```bash
 go install github.com/Buildtall-Systems/stigmergic.dev/cmd/stigmergic@latest
@@ -53,13 +53,13 @@ make install  # installs to ~/.local/bin
 
 ### Build Dependencies
 
-- Go 1.24+
-- Node.js (for Tailwind CSS)
+- [Go](https://go.dev/) 1.24+
+- [Node.js](https://nodejs.org/) (for [Tailwind CSS](https://tailwindcss.com/))
 - [templ](https://templ.guide) — `go install github.com/a-h/templ/cmd/templ@latest`
 
 ### Development Environment
 
-Using Nix:
+Using [Nix](https://nixos.org/):
 
 ```bash
 nix develop
@@ -122,4 +122,4 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now stigmergic
 ```
 
-Put nginx or caddy in front for TLS termination.
+Put [nginx](https://nginx.org/) or [Caddy](https://caddyserver.com/) in front for TLS termination.

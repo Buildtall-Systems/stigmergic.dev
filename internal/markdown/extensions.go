@@ -182,8 +182,11 @@ func (r *mathRenderer) renderMathInline(w util.BufWriter, source []byte, node as
 	if entering {
 		_, _ = w.WriteString("<span class=\"math-inline\">$")
 		for c := node.FirstChild(); c != nil; c = c.NextSibling() {
-			segment := c.(*ast.Text).Segment
-			_, _ = w.Write(segment.Value(source))
+			textNode, ok := c.(*ast.Text)
+			if !ok {
+				continue
+			}
+			_, _ = w.Write(textNode.Segment.Value(source))
 		}
 		_, _ = w.WriteString("$</span>")
 	}

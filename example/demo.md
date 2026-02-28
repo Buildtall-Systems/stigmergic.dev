@@ -1,6 +1,6 @@
 # stigmergic.dev - Feature Demonstration
 
-**stigmergic.dev** is a *lightweight* markdown watcher and renderer built with Go. This document showcases all supported markdown features.
+**stigmergic.dev** is a *lightweight* markdown watcher and renderer built with [Go](https://go.dev/). This document showcases all supported markdown features.
 
 ## Overview
 
@@ -181,7 +181,7 @@ Initial testing shows promising results:
 
 ## Conclusion
 
-stigmergic.dev provides a **fast**, **beautiful**, and **extensible** way to read markdown documentation in real-time. Built with modern Go practices and leveraging the power of `goldmark`, `htmx`, and `templ`.
+stigmergic.dev provides a **fast**, **beautiful**, and **extensible** way to read markdown documentation in real-time. Built with modern Go practices and leveraging the power of [`goldmark`](https://github.com/yuin/goldmark), [`htmx`](https://htmx.org), and [`templ`](https://templ.guide).
 
 Visit [GitHub](https://github.com/Buildtall-Systems/stigmergic.dev) for source code and contributions.
 

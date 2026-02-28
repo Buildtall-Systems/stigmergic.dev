@@ -1,9 +1,10 @@
 package server
 
 import (
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 )
 
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -18,7 +19,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(lrw, r)
 
 		duration := time.Since(start)
-		log.Printf("%s %s %d %v", r.Method, r.URL.Path, lrw.statusCode, duration)
+		logger.Log.Info("http request", "method", r.Method, "path", r.URL.Path, "status", lrw.statusCode, "duration", duration)
 	})
 }
 
@@ -26,7 +27,7 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Printf("PANIC on %s %s: %v", r.Method, r.URL.Path, err)
+				logger.Log.Error("panic recovered", "method", r.Method, "path", r.URL.Path, "error", err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			}
 		}()
