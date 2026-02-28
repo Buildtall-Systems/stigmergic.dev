@@ -15,6 +15,7 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/auth"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/watcher"
@@ -26,6 +27,7 @@ type Server struct {
 	mux              *http.ServeMux
 	tree             *models.Tree
 	cachedFiles      atomic.Value
+	cachedBacklinks  atomic.Value
 	watcher          *watcher.Watcher
 	theme            *theme.Theme
 	clients          map[chan string]bool
@@ -123,6 +125,7 @@ func NewServer(cfg *config.Config) *Server {
 	}
 
 	s.cachedFiles.Store([]models.SearchableFile{})
+	s.cachedBacklinks.Store(models.BacklinkIndex{})
 	s.respectGitignore.Store(cfg.RespectGitignore)
 
 	s.wg.Add(2)
@@ -290,7 +293,9 @@ func (s *Server) updateTree() {
 	s.tree = newTree
 	s.treeMux.Unlock()
 
-	s.cachedFiles.Store(newTree.FlattenMarkdownFiles())
+	files := newTree.FlattenMarkdownFiles()
+	s.cachedFiles.Store(files)
+	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.config.WatchPath, files))
 	logger.Log.Info("directory tree updated successfully")
 }
 
@@ -310,7 +315,9 @@ func (s *Server) initialScan() {
 	s.tree = newTree
 	s.treeMux.Unlock()
 
-	s.cachedFiles.Store(newTree.FlattenMarkdownFiles())
+	files := newTree.FlattenMarkdownFiles()
+	s.cachedFiles.Store(files)
+	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.config.WatchPath, files))
 	s.indexReady.Store(true)
 	logger.Log.Info("background scan complete, index ready")
 
