@@ -178,6 +178,11 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prefer frontmatter title for the HTML <title> when present.
+	if metaTitle, ok := meta["title"].(string); ok && metaTitle != "" {
+		title = metaTitle
+	}
+
 	backlinks, _ := s.cachedBacklinks.Load().(models.BacklinkIndex)
 	fileBacklinks := backlinks[filePath]
 

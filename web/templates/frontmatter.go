@@ -25,6 +25,8 @@ func ClassifyMetadataValue(v any) MetadataValue {
 			strs = append(strs, fmt.Sprint(item))
 		}
 		return MetadataValue{ArrayVal: strs, IsArray: true}
+	case []string:
+		return MetadataValue{ArrayVal: val, IsArray: true}
 	case map[string]any:
 		return MetadataValue{IsHidden: true}
 	case bool:
