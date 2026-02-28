@@ -12,13 +12,15 @@ import (
 	"github.com/yuin/goldmark/renderer"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/util"
+	"go.abhg.dev/goldmark/frontmatter"
 	"go.abhg.dev/goldmark/mermaid"
 	"go.abhg.dev/goldmark/wikilink"
 )
 
-// Parse converts markdown source to HTML.
+// Parse converts markdown source to HTML and extracts any YAML/TOML frontmatter.
 // When resolver is non-nil, wiki-style [[links]] are parsed and resolved.
-func Parse(source []byte, resolver wikilink.Resolver) ([]byte, error) {
+// Returns rendered HTML, parsed frontmatter metadata (nil if none), and any error.
+func Parse(source []byte, resolver wikilink.Resolver) ([]byte, map[string]any, error) {
 	extensions := []goldmark.Extender{
 		extension.GFM,
 		highlighting.NewHighlighting(
@@ -32,6 +34,7 @@ func Parse(source []byte, resolver wikilink.Resolver) ([]byte, error) {
 			NoScript:   true,
 		},
 		nostr.New(nostr.WithNostrLink("nostr:%s")),
+		&frontmatter.Extender{},
 	}
 
 	parserOpts := []parser.Option{
@@ -59,10 +62,18 @@ func Parse(source []byte, resolver wikilink.Resolver) ([]byte, error) {
 		goldmark.WithRendererOptions(rendererOpts...),
 	)
 
+	ctx := parser.NewContext()
 	var buf bytes.Buffer
-	if err := md.Convert(source, &buf); err != nil {
-		return nil, err
+	if err := md.Convert(source, &buf, parser.WithContext(ctx)); err != nil {
+		return nil, nil, err
 	}
 
-	return buf.Bytes(), nil
+	var meta map[string]any
+	if fm := frontmatter.Get(ctx); fm != nil {
+		if err := fm.Decode(&meta); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return buf.Bytes(), meta, nil
 }

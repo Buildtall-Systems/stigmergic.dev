@@ -1,3 +1,7 @@
+# github.com/BurntSushi/toml v1.5.0
+## explicit; go 1.18
+github.com/BurntSushi/toml
+github.com/BurntSushi/toml/internal
 # github.com/ImVexed/fasturl v0.0.0-20230304231329-4e41488060f3
 ## explicit; go 1.14
 github.com/ImVexed/fasturl
@@ -210,6 +214,9 @@ github.com/yuin/goldmark/util
 # github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 ## explicit; go 1.13
 github.com/yuin/goldmark-highlighting/v2
+# go.abhg.dev/goldmark/frontmatter v0.3.0
+## explicit; go 1.24.0
+go.abhg.dev/goldmark/frontmatter
 # go.abhg.dev/goldmark/mermaid v0.6.0
 ## explicit; go 1.24
 go.abhg.dev/goldmark/mermaid
@@ -239,3 +246,6 @@ golang.org/x/text/internal/utf8internal
 golang.org/x/text/runes
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
+# gopkg.in/yaml.v3 v3.0.1
+## explicit
+gopkg.in/yaml.v3
