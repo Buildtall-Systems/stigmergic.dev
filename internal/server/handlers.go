@@ -178,16 +178,19 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	backlinks, _ := s.cachedBacklinks.Load().(models.BacklinkIndex)
+	fileBacklinks := backlinks[filePath]
+
 	relativePath := computeBuildtallRelativePath(s.config.WatchPath, filePath)
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, fileBacklinks).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown content template", "error", renderErr)
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady, fileBacklinks).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}
