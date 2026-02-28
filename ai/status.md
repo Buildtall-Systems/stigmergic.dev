@@ -234,3 +234,39 @@ Implemented optional NIP-98 Nostr authentication (GitHub issue #2).
 - `internal/models/tree_test.go` - Replaced string literals with `MarkdownExt` constant
 
 Verification: `make lint && make test && make build` — all pass (0 lint issues, 0 test failures, race-clean).
+
+## 2026-02-28
+
+Implemented wikilink backlinks (GitHub issue #9).
+
+**New types: `internal/models/backlink.go`**
+- `BacklinkEntry` struct (SourcePath, SourceTitle) and `BacklinkIndex` type alias — placed in models to avoid circular imports with templates
+
+**New: `internal/markdown/backlinks.go`**
+- `BuildBacklinkIndex(rootPath, files)` — builds parse-only goldmark instance with wikilink inline parser, walks every file's AST via `ast.Walk()`, resolves targets via existing `TreeResolver`, builds inverse index
+- Self-links excluded, duplicate links from same source deduplicated
+- Reuses `NewTreeResolver()` and `normalize()` from `wikilink.go`
+
+**New: `internal/markdown/backlinks_test.go`**
+- 5 test cases: multiple backlinks, no links, self-links, duplicate links, unresolved targets
+- Uses `t.TempDir()` with on-disk markdown files
+
+**Modified: `internal/server/server.go`**
+- Added `cachedBacklinks atomic.Value` to Server struct
+- Initialized with empty index in `NewServer()`
+- Populated via `BuildBacklinkIndex()` in both `updateTree()` and `initialScan()` after file scanning
+
+**Modified: `internal/server/handlers.go`**
+- Loads backlinks from cached atomic, looks up entries for current file path
+- Passes `[]models.BacklinkEntry` to both `Markdown()` and `MarkdownContent()` template calls
+
+**Modified: `web/templates/markdown.templ`**
+- Added `backlinks []models.BacklinkEntry` parameter to both template functions
+- Conditional backlinks section after article using theme CSS variables (`--bg-alt-color`, `--border-color`, `--comment-color`, `--link-color`)
+
+**Minor fix: `internal/server/handlers_test.go`**
+- Removed stale `//nolint:gosec` directive
+
+PR: https://github.com/Buildtall-Systems/stigmergic.dev/pull/11 (branch `feature/wikilink-backlinks` → `develop`)
+
+Verification: `make generate && make lint && make test && make build` — all pass.
