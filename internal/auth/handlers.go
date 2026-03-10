@@ -3,12 +3,18 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
+	"time"
 
 	"github.com/nbd-wtf/go-nostr"
 
+	"github.com/Buildtall-Systems/btk/auth/nip98"
+	"github.com/Buildtall-Systems/btk/auth/session"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
 )
+
+const DefaultTimeSkew = 60 * time.Second
 
 type verifyRequest struct {
 	Event *nostr.Event `json:"event"`
@@ -34,7 +40,7 @@ func LoginHandler(serverURL string) http.HandlerFunc {
 	}
 }
 
-func VerifyHandler(sm *SessionManager, allowedPubkeys []string, serverURL string) http.HandlerFunc {
+func VerifyHandler(sm *session.Manager, allowedPubkeys []string, serverURL string) http.HandlerFunc {
 	verifyURL := serverURL + "/auth/verify"
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -54,13 +60,13 @@ func VerifyHandler(sm *SessionManager, allowedPubkeys []string, serverURL string
 			return
 		}
 
-		if err := VerifyNIP98Event(req.Event, verifyURL, "POST"); err != nil {
+		if err := nip98.VerifyNIP98Event(req.Event, verifyURL, "POST", DefaultTimeSkew); err != nil {
 			logger.Log.Warn("NIP-98 verification failed", "error", err, "pubkey", req.Event.PubKey)
 			writeJSON(w, http.StatusUnauthorized, verifyResponse{Error: "authentication failed: " + err.Error()})
 			return
 		}
 
-		if !IsPubkeyAllowed(req.Event.PubKey, allowedPubkeys) {
+		if !slices.Contains(allowedPubkeys, req.Event.PubKey) {
 			logger.Log.Warn("pubkey not in allowlist", "pubkey", req.Event.PubKey)
 			writeJSON(w, http.StatusForbidden, verifyResponse{Error: "pubkey not authorized"})
 			return
@@ -78,7 +84,7 @@ func VerifyHandler(sm *SessionManager, allowedPubkeys []string, serverURL string
 	}
 }
 
-func LogoutHandler(sm *SessionManager) http.HandlerFunc {
+func LogoutHandler(sm *session.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -86,7 +92,7 @@ func LogoutHandler(sm *SessionManager) http.HandlerFunc {
 		}
 
 		sm.ClearSessionCookie(w)
-		http.Redirect(w, r, LoginPath, http.StatusSeeOther)
+		http.Redirect(w, r, session.LoginPath, http.StatusSeeOther)
 	}
 }
 
