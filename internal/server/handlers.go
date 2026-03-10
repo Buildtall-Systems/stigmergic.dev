@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Buildtall-Systems/btk/auth/session"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/auth"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/embed"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
@@ -32,7 +33,7 @@ func (s *Server) setupRoutes() {
 	s.mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	if s.config.Auth.Enabled {
-		s.mux.HandleFunc(auth.LoginPath, auth.LoginHandler(s.serverURL))
+		s.mux.HandleFunc(session.LoginPath, auth.LoginHandler(s.serverURL))
 		s.mux.HandleFunc("/auth/verify", auth.VerifyHandler(s.sessionManager, s.allowedPubkeys, s.serverURL))
 		s.mux.HandleFunc("/auth/logout", auth.LogoutHandler(s.sessionManager))
 		logger.Log.Info("auth routes registered")

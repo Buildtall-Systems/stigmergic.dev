@@ -1,4 +1,4 @@
-package auth
+package session
 
 import (
 	"crypto/hmac"
@@ -12,19 +12,24 @@ import (
 	"time"
 )
 
-const CookieName = "stigmergic_session"
+const DefaultCookieName = "btk_session"
 
-type SessionManager struct {
-	secret []byte
-	maxAge time.Duration
+type Manager struct {
+	cookieName string
+	secret     []byte
+	maxAge     time.Duration
 }
 
-func NewSessionManager(secret string, maxAge string) (*SessionManager, error) {
+func NewManager(cookieName, secret, maxAge string) (*Manager, error) {
+	if cookieName == "" {
+		cookieName = DefaultCookieName
+	}
+
 	var secretBytes []byte
 	if secret == "" {
 		secretBytes = make([]byte, 32)
 		if _, err := rand.Read(secretBytes); err != nil {
-			return nil, fmt.Errorf("failed to generate session secret: %w", err)
+			return nil, fmt.Errorf("generating session secret: %w", err)
 		}
 	} else {
 		secretBytes = []byte(secret)
@@ -32,27 +37,32 @@ func NewSessionManager(secret string, maxAge string) (*SessionManager, error) {
 
 	duration, err := time.ParseDuration(maxAge)
 	if err != nil {
-		return nil, fmt.Errorf("invalid session_max_age %q: %w", maxAge, err)
+		return nil, fmt.Errorf("invalid max age %q: %w", maxAge, err)
 	}
 
-	return &SessionManager{
-		secret: secretBytes,
-		maxAge: duration,
+	return &Manager{
+		cookieName: cookieName,
+		secret:     secretBytes,
+		maxAge:     duration,
 	}, nil
 }
 
-func (sm *SessionManager) CreateSession(pubkey string) (string, time.Time) {
-	expiry := time.Now().Add(sm.maxAge)
+func (m *Manager) CookieName() string {
+	return m.cookieName
+}
+
+func (m *Manager) CreateSession(pubkey string) (string, time.Time) {
+	expiry := time.Now().Add(m.maxAge)
 	expiryStr := strconv.FormatInt(expiry.UnixMilli(), 10)
 
 	payload := pubkey + "." + expiryStr
-	sig := sm.sign(payload)
+	sig := m.sign(payload)
 
 	cookieValue := base64.RawURLEncoding.EncodeToString([]byte(payload + "." + sig))
 	return cookieValue, expiry
 }
 
-func (sm *SessionManager) ValidateSession(cookieValue string) (string, error) {
+func (m *Manager) ValidateSession(cookieValue string) (string, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(cookieValue)
 	if err != nil {
 		return "", fmt.Errorf("invalid session cookie encoding")
@@ -68,7 +78,7 @@ func (sm *SessionManager) ValidateSession(cookieValue string) (string, error) {
 	sig := parts[2]
 
 	payload := pubkey + "." + expiryStr
-	expectedSig := sm.sign(payload)
+	expectedSig := m.sign(payload)
 	if !hmac.Equal([]byte(sig), []byte(expectedSig)) {
 		return "", fmt.Errorf("invalid session signature")
 	}
@@ -85,10 +95,10 @@ func (sm *SessionManager) ValidateSession(cookieValue string) (string, error) {
 	return pubkey, nil
 }
 
-func (sm *SessionManager) SetSessionCookie(w http.ResponseWriter, r *http.Request, pubkey string) {
-	value, expiry := sm.CreateSession(pubkey)
+func (m *Manager) SetSessionCookie(w http.ResponseWriter, r *http.Request, pubkey string) {
+	value, expiry := m.CreateSession(pubkey)
 	cookie := &http.Cookie{
-		Name:     CookieName,
+		Name:     m.cookieName,
 		Value:    value,
 		Path:     "/",
 		Expires:  expiry,
@@ -99,9 +109,9 @@ func (sm *SessionManager) SetSessionCookie(w http.ResponseWriter, r *http.Reques
 	http.SetCookie(w, cookie)
 }
 
-func (sm *SessionManager) ClearSessionCookie(w http.ResponseWriter) {
+func (m *Manager) ClearSessionCookie(w http.ResponseWriter) {
 	cookie := &http.Cookie{
-		Name:     CookieName,
+		Name:     m.cookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
@@ -110,8 +120,8 @@ func (sm *SessionManager) ClearSessionCookie(w http.ResponseWriter) {
 	http.SetCookie(w, cookie)
 }
 
-func (sm *SessionManager) sign(payload string) string {
-	mac := hmac.New(sha256.New, sm.secret)
+func (m *Manager) sign(payload string) string {
+	mac := hmac.New(sha256.New, m.secret)
 	mac.Write([]byte(payload))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }

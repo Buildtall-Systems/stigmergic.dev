@@ -1,4 +1,4 @@
-package auth
+package session
 
 import (
 	"context"
@@ -10,9 +10,17 @@ const LoginPath = "/auth/login"
 
 type contextKey string
 
-const pubkeyContextKey contextKey = "auth_pubkey"
+const pubkeyContextKey contextKey = "session_pubkey"
 
-func Middleware(sm *SessionManager) func(http.Handler) http.Handler {
+func PubkeyFromContext(ctx context.Context) string {
+	v, ok := ctx.Value(pubkeyContextKey).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+func Middleware(sm *Manager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isPublicPath(r.URL.Path) {
@@ -20,7 +28,7 @@ func Middleware(sm *SessionManager) func(http.Handler) http.Handler {
 				return
 			}
 
-			cookie, err := r.Cookie(CookieName)
+			cookie, err := r.Cookie(sm.CookieName())
 			if err != nil {
 				redirectToLogin(w, r)
 				return
@@ -37,14 +45,6 @@ func Middleware(sm *SessionManager) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
-}
-
-func PubkeyFromContext(ctx context.Context) string {
-	v, ok := ctx.Value(pubkeyContextKey).(string)
-	if !ok {
-		return ""
-	}
-	return v
 }
 
 func isPublicPath(path string) bool {

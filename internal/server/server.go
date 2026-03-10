@@ -12,7 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Buildtall-Systems/stigmergic.dev/internal/auth"
+	"github.com/Buildtall-Systems/btk/auth/nip98"
+	"github.com/Buildtall-Systems/btk/auth/session"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
@@ -33,7 +34,7 @@ type Server struct {
 	clients          map[chan string]bool
 	ctx              context.Context
 	cancel           context.CancelFunc
-	sessionManager   *auth.SessionManager
+	sessionManager   *session.Manager
 	serverURL        string
 	allowedPubkeys   []string
 	treeMux          sync.RWMutex
@@ -50,19 +51,19 @@ func NewServer(cfg *config.Config) *Server {
 	handler = recoveryMiddleware(handler)
 	handler = securityMiddleware(handler)
 
-	var sm *auth.SessionManager
+	var sm *session.Manager
 	var allowedPubkeys []string
 	var serverURL string
 
 	if cfg.Auth.Enabled {
 		var err error
-		allowedPubkeys, err = auth.NormalizePubkeys(cfg.Auth.AllowedNpubs)
+		allowedPubkeys, err = nip98.NormalizePubkeys(cfg.Auth.AllowedNpubs)
 		if err != nil {
 			logger.Log.Error("invalid pubkey in allowlist", "error", err)
 			panic(fmt.Sprintf("invalid pubkey in auth allowlist: %v", err))
 		}
 
-		sm, err = auth.NewSessionManager(cfg.Auth.SessionSecret, cfg.Auth.SessionMaxAge)
+		sm, err = session.NewManager("stigmergic_session", cfg.Auth.SessionSecret, cfg.Auth.SessionMaxAge)
 		if err != nil {
 			logger.Log.Error("failed to create session manager", "error", err)
 			panic(fmt.Sprintf("failed to create session manager: %v", err))
@@ -73,7 +74,7 @@ func NewServer(cfg *config.Config) *Server {
 		} else {
 			serverURL = fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
 		}
-		handler = auth.Middleware(sm)(handler)
+		handler = session.Middleware(sm)(handler)
 		logger.Log.Info("auth enabled", "allowed_pubkeys", len(allowedPubkeys))
 	}
 

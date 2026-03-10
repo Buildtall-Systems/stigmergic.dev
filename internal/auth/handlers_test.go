@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,13 +10,29 @@ import (
 	"time"
 
 	"github.com/nbd-wtf/go-nostr"
+
+	"github.com/Buildtall-Systems/btk/auth/session"
 )
+
+const (
+	testPrivateKey = "9a9787e3e31a4b0e7e483ed97b1ab0a45534675b07003a51c0840d6a681ad53a"
+	kindHTTPAuth   = 27235
+)
+
+func testSessionManager(t *testing.T) *session.Manager {
+	t.Helper()
+	sm, err := session.NewManager("stigmergic_session", "testsecret", "1h")
+	if err != nil {
+		t.Fatalf("failed to create session manager: %v", err)
+	}
+	return sm
+}
 
 func TestLoginHandler_GET(t *testing.T) {
 	t.Parallel()
 
 	handler := LoginHandler("http://localhost:8080")
-	req := httptest.NewRequest(http.MethodGet, LoginPath, nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, session.LoginPath, nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -34,7 +51,7 @@ func TestLoginHandler_POST_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
 	handler := LoginHandler("http://localhost:8080")
-	req := httptest.NewRequest(http.MethodPost, LoginPath, nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, session.LoginPath, nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -47,7 +64,7 @@ func TestLoginHandler_POST_MethodNotAllowed(t *testing.T) {
 func TestVerifyHandler_ValidEvent(t *testing.T) {
 	t.Parallel()
 
-	sm, _ := NewSessionManager("testsecret", "1h")
+	sm := testSessionManager(t)
 	serverURL := "http://localhost:8080"
 	verifyURL := serverURL + "/auth/verify"
 
@@ -55,8 +72,8 @@ func TestVerifyHandler_ValidEvent(t *testing.T) {
 	allowedPubkeys := []string{pub}
 
 	event := &nostr.Event{
-		Kind:      KindHTTPAuth,
-		CreatedAt: TimestampFromTime(time.Now()),
+		Kind:      kindHTTPAuth,
+		CreatedAt: nostr.Timestamp(time.Now().Unix()),
 		Tags: nostr.Tags{
 			{"u", verifyURL},
 			{"method", "POST"},
@@ -66,7 +83,7 @@ func TestVerifyHandler_ValidEvent(t *testing.T) {
 	_ = event.Sign(testPrivateKey)
 
 	body, _ := json.Marshal(verifyRequest{Event: event})
-	req := httptest.NewRequest(http.MethodPost, "/auth/verify", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/verify", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -93,7 +110,7 @@ func TestVerifyHandler_ValidEvent(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	found := false
 	for _, c := range cookies {
-		if c.Name == CookieName {
+		if c.Name == sm.CookieName() {
 			found = true
 			break
 		}
@@ -106,15 +123,15 @@ func TestVerifyHandler_ValidEvent(t *testing.T) {
 func TestVerifyHandler_UnauthorizedPubkey(t *testing.T) {
 	t.Parallel()
 
-	sm, _ := NewSessionManager("testsecret", "1h")
+	sm := testSessionManager(t)
 	serverURL := "http://localhost:8080"
 	verifyURL := serverURL + "/auth/verify"
 
 	allowedPubkeys := []string{"0000000000000000000000000000000000000000000000000000000000000000"}
 
 	event := &nostr.Event{
-		Kind:      KindHTTPAuth,
-		CreatedAt: TimestampFromTime(time.Now()),
+		Kind:      kindHTTPAuth,
+		CreatedAt: nostr.Timestamp(time.Now().Unix()),
 		Tags: nostr.Tags{
 			{"u", verifyURL},
 			{"method", "POST"},
@@ -124,7 +141,7 @@ func TestVerifyHandler_UnauthorizedPubkey(t *testing.T) {
 	_ = event.Sign(testPrivateKey)
 
 	body, _ := json.Marshal(verifyRequest{Event: event})
-	req := httptest.NewRequest(http.MethodPost, "/auth/verify", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/verify", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -139,10 +156,10 @@ func TestVerifyHandler_UnauthorizedPubkey(t *testing.T) {
 func TestVerifyHandler_InvalidBody(t *testing.T) {
 	t.Parallel()
 
-	sm, _ := NewSessionManager("testsecret", "1h")
+	sm := testSessionManager(t)
 	handler := VerifyHandler(sm, nil, "http://localhost:8080")
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/verify", bytes.NewReader([]byte("not json")))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/verify", bytes.NewReader([]byte("not json")))
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -155,11 +172,11 @@ func TestVerifyHandler_InvalidBody(t *testing.T) {
 func TestVerifyHandler_MissingEvent(t *testing.T) {
 	t.Parallel()
 
-	sm, _ := NewSessionManager("testsecret", "1h")
+	sm := testSessionManager(t)
 	handler := VerifyHandler(sm, nil, "http://localhost:8080")
 
 	body, _ := json.Marshal(verifyRequest{})
-	req := httptest.NewRequest(http.MethodPost, "/auth/verify", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/verify", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -172,10 +189,10 @@ func TestVerifyHandler_MissingEvent(t *testing.T) {
 func TestLogoutHandler(t *testing.T) {
 	t.Parallel()
 
-	sm, _ := NewSessionManager("testsecret", "1h")
+	sm := testSessionManager(t)
 	handler := LogoutHandler(sm)
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/logout", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -185,14 +202,14 @@ func TestLogoutHandler(t *testing.T) {
 	}
 
 	location := rec.Header().Get("Location")
-	if location != LoginPath {
+	if location != session.LoginPath {
 		t.Errorf("expected redirect to /auth/login, got %s", location)
 	}
 
 	cookies := rec.Result().Cookies()
 	found := false
 	for _, c := range cookies {
-		if c.Name == CookieName && c.MaxAge == -1 {
+		if c.Name == sm.CookieName() && c.MaxAge == -1 {
 			found = true
 			break
 		}
