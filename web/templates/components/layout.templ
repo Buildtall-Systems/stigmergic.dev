@@ -413,6 +413,13 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 					document.body.addEventListener('htmx:afterSwap', function(evt) {
 						renderMath(evt.detail.target);
 						initCodeCopyButtons();
+						evt.detail.target.querySelectorAll('pre.mermaid').forEach(function(node, i) {
+							var id = 'mermaid-swap-' + Date.now() + '-' + i;
+							mermaid.render(id, node.textContent).then(function(result) {
+								node.innerHTML = result.svg;
+								node.setAttribute('data-processed', 'true');
+							});
+						});
 						if (evt.detail.target.id === 'main' && window.location.pathname === '/') {
 							initKeyboardNav();
 						}
