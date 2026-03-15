@@ -413,6 +413,10 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 					document.body.addEventListener('htmx:afterSwap', function(evt) {
 						renderMath(evt.detail.target);
 						initCodeCopyButtons();
+						var mermaidNodes = evt.detail.target.querySelectorAll('pre.mermaid');
+						if (mermaidNodes.length > 0) {
+							mermaid.run({ nodes: mermaidNodes });
+						}
 						if (evt.detail.target.id === 'main' && window.location.pathname === '/') {
 							initKeyboardNav();
 						}
