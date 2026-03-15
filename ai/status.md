@@ -276,3 +276,17 @@ Verification: `make generate && make lint && make test && make build` — all pa
 Released v0.2.0: https://github.com/Buildtall-Systems/stigmergic.dev/releases/tag/v0.2.0
 
 Binaries: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64. Built via goreleaser (nix-shell). Merged develop → master, tagged, pushed.
+
+## 2026-03-15
+
+Fixed mermaid diagram rerendering after htmx live-reload swap (GitHub issue #16).
+
+**Root cause**: `mermaid.initialize({ startOnLoad: true })` only fires on `DOMContentLoaded`. After an htmx swap, fresh `<pre class="mermaid">` elements from goldmark's client-side mermaid renderer are never processed.
+
+**Fix**: Added `mermaid.run({ nodes })` call to the `htmx:afterSwap` handler in `layout.templ`, scoped to the swapped target element via `querySelectorAll('pre.mermaid')`. Only invokes when mermaid nodes are present.
+
+Files modified:
+- `web/templates/components/layout.templ` — 4 lines added to afterSwap handler
+
+PR: https://github.com/Buildtall-Systems/stigmergic.dev/pull/17
+Verification: `make generate && make build && make test` — all pass.

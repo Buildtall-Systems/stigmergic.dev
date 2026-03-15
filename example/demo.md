@@ -179,6 +179,27 @@ Initial testing shows promising results:
 - Markdown rendering: **< 50ms** per file
 - Change detection to update: **< 200ms**
 
+## Live Reload Test Diagram
+
+```mermaid
+graph LR
+    A[Edit this file] --> B{Did it rerender?}
+    B -->|Yes| C[Fix works!]
+    B -->|No| D[Bug persists]
+    C --> E[Ship it]
+```
+
+## State Machine Test
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Watching: start
+    Watching --> Rendering: file changed
+    Rendering --> Watching: done
+    Watching --> [*]: stop
+```
+
 ## Conclusion
 
 stigmergic.dev provides a **fast**, **beautiful**, and **extensible** way to read markdown documentation in real-time. Built with modern Go practices and leveraging the power of [`goldmark`](https://github.com/yuin/goldmark), [`htmx`](https://htmx.org), and [`templ`](https://templ.guide).
