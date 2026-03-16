@@ -127,7 +127,9 @@ func (r *WikilinkRenderer) Render(w util.BufWriter, src []byte, node ast.Node, e
 		return r.enter(w, n)
 	}
 
-	r.exit(w, n)
+	if err := r.exit(w, n); err != nil {
+		return ast.WalkStop, err
+	}
 	return ast.WalkContinue, nil
 }
 
@@ -139,20 +141,33 @@ func (r *WikilinkRenderer) enter(w util.BufWriter, n *wikilink.Node) (ast.WalkSt
 
 	if len(dest) > 0 {
 		r.hasDest.Store(n, struct{}{})
-		_, _ = w.WriteString(`<a href="`)
-		_, _ = w.Write(util.URLEscape(dest, true))
-		_, _ = w.WriteString(`">`)
+		if _, err := w.WriteString(`<a href="`); err != nil {
+			return ast.WalkStop, err
+		}
+		if _, err := w.Write(util.URLEscape(dest, true)); err != nil {
+			return ast.WalkStop, err
+		}
+		if _, err := w.WriteString(`">`); err != nil {
+			return ast.WalkStop, err
+		}
 	} else {
-		_, _ = w.WriteString(`<span class="wikilink-unresolved">`)
+		if _, err := w.WriteString(`<span class="wikilink-unresolved">`); err != nil {
+			return ast.WalkStop, err
+		}
 	}
 
 	return ast.WalkContinue, nil
 }
 
-func (r *WikilinkRenderer) exit(w util.BufWriter, n *wikilink.Node) {
+func (r *WikilinkRenderer) exit(w util.BufWriter, n *wikilink.Node) error {
 	if _, ok := r.hasDest.LoadAndDelete(n); ok {
-		_, _ = w.WriteString("</a>")
+		if _, err := w.WriteString("</a>"); err != nil {
+			return err
+		}
 	} else {
-		_, _ = w.WriteString("</span>")
+		if _, err := w.WriteString("</span>"); err != nil {
+			return err
+		}
 	}
+	return nil
 }

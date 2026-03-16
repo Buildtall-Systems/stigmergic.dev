@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,11 +29,12 @@ func BuildBacklinkIndex(rootPath string, files []models.SearchableFile) models.B
 	)
 
 	index := make(models.BacklinkIndex)
+	watchFS := os.DirFS(rootPath)
 
 	for _, f := range files {
 		route := strings.TrimPrefix(f.Path, "/")
 
-		source, err := os.ReadFile(filepath.Join(rootPath, route)) //nolint:gosec // G304: paths come from our scanned file tree, not user input
+		source, err := fs.ReadFile(watchFS, route)
 		if err != nil {
 			continue
 		}
@@ -41,7 +43,7 @@ func BuildBacklinkIndex(rootPath string, files []models.SearchableFile) models.B
 		doc := md.Parser().Parse(reader)
 
 		seen := make(map[string]bool)
-		_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 			if !entering {
 				return ast.WalkContinue, nil
 			}
@@ -73,7 +75,9 @@ func BuildBacklinkIndex(rootPath string, files []models.SearchableFile) models.B
 			})
 
 			return ast.WalkContinue, nil
-		})
+		}); err != nil {
+			continue
+		}
 	}
 
 	for target, entries := range index {

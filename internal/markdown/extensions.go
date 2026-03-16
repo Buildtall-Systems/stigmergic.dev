@@ -168,27 +168,39 @@ func (r *mathRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 
 func (r *mathRenderer) renderMathBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
-		_, _ = w.WriteString("<div class=\"math-block\">\n$$\n")
+		if _, err := w.WriteString("<div class=\"math-block\">\n$$\n"); err != nil {
+			return ast.WalkStop, err
+		}
 		for i := 0; i < node.Lines().Len(); i++ {
 			line := node.Lines().At(i)
-			_, _ = w.Write(line.Value(source))
+			if _, err := w.Write(line.Value(source)); err != nil {
+				return ast.WalkStop, err
+			}
 		}
-		_, _ = w.WriteString("\n$$\n</div>\n")
+		if _, err := w.WriteString("\n$$\n</div>\n"); err != nil {
+			return ast.WalkStop, err
+		}
 	}
 	return ast.WalkContinue, nil
 }
 
 func (r *mathRenderer) renderMathInline(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
-		_, _ = w.WriteString("<span class=\"math-inline\">$")
+		if _, err := w.WriteString("<span class=\"math-inline\">$"); err != nil {
+			return ast.WalkStop, err
+		}
 		for c := node.FirstChild(); c != nil; c = c.NextSibling() {
 			textNode, ok := c.(*ast.Text)
 			if !ok {
 				continue
 			}
-			_, _ = w.Write(textNode.Segment.Value(source))
+			if _, err := w.Write(textNode.Segment.Value(source)); err != nil {
+				return ast.WalkStop, err
+			}
 		}
-		_, _ = w.WriteString("$</span>")
+		if _, err := w.WriteString("$</span>"); err != nil {
+			return ast.WalkStop, err
+		}
 	}
 	return ast.WalkContinue, nil
 }
