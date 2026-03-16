@@ -32,22 +32,40 @@ func (r *LinkRenderer) renderLink(
 		return ast.WalkContinue, nil
 	}
 	if !entering {
-		_, _ = w.WriteString("</a>")
+		if _, err := w.WriteString("</a>"); err != nil {
+			return ast.WalkStop, err
+		}
 		return ast.WalkContinue, nil
 	}
 
-	_, _ = w.WriteString(`<a href="`)
-	_, _ = w.Write(util.URLEscape(n.Destination, true))
-	_, _ = w.WriteString(`"`)
+	if _, err := w.WriteString(`<a href="`); err != nil {
+		return ast.WalkStop, err
+	}
+	if _, err := w.Write(util.URLEscape(n.Destination, true)); err != nil {
+		return ast.WalkStop, err
+	}
+	if _, err := w.WriteString(`"`); err != nil {
+		return ast.WalkStop, err
+	}
 	if n.Title != nil {
-		_, _ = w.WriteString(` title="`)
-		_, _ = w.Write(util.EscapeHTML(n.Title))
-		_, _ = w.WriteString(`"`)
+		if _, err := w.WriteString(` title="`); err != nil {
+			return ast.WalkStop, err
+		}
+		if _, err := w.Write(util.EscapeHTML(n.Title)); err != nil {
+			return ast.WalkStop, err
+		}
+		if _, err := w.WriteString(`"`); err != nil {
+			return ast.WalkStop, err
+		}
 	}
 	if isExternalURL(n.Destination) {
-		_, _ = w.WriteString(` target="_blank" rel="noopener noreferrer"`)
+		if _, err := w.WriteString(` target="_blank" rel="noopener noreferrer"`); err != nil {
+			return ast.WalkStop, err
+		}
 	}
-	_, _ = w.WriteString(`>`)
+	if _, err := w.WriteString(`>`); err != nil {
+		return ast.WalkStop, err
+	}
 	return ast.WalkContinue, nil
 }
 
@@ -59,24 +77,40 @@ func (r *LinkRenderer) renderAutoLink(
 		return ast.WalkContinue, nil
 	}
 	if !entering {
-		_, _ = w.WriteString("</a>")
+		if _, err := w.WriteString("</a>"); err != nil {
+			return ast.WalkStop, err
+		}
 		return ast.WalkContinue, nil
 	}
 
 	url := n.URL(source)
 	label := n.Label(source)
 
-	_, _ = w.WriteString(`<a href="`)
+	if _, err := w.WriteString(`<a href="`); err != nil {
+		return ast.WalkStop, err
+	}
 	if n.AutoLinkType == ast.AutoLinkEmail &&
 		!bytes.HasPrefix(bytes.ToLower(url), []byte("mailto:")) {
-		_, _ = w.WriteString("mailto:")
+		if _, err := w.WriteString("mailto:"); err != nil {
+			return ast.WalkStop, err
+		}
 	}
-	_, _ = w.Write(util.URLEscape(url, false))
-	_, _ = w.WriteString(`"`)
+	if _, err := w.Write(util.URLEscape(url, false)); err != nil {
+		return ast.WalkStop, err
+	}
+	if _, err := w.WriteString(`"`); err != nil {
+		return ast.WalkStop, err
+	}
 	if isExternalURL(url) {
-		_, _ = w.WriteString(` target="_blank" rel="noopener noreferrer"`)
+		if _, err := w.WriteString(` target="_blank" rel="noopener noreferrer"`); err != nil {
+			return ast.WalkStop, err
+		}
 	}
-	_, _ = w.WriteString(`>`)
-	_, _ = w.Write(util.EscapeHTML(label))
+	if _, err := w.WriteString(`>`); err != nil {
+		return ast.WalkStop, err
+	}
+	if _, err := w.Write(util.EscapeHTML(label)); err != nil {
+		return ast.WalkStop, err
+	}
 	return ast.WalkContinue, nil
 }

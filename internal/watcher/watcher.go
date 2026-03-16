@@ -104,7 +104,11 @@ func (w *Watcher) Add(path string, respectGitignore bool, ignorePatterns []strin
 		if respectGitignore {
 			gitignorePath := filepath.Join(absPath, ".gitignore")
 			if file, err := os.Open(filepath.Clean(gitignorePath)); err == nil {
-				defer func() { _ = file.Close() }()
+				defer func() {
+					if err := file.Close(); err != nil {
+						logger.Log.Warn("failed to close .gitignore", "error", err)
+					}
+				}()
 				scanner := bufio.NewScanner(file)
 				lineCount := 0
 				for scanner.Scan() {
