@@ -33,7 +33,11 @@ func FindAvailablePort(t *testing.T) int {
 	if err != nil {
 		t.Fatalf("failed to find available port: %v", err)
 	}
-	defer func() { _ = listener.Close() }()
+	defer func() {
+		if err := listener.Close(); err != nil {
+			t.Logf("failed to close listener: %v", err)
+		}
+	}()
 
 	addr, ok := listener.Addr().(*net.TCPAddr)
 	if !ok {

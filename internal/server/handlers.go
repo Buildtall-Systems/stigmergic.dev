@@ -64,7 +64,10 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	tree := s.tree
 	s.treeMux.RUnlock()
 
-	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
+	var files []models.SearchableFile
+	if v, ok := s.cachedFiles.Load().([]models.SearchableFile); ok {
+		files = v
+	}
 	recentFiles := s.computeRecentFiles(files)
 
 	indexReady := s.IsIndexReady()
@@ -126,7 +129,10 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	title := filepath.Base(filePath)
 	isHTMX := isHTMXRequest(r)
 
-	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
+	var files []models.SearchableFile
+	if v, ok := s.cachedFiles.Load().([]models.SearchableFile); ok {
+		files = v
+	}
 	indexReady := s.IsIndexReady()
 
 	if info.IsDir() {
@@ -184,7 +190,10 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		title = metaTitle
 	}
 
-	backlinks, _ := s.cachedBacklinks.Load().(models.BacklinkIndex)
+	var backlinks models.BacklinkIndex
+	if v, ok := s.cachedBacklinks.Load().(models.BacklinkIndex); ok {
+		backlinks = v
+	}
 	fileBacklinks := backlinks[filePath]
 
 	relativePath := computeBuildtallRelativePath(s.config.WatchPath, filePath)
@@ -283,7 +292,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFilesAPI(w http.ResponseWriter, r *http.Request) {
-	files, _ := s.cachedFiles.Load().([]models.SearchableFile)
+	var files []models.SearchableFile
+	if v, ok := s.cachedFiles.Load().([]models.SearchableFile); ok {
+		files = v
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(files); err != nil {
