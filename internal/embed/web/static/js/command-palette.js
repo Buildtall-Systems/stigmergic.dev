@@ -98,6 +98,7 @@ function commandPalette() {
 			this.fuse = new Fuse(allItems, {
 				keys: ['name', 'description'],
 				threshold: 0.4,
+				useExtendedSearch: true,
 				includeScore: true,
 				includeMatches: true
 			});
