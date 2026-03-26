@@ -6,7 +6,7 @@ interface WiremdResult {
   css: string;
 }
 
-function render(source: string, style: string = "sketch"): WiremdResult {
+export function render(source: string, style: string = "sketch"): WiremdResult {
   const ast = parse(source);
   const doc = renderToHTML(ast, { style, inlineStyles: true, pretty: false });
 
@@ -20,4 +20,3 @@ function render(source: string, style: string = "sketch"): WiremdResult {
   return { html, css };
 }
 
-(window as any).wiremd = { render };
