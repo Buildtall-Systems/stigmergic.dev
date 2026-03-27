@@ -4,6 +4,18 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 See `docs/operations/status-spec.md` for format specification.
 
+## 2026-03-26
+
+### WireMD Integration (#21) — Implementation Complete
+
+Implemented wiremd fenced code block rendering across 3 phases on `feature/wiremd-integration`:
+
+- **Phase 1**: Built wiremd browser bundle (IIFE via esbuild) with Node.js shims for browser compatibility. Added `wiremd-js` Makefile target, integrated into `vendor-js` workflow.
+- **Phase 2**: Created goldmark AST extension (`internal/markdown/wiremd.go`) — transformer intercepts wiremd fenced code blocks, renderer emits `<pre class="wiremd">`. Registered before syntax highlighter. Unit tests cover rendering, HTML escaping, and non-interference with other block types.
+- **Phase 3**: Wired client-side rendering in `layout.templ` — `renderWiremd()` function handles DOMContentLoaded and htmx:afterSwap. CSS injected once via deduped `<style id="wiremd-styles">`. Copy buttons skip wiremd blocks.
+
+All acceptance criteria pass. Lint, test, build green. Awaiting operator browser verification and PR.
+
 ## 2025-11-16
 
 ### Standup (automated)

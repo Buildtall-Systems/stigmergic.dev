@@ -36,3 +36,4 @@ empty fields should be left empty... no "NA" or "*Not Found*"... nothing, just a
 | iceberg.vim           |                                | ai/context/iceberg.vim             |
 | alpine.js             | /alpinejs/alpine               |                                    |
 | go stdlib             | /golang/go                     |                                    |
+| wiremd                |                                | ai/context/wiremd/                 |
