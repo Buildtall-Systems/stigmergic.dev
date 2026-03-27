@@ -247,6 +247,7 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 					theme: 'dark'
 				});
 			</script>
+			<script src="/static/js/wiremd.min.js"></script>
 			<script src="/static/js/htmx.min.js"></script>
 			<script src="/static/js/sse.js"></script>
 			<script src="/static/js/fuse.min.js"></script>
@@ -281,6 +282,29 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 					});
 				}
 
+				function renderWiremd(element) {
+					element.querySelectorAll('pre.wiremd').forEach(function(block) {
+						if (block.getAttribute('data-processed') === 'true') return
+						try {
+							var source = block.textContent
+							var result = wiremd.render(source, 'sketch')
+							if (result.css && !document.getElementById('wiremd-styles')) {
+								var style = document.createElement('style')
+								style.id = 'wiremd-styles'
+								style.textContent = result.css
+								document.head.appendChild(style)
+							}
+							var div = document.createElement('div')
+							div.className = 'wiremd-rendered wmd-root wmd-sketch'
+							div.innerHTML = result.html
+							block.parentNode.replaceChild(div, block)
+						} catch (e) {
+							console.warn('wiremd render failed:', e.message)
+							block.setAttribute('data-processed', 'true')
+						}
+					})
+				}
+
 				function scrollProgress() {
 					return {
 						progress: 0,
@@ -301,6 +325,7 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 				function initCodeCopyButtons() {
 					document.querySelectorAll('pre').forEach(function(pre) {
 						if (pre.classList.contains('mermaid')) return
+						if (pre.classList.contains('wiremd')) return
 						if (pre.querySelector('.copy-btn')) return
 
 						var wrapper = document.createElement('div')
@@ -406,12 +431,14 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 
 				document.addEventListener("DOMContentLoaded", function() {
 					renderMath(document.body);
+					renderWiremd(document.body);
 					initCodeCopyButtons();
 					initKeyboardNav();
 					document.addEventListener('keydown', handleNavKeydown);
 
 					document.body.addEventListener('htmx:afterSwap', function(evt) {
 						renderMath(evt.detail.target);
+						renderWiremd(evt.detail.target);
 						initCodeCopyButtons();
 						evt.detail.target.querySelectorAll('pre.mermaid').forEach(function(node, i) {
 							var id = 'mermaid-swap-' + Date.now() + '-' + i;
