@@ -200,6 +200,27 @@ stateDiagram-v2
     Watching --> [*]: stop
 ```
 
+## UI Wireframe
+
+```wiremd
+## Settings Page
+
+[____________________________] Search settings...
+
+### Appearance
+Theme        [Dark        v]
+Font Size    [14px        v]
+Line Height  [1.6         v]
+
+### Editor
+( ) Vim Mode
+(*) Standard
+[ ] Word Wrap
+[x] Line Numbers
+
+[Save Changes]{.primary}  [Reset Defaults]
+```
+
 ## Conclusion
 
 stigmergic.dev provides a **fast**, **beautiful**, and **extensible** way to read markdown documentation in real-time. Built with modern Go practices and leveraging the power of [`goldmark`](https://github.com/yuin/goldmark), [`htmx`](https://htmx.org), and [`templ`](https://templ.guide).

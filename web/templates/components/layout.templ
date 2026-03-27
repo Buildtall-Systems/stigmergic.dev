@@ -285,18 +285,23 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 				function renderWiremd(element) {
 					element.querySelectorAll('pre.wiremd').forEach(function(block) {
 						if (block.getAttribute('data-processed') === 'true') return
-						var source = block.textContent
-						var result = wiremd.render(source, 'sketch')
-						if (result.css && !document.getElementById('wiremd-styles')) {
-							var style = document.createElement('style')
-							style.id = 'wiremd-styles'
-							style.textContent = result.css
-							document.head.appendChild(style)
+						try {
+							var source = block.textContent
+							var result = wiremd.render(source, 'sketch')
+							if (result.css && !document.getElementById('wiremd-styles')) {
+								var style = document.createElement('style')
+								style.id = 'wiremd-styles'
+								style.textContent = result.css
+								document.head.appendChild(style)
+							}
+							var div = document.createElement('div')
+							div.className = 'wiremd-rendered wmd-root wmd-sketch'
+							div.innerHTML = result.html
+							block.parentNode.replaceChild(div, block)
+						} catch (e) {
+							console.warn('wiremd render failed:', e.message)
+							block.setAttribute('data-processed', 'true')
 						}
-						var div = document.createElement('div')
-						div.className = 'wiremd-rendered wmd-root wmd-sketch'
-						div.innerHTML = result.html
-						block.parentNode.replaceChild(div, block)
 					})
 				}
 
