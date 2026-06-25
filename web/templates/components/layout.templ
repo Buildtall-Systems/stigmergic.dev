@@ -429,6 +429,52 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 					items[nextIdx].focus()
 				}
 
+				// Scroll anchoring: find the element the user is looking at,
+				// restore their position after DOM replacement.
+				var _scrollAnchor = null;
+
+				function findScrollAnchor() {
+					var main = document.getElementById('main');
+					if (!main) return null;
+
+					var scrollTop = document.documentElement.scrollTop;
+					var viewportMid = scrollTop + window.innerHeight * 0.25;
+
+					// Walk all elements with IDs inside #main (headings get auto-IDs).
+					// Find the one closest to (but above) 25% of the viewport.
+					var candidates = main.querySelectorAll('[id]');
+					var best = null;
+					var bestTop = -Infinity;
+
+					for (var i = 0; i < candidates.length; i++) {
+						var rect = candidates[i].getBoundingClientRect();
+						var absTop = rect.top + scrollTop;
+						if (absTop <= viewportMid && absTop > bestTop) {
+							best = candidates[i];
+							bestTop = absTop;
+						}
+					}
+
+					if (!best) return null;
+
+					return {
+						id: best.id,
+						offsetFromViewport: best.getBoundingClientRect().top
+					};
+				}
+
+				function restoreScrollAnchor(anchor) {
+					if (!anchor || !anchor.id) return;
+					var el = document.getElementById(anchor.id);
+					if (!el) return;
+
+					var newRect = el.getBoundingClientRect();
+					var delta = newRect.top - anchor.offsetFromViewport;
+					if (Math.abs(delta) > 1) {
+						document.documentElement.scrollTop += delta;
+					}
+				}
+
 				document.addEventListener("DOMContentLoaded", function() {
 					renderMath(document.body);
 					renderWiremd(document.body);
@@ -437,16 +483,32 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 					document.addEventListener('keydown', handleNavKeydown);
 
 					document.body.addEventListener('htmx:afterSwap', function(evt) {
+						var anchor = _scrollAnchor;
+						_scrollAnchor = null;
+
 						renderMath(evt.detail.target);
 						renderWiremd(evt.detail.target);
 						initCodeCopyButtons();
-						evt.detail.target.querySelectorAll('pre.mermaid').forEach(function(node, i) {
+
+						// Restore immediately after sync rendering (KaTeX, copy buttons)
+						if (anchor) restoreScrollAnchor(anchor);
+
+						var mermaidNodes = evt.detail.target.querySelectorAll('pre.mermaid');
+						var pending = mermaidNodes.length;
+
+						if (pending === 0) return;
+
+						mermaidNodes.forEach(function(node, i) {
 							var id = 'mermaid-swap-' + Date.now() + '-' + i;
 							mermaid.render(id, node.textContent).then(function(result) {
 								node.innerHTML = result.svg;
 								node.setAttribute('data-processed', 'true');
+								pending--;
+								// Restore again after each mermaid render changes layout
+								if (anchor) restoreScrollAnchor(anchor);
 							});
 						});
+
 						if (evt.detail.target.id === 'main' && window.location.pathname === '/') {
 							initKeyboardNav();
 						}
@@ -459,6 +521,9 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 							document.body.dispatchEvent(new CustomEvent('indexReady'));
 							return;
 						}
+
+						// Capture scroll anchor before the swap destroys the DOM
+						_scrollAnchor = findScrollAnchor();
 						htmx.ajax('GET', window.location.pathname, {target: '#main', swap: 'innerHTML'});
 					});
 
