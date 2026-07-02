@@ -34,7 +34,7 @@
 
         packages.default = pkgs.buildGoModule {
           pname = "stigmergic";
-          version = "0.1.0";
+          version = "0.3.0";
           src = ./.;
           vendorHash = null;
 
