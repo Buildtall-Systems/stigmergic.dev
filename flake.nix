@@ -32,11 +32,13 @@
           '';
         };
 
-        packages.default = pkgs.buildGoModule {
+        packages.default = pkgs.buildGoModule rec {
           pname = "stigmergic";
-          version = "0.3.0";
+          version = "0.3.1";
           src = ./.;
           vendorHash = null;
+
+          ldflags = [ "-s" "-w" "-X main.version=${version}" ];
 
           nativeBuildInputs = [ pkgs.templ ];
 
