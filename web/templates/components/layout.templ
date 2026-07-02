@@ -235,6 +235,7 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, tree
 			<script src="/static/js/app/render.js"></script>
 			<script src="/static/js/app/nav.js"></script>
 			<script src="/static/js/app/events.js"></script>
+			<script src="/static/js/app/follow.js"></script>
 			<script src="/static/js/app/ui.js"></script>
 		</head>
 		<body class="h-screen overflow-hidden flex flex-col" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) } x-data="{ sidebarOpen: true }">
@@ -262,6 +263,37 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, tree
 							<span>Search</span>
 							<kbd class="px-1.5 py-0.5 rounded text-xs" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">Ctrl+K</kbd>
 						</button>
+						if caps.FollowMode {
+							<div x-data="{ scopeOpen: false }" class="relative">
+								<div class="flex items-center rounded-md" style="background-color: var(--bg-color); border: 1px solid var(--border-color);">
+									<button
+										data-follow-toggle
+										hx-push-url="true"
+										@click="$store.follow.toggle()"
+										title="Toggle follow mode (F)"
+										class="px-3 py-1.5 text-sm rounded-l-md transition-colors cursor-pointer"
+										:style="$store.follow.active ? 'color: var(--green-color); font-weight: 600;' : ($store.follow.enabled ? 'color: var(--orange-color);' : 'color: var(--comment-color);')"
+										x-text="$store.follow.label()"
+									>Follow</button>
+									<button @click="scopeOpen = !scopeOpen" title="Follow scope" class="px-1.5 py-2 rounded-r-md transition-colors cursor-pointer" style="color: var(--comment-color); border-left: 1px solid var(--border-color);">
+										<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+										</svg>
+									</button>
+								</div>
+								<div x-cloak x-show="scopeOpen" @click.outside="scopeOpen = false" class="absolute right-0 top-full mt-1 z-50 w-64 rounded-md shadow-2xl p-3 space-y-2" style="background-color: var(--bg-color); border: 1px solid var(--border-color);">
+									<p class="text-sm font-semibold">Follow scope</p>
+									<label class="flex items-center gap-2 text-sm cursor-pointer">
+										<input type="radio" name="follow-scope" value="corpus" :checked="$store.follow.scope === 'corpus'" @change="$store.follow.setScope('corpus')"/>
+										<span>Entire corpus</span>
+									</label>
+									<label class="flex items-center gap-2 text-sm cursor-pointer">
+										<input type="radio" name="follow-scope" value="dir" :checked="$store.follow.scope === 'dir'" @change="$store.follow.setScope('dir')"/>
+										<span>Current directory only</span>
+									</label>
+								</div>
+							</div>
+						}
 						<button @click="$dispatch('toggle-help')" title="Keyboard shortcuts" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">?</button>
 					</div>
 				</div>

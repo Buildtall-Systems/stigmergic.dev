@@ -81,6 +81,21 @@ func closeBody(t *testing.T, resp *http.Response) {
 	}
 }
 
+func TestEmbeddedFollowModeAbsent(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Port:  8080,
+		Host:  testHost,
+		Theme: testThemeName,
+	}
+	srv := NewServer(cfg, source.NewEmbedded(embeddedTestFS(), embeddedSourceName))
+
+	if srv.uiCaps.FollowMode {
+		t.Error("embedded source must not advertise the FollowMode capability")
+	}
+}
+
 func TestEmbeddedMarkdownRenders(t *testing.T) {
 	t.Parallel()
 

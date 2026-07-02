@@ -1,3 +1,41 @@
+// parseSSEEvent decodes the JSON envelope pushed by the server. Bare legacy
+// strings (a stale cached page against a newer server, or vice versa) degrade
+// to the old blind-refresh behavior instead of erroring.
+function parseSSEEvent(data) {
+	if (typeof data === 'string' && data.charAt(0) === '{') {
+		try {
+			return JSON.parse(data)
+		} catch (err) {
+			console.error('unparseable SSE payload', data, err)
+		}
+	}
+	if (data === 'index-ready') return {type: 'index-ready'}
+	return {type: 'reload', path: ''}
+}
+
+// contentShowsPath reports whether the reading pane is displaying the changed
+// path: the file itself, a directory listing on its ancestor chain, or home.
+// An empty path means "refresh regardless" (gitignore toggle, legacy reload).
+function contentShowsPath(path) {
+	if (!path) return true
+	var pathname = decodeURIComponent(window.location.pathname)
+	if (pathname === '/') return true
+	if (!pathname.startsWith('/file/')) return false
+	var current = pathname.slice('/file/'.length)
+	return current === path || path.startsWith(current + '/')
+}
+
+// refreshPane refetches without a history push, flagged so the follow store
+// does not mistake it for user-initiated navigation.
+function refreshPane(url, target) {
+	window.stigmergicProgrammaticNav = true
+	try {
+		htmx.ajax('GET', url, {target: target, swap: 'innerHTML'})
+	} finally {
+		window.stigmergicProgrammaticNav = false
+	}
+}
+
 function handleSourceKeydown(evt) {
 	if (evt.key !== 's' && evt.key !== 'S') return
 	if (evt.ctrlKey || evt.metaKey || evt.altKey) return
@@ -35,14 +73,18 @@ document.addEventListener('DOMContentLoaded', function() {
 	});
 
 	document.body.addEventListener('sse:message', function(evt) {
-		var data = evt.detail ? evt.detail.data : null;
-		if (data === 'index-ready') {
+		var msg = parseSSEEvent(evt.detail ? evt.detail.data : null);
+		if (msg.type === 'index-ready') {
 			document.body.dataset.indexReady = 'true';
 			document.body.dispatchEvent(new CustomEvent('indexReady'));
 			return;
 		}
-		htmx.ajax('GET', window.location.pathname, {target: '#content', swap: 'innerHTML'});
-		htmx.ajax('GET', '/partial/sidebar', {target: '#sidebar', swap: 'innerHTML'});
+		refreshPane('/partial/sidebar', '#sidebar');
+		var follow = window.Alpine ? Alpine.store('follow') : null;
+		if (follow && follow.handleChange(msg.path)) return;
+		if (contentShowsPath(msg.path)) {
+			refreshPane(window.location.pathname, '#content');
+		}
 	});
 
 	window.addEventListener('pageshow', function(evt) {

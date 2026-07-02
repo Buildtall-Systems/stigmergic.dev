@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -391,6 +393,77 @@ func TestWatchDirAssetNotFound(t *testing.T) {
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestSSEStreamEnvelopeFraming(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	url := fmt.Sprintf("http://localhost:%d/events", port)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to connect to SSE endpoint: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
+
+	reader := bufio.NewReader(resp.Body)
+	connected, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("failed to read connection confirmation: %v", err)
+	}
+	if !strings.HasPrefix(connected, ": connected") {
+		t.Fatalf("expected connection comment, got %q", connected)
+	}
+
+	// The registered client now receives watcher broadcasts; a file write
+	// must arrive as a framed JSON envelope naming the changed path.
+	testutil.CreateTestFile(t, dir, "changed.md", "# Changed\n")
+
+	// Scan frames until the change envelope arrives; the index-ready
+	// broadcast may legitimately precede it. The request context deadline
+	// bounds the read loop.
+	var eventLine string
+	for {
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			t.Fatalf("SSE stream ended before change envelope arrived: %v", readErr)
+		}
+		if strings.HasPrefix(line, "event: ") {
+			eventLine = strings.TrimSpace(line)
+			continue
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data: "))
+		var envelope struct {
+			Type string `json:"type"`
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal([]byte(payload), &envelope); err != nil {
+			t.Fatalf("SSE data is not valid JSON: %v (payload %q)", err, payload)
+		}
+		if envelope.Type != "reload" || envelope.Path != "changed.md" {
+			continue
+		}
+		if eventLine != "event: message" {
+			t.Errorf("expected 'event: message' framing, got %q", eventLine)
+		}
+		return
 	}
 }
 

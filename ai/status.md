@@ -4,6 +4,21 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-02
 
+### UI Redesign — Phase 2 Complete (structured SSE + follow mode), awaiting operator verification
+
+Phase 1 committed as `a3a13a0` after operator verification. Phase 2 on `feature/ui-redesign`:
+
+- **SSE JSON envelope**: `broadcastEvents`/`broadcastIndexReady`/`broadcastReload` now push `{"type":"reload","path":"..."}` / `{"type":"index-ready"}` (path omitted when empty = refresh regardless) via a shared `encodeSSEEvent` + `broadcast` helper pair; the three hand-rolled client loops collapsed into one.
+- **Corpus-relative event paths** (defect found while testing): `FilesystemSource.pump` was forwarding the watcher's absolute path; clients need corpus-relative to build `/file/` URLs. Now relativized against the source root with `filepath.Rel` + `ToSlash`; `source.Event` doc updated to state the contract, source test pins it exactly.
+- **`FollowMode` capability**: new `UICapabilities` flag set from the `Watchable` assertion — embedded/site mode renders no toggle.
+- **Header Follow control** (caps-gated): toggle button (Off / Following in green / Paused in orange, one-click resume) with `data-follow-toggle` carrying `hx-push-url="true"` as the htmx.ajax inheritance source, plus a scope dropdown (entire corpus vs current directory).
+- **`js/app/follow.js`** (new): Alpine store — localStorage persistence (`stigmergic-follow`, `stigmergic-follow-scope`), `F` keybinding, 150ms newest-event-wins debounce atop the server's watcher debounce, subtree-prefix directory scoping, pause on any user-initiated `#content` request or popstate (SSE refreshes flagged via `stigmergicProgrammaticNav`), same-file navigation skips the history push.
+- **events.js dispatcher**: parses the envelope with bare-string legacy fallback; sidebar always refreshes; follow store gets first claim on the event; otherwise `#content` refetches only when it shows the changed path (the file itself, an ancestor directory listing, or home).
+- **help.templ**: `F` row added.
+- **Tests**: exact payload-shape assertions for change/reload/index-ready broadcasts, FollowMode true for filesystem + false for embedded, SSE stream framing integration test (end-to-end: file write → framed JSON envelope on the wire), template test gating the toggle on the capability.
+
+Verification: generate/lint/test/build all green via run_silent (lint 0 findings, tests race-clean). Halted for operator manual verification before commit.
+
 ### UI Redesign — Phase 1 Complete (layout substrate), awaiting operator verification
 
 On `feature/ui-redesign` (from develop), per `thoughts/plans/2026-07-02_15-17-17_stigmergic-ui-redesign.md`:

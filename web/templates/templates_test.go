@@ -209,6 +209,26 @@ func TestTreeLinksCarryDataPathAndContentTarget(t *testing.T) {
 	}
 }
 
+func TestLayoutFollowToggleGatedOnCapability(t *testing.T) {
+	t.Parallel()
+
+	renderHome := func(caps models.UICapabilities) string {
+		var sb strings.Builder
+		err := Home(nil, testTreeRoot, testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, caps).Render(context.Background(), &sb)
+		if err != nil {
+			t.Fatalf("failed to render: %v", err)
+		}
+		return sb.String()
+	}
+
+	if !strings.Contains(renderHome(models.UICapabilities{FollowMode: true}), "data-follow-toggle") {
+		t.Error("expected follow toggle when source is watchable")
+	}
+	if strings.Contains(renderHome(models.UICapabilities{}), "data-follow-toggle") {
+		t.Error("follow toggle must be absent without the FollowMode capability")
+	}
+}
+
 func TestMarkdownBreadcrumbsUseHTMXSwaps(t *testing.T) {
 	t.Parallel()
 
