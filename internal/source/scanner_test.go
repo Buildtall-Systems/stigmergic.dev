@@ -9,8 +9,12 @@ import (
 )
 
 const (
-	readmeName   = "readme.md"
-	helloContent = "hello"
+	readmeName    = "readme.md"
+	helloContent  = "hello"
+	indexName     = "index.md"
+	guidePath     = "docs/guide.md"
+	guideContent  = "guide"
+	binaryContent = "binary"
 )
 
 func mapFS(files map[string]string) fstest.MapFS {
@@ -58,8 +62,8 @@ func TestScanNested(t *testing.T) {
 	t.Parallel()
 
 	fsys := mapFS(map[string]string{
-		"index.md":            "index",
-		"docs/guide.md":       "guide",
+		indexName:             "index",
+		guidePath:             guideContent,
 		"docs/deep/nested.md": "nested",
 	})
 
@@ -98,7 +102,7 @@ func TestScanSkipsNonMarkdown(t *testing.T) {
 
 	fsys := mapFS(map[string]string{
 		readmeName:  helloContent,
-		"image.png": "binary",
+		"image.png": binaryContent,
 		"data.json": "{}",
 	})
 
@@ -120,7 +124,7 @@ func TestScanPrunesEmptyDirectories(t *testing.T) {
 
 	fsys := mapFS(map[string]string{
 		readmeName:       "hello",
-		"assets/img.png": "binary",
+		"assets/img.png": binaryContent,
 	})
 
 	tree, err := Scan(fsys, false, nil)
@@ -226,7 +230,7 @@ func TestScanFindRouteRelative(t *testing.T) {
 	t.Parallel()
 
 	fsys := mapFS(map[string]string{
-		"docs/guide.md": "guide",
+		guidePath: guideContent,
 	})
 
 	tree, err := Scan(fsys, false, nil)
@@ -237,7 +241,7 @@ func TestScanFindRouteRelative(t *testing.T) {
 	if tree.Find("docs") == nil {
 		t.Error("expected Find to resolve route-relative directory path")
 	}
-	if tree.Find("docs/guide.md") == nil {
+	if tree.Find(guidePath) == nil {
 		t.Error("expected Find to resolve route-relative file path")
 	}
 	if tree.Find(".") != tree.Root {

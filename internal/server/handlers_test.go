@@ -148,7 +148,7 @@ func TestDefaultFileRedirect(t *testing.T) {
 		Port:        port,
 		Host:        testHost,
 		Theme:       testThemeName,
-		DefaultFile: "index.md",
+		DefaultFile: testIndexFile,
 	}
 
 	srv := newTestServer(t, cfg)
@@ -195,7 +195,7 @@ func TestDefaultFileNoRedirectForHTMX(t *testing.T) {
 		Port:        port,
 		Host:        testHost,
 		Theme:       testThemeName,
-		DefaultFile: "index.md",
+		DefaultFile: testIndexFile,
 	}
 
 	srv := newTestServer(t, cfg)

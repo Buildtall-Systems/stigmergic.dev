@@ -75,6 +75,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&defaultFile, "default-file", "", "file to display on homepage (relative to watch path)")
 
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(siteCmd)
 }
 
 func Execute() error {

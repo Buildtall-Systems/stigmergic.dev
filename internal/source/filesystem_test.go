@@ -104,7 +104,7 @@ func TestFilesystemFiltersIrrelevantEvents(t *testing.T) {
 
 	src, dir := newTestFilesystem(t, false)
 
-	writeFile(t, dir, "image.png", "binary")
+	writeFile(t, dir, "image.png", binaryContent)
 	writeFile(t, dir, "after.md", "content")
 
 	select {

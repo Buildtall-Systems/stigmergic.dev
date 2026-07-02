@@ -16,6 +16,7 @@ import (
 const (
 	testHost      = "localhost"
 	testThemeName = "iceberg-dark"
+	testIndexFile = "index.md"
 )
 
 // newTestServer builds a server over a FilesystemSource. Tests without an

@@ -4,6 +4,17 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-01
 
+### ContentSource Abstraction — Phase 2 Complete (embedded site mode)
+
+Phase 1 committed as `22c8e43` after operator serve-parity verification. Implemented Phase 2 on `feature/content-source`:
+
+- **`site/` package**: `//go:embed all:content` over `site/content/` (index, installation, features, architecture, demo pages plus `img/`, copied verbatim from `example/` — curation is Phase 3); `Content()` accessor returns `fs.Sub` of the content root. No dotfiles in the embedded tree.
+- **`internal/source/embedded.go`**: `EmbeddedSource` implements only the core `ContentSource` interface — asserts none of Watchable/GitignoreAware/Timestamped/Rooted; no-op Close. Tests assert capability absence and exercise tree building over `fstest.MapFS` and the real embedded site FS.
+- **`cmd/stigmergic/site.go`**: `stigmergic site` subcommand (no positional args); port negotiation identical to serve; honors loaded config wholesale including auth; source named "stigmergic.dev" for display. Registered on root.
+- **Server integration tests** (`internal/server/embedded_test.go`): full request path over an embedded source — markdown render, PNG serve via `ServeFileFS`, directory listing, `/api/files`; gitignore endpoints 404; traversal attempts (dotdot, encoded, absolute, trailing slash) rejected; index-ready fires and shutdown is deadlock-free without watcher goroutines. No server code changes were needed — Phase 1 architecture already handled non-watchable sources.
+
+Lint 0 issues, tests race-clean, build green. Awaiting operator manual verification of `./stigmergic site`, then commit.
+
 ### ContentSource Abstraction — Phase 1 Complete (pure refactor)
 
 Implemented Phase 1 of the ContentSource plan (`thoughts/plans/2026-07-01_22-25-38_stigmergic-contentsource-embedded-site.md`) on `feature/content-source`:
