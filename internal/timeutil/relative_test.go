@@ -14,12 +14,12 @@ func TestRelativeTime(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "just now",
+			name:     "under a minute",
 			input:    now.Add(-30 * time.Second),
 			expected: "just now",
 		},
 		{
-			name:     "1 minute ago",
+			name:     "exactly one minute",
 			input:    now.Add(-1 * time.Minute),
 			expected: "1 minute ago",
 		},
@@ -29,7 +29,7 @@ func TestRelativeTime(t *testing.T) {
 			expected: "5 minutes ago",
 		},
 		{
-			name:     "1 hour ago",
+			name:     "exactly one hour",
 			input:    now.Add(-1 * time.Hour),
 			expected: "1 hour ago",
 		},
@@ -39,7 +39,7 @@ func TestRelativeTime(t *testing.T) {
 			expected: "3 hours ago",
 		},
 		{
-			name:     "yesterday",
+			name:     "previous day",
 			input:    now.Add(-30 * time.Hour),
 			expected: "yesterday",
 		},

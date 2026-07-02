@@ -4,24 +4,45 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"path/filepath"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/source"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/testutil"
 )
+
+const (
+	testHost      = "localhost"
+	testThemeName = "iceberg-dark"
+)
+
+// newTestServer builds a server over a FilesystemSource. Tests without an
+// explicit WatchPath get a dedicated temp dir; the old empty-path behavior
+// (resolving to the working directory) was accidental, never specified.
+func newTestServer(t *testing.T, cfg *config.Config) *Server {
+	t.Helper()
+	if cfg.WatchPath == "" {
+		cfg.WatchPath = testutil.CreateTempDir(t)
+	}
+	src, err := source.NewFilesystem(cfg.WatchPath, cfg.RespectGitignore, cfg.IgnorePatterns)
+	if err != nil {
+		t.Fatalf("failed to create filesystem source: %v", err)
+	}
+	return NewServer(cfg, src)
+}
 
 func TestNewServer(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
 		Port:  8080,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 	if srv == nil {
 		t.Fatal("expected server to be created, got nil")
 	}
@@ -41,11 +62,11 @@ func TestServerStartAndShutdown(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:  port,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	done := make(chan error, 1)
 	go func() {
@@ -84,11 +105,11 @@ func TestServerGracefulShutdown(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:  port,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -110,11 +131,11 @@ func TestServerShutdownTimeout(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:  port,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -137,12 +158,12 @@ func TestServerRespondsToRequests(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:      port,
-		Host:      "localhost",
+		Host:      testHost,
 		WatchPath: tmpDir,
-		Theme:     "iceberg-dark",
+		Theme:     testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -184,10 +205,10 @@ func TestServerAddress(t *testing.T) {
 	cfg := &config.Config{
 		Port:  9000,
 		Host:  "0.0.0.0",
-		Theme: "iceberg-dark",
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	expectedAddr := "0.0.0.0:9000"
 	if srv.httpServer.Addr != expectedAddr {
@@ -200,11 +221,11 @@ func TestServerTimeouts(t *testing.T) {
 
 	cfg := &config.Config{
 		Port:  8080,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	if srv.httpServer.ReadTimeout != 15*time.Second {
 		t.Errorf("expected ReadTimeout 15s, got %v", srv.httpServer.ReadTimeout)
@@ -223,14 +244,14 @@ func TestServerUpdateTree(t *testing.T) {
 
 	cfg := &config.Config{
 		Port:             8080,
-		Host:             "localhost",
+		Host:             testHost,
 		WatchPath:        tmpDir,
-		Theme:            "iceberg-dark",
+		Theme:            testThemeName,
 		RespectGitignore: false,
 		IgnorePatterns:   []string{},
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	// Wait for background scan to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -240,7 +261,7 @@ func TestServerUpdateTree(t *testing.T) {
 	}
 
 	srv.treeMux.RLock()
-	initialNode := srv.tree.Find(filepath.Join(tmpDir, "initial.md"))
+	initialNode := srv.tree.Find("initial.md")
 	srv.treeMux.RUnlock()
 
 	if initialNode == nil {
@@ -252,7 +273,7 @@ func TestServerUpdateTree(t *testing.T) {
 	srv.updateTree()
 
 	srv.treeMux.RLock()
-	newNode := srv.tree.Find(filepath.Join(tmpDir, "new.md"))
+	newNode := srv.tree.Find("new.md")
 	srv.treeMux.RUnlock()
 
 	if newNode == nil {
@@ -268,14 +289,14 @@ func TestServerUpdateTreeConcurrent(t *testing.T) {
 
 	cfg := &config.Config{
 		Port:             8080,
-		Host:             "localhost",
+		Host:             testHost,
 		WatchPath:        tmpDir,
-		Theme:            "iceberg-dark",
+		Theme:            testThemeName,
 		RespectGitignore: false,
 		IgnorePatterns:   []string{},
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	// Wait for background scan to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -306,21 +327,21 @@ func TestServerUpdateTreeConcurrent(t *testing.T) {
 	<-done
 }
 
-func TestServerUpdateTreeOnInvalidPath(t *testing.T) {
+func TestServerUpdateTreeOnScanFailure(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := testutil.CreateTempDir(t)
 
 	cfg := &config.Config{
 		Port:             8080,
-		Host:             "localhost",
+		Host:             testHost,
 		WatchPath:        tmpDir,
-		Theme:            "iceberg-dark",
+		Theme:            testThemeName,
 		RespectGitignore: false,
 		IgnorePatterns:   []string{},
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	// Wait for background scan to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -329,10 +350,14 @@ func TestServerUpdateTreeOnInvalidPath(t *testing.T) {
 		t.Fatalf("timed out waiting for index: %v", err)
 	}
 
-	srv.treeMux.Lock()
-	srv.config.WatchPath = "/nonexistent/path"
+	srv.treeMux.RLock()
 	oldTree := srv.tree
-	srv.treeMux.Unlock()
+	srv.treeMux.RUnlock()
+
+	// Removing the content root makes the next scan fail.
+	if err := os.RemoveAll(tmpDir); err != nil {
+		t.Fatalf("failed to remove content root: %v", err)
+	}
 
 	srv.updateTree()
 
@@ -354,14 +379,14 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:             port,
-		Host:             "localhost",
+		Host:             testHost,
 		WatchPath:        tmpDir,
-		Theme:            "iceberg-dark",
+		Theme:            testThemeName,
 		RespectGitignore: false,
 		IgnorePatterns:   []string{},
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -380,7 +405,7 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 	}
 
 	srv.treeMux.RLock()
-	initialNode := srv.tree.Find(filepath.Join(tmpDir, "new-file.md"))
+	initialNode := srv.tree.Find("new-file.md")
 	srv.treeMux.RUnlock()
 
 	if initialNode != nil {
@@ -392,7 +417,7 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	srv.treeMux.RLock()
-	newNode := srv.tree.Find(filepath.Join(tmpDir, "new-file.md"))
+	newNode := srv.tree.Find("new-file.md")
 	srv.treeMux.RUnlock()
 
 	if newNode == nil {

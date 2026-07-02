@@ -36,20 +36,14 @@ type Node struct {
 }
 
 type Tree struct {
-	Root     *Node
-	RootPath string
+	Root *Node
 }
 
-func NewTree(rootPath string) *Tree {
-	absPath, err := filepath.Abs(rootPath)
-	if err != nil {
-		absPath = rootPath
-	}
+func NewTree(name string) *Tree {
 	return &Tree{
-		RootPath: absPath,
 		Root: &Node{
-			Name:     filepath.Base(absPath),
-			Path:     absPath,
+			Name:     name,
+			Path:     ".",
 			Type:     NodeTypeDirectory,
 			Children: make([]*Node, 0),
 		},
@@ -85,16 +79,16 @@ func (n *Node) AddChild(child *Node) {
 	n.Children = append(n.Children, child)
 }
 
+// Find looks up a node by route-relative, forward-slash path ("." is the
+// root). Paths never carry a leading slash.
 func (t *Tree) Find(path string) *Node {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
+	if t.Root == nil {
 		return nil
 	}
-	relPath, err := filepath.Rel(t.RootPath, absPath)
-	if err != nil {
-		return nil
+	if path == "" {
+		path = "."
 	}
-	return t.findNode(t.Root, relPath)
+	return t.findNode(t.Root, path)
 }
 
 func (t *Tree) findNode(node *Node, path string) *Node {

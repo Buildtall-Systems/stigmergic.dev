@@ -36,11 +36,11 @@ func TestStaticFileServing(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:  port,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -76,11 +76,11 @@ func TestStaticFileMissing(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:  port,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -111,11 +111,11 @@ func TestStaticStylesDirectory(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:  port,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -146,12 +146,12 @@ func TestDefaultFileRedirect(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:        port,
-		Host:        "localhost",
-		Theme:       "iceberg-dark",
+		Host:        testHost,
+		Theme:       testThemeName,
 		DefaultFile: "index.md",
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -193,12 +193,12 @@ func TestDefaultFileNoRedirectForHTMX(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:        port,
-		Host:        "localhost",
-		Theme:       "iceberg-dark",
+		Host:        testHost,
+		Theme:       testThemeName,
 		DefaultFile: "index.md",
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -238,12 +238,12 @@ func TestNoDefaultFileNoRedirect(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:        port,
-		Host:        "localhost",
-		Theme:       "iceberg-dark",
+		Host:        testHost,
+		Theme:       testThemeName,
 		DefaultFile: "",
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -292,11 +292,11 @@ func startServerWithWatchPath(t *testing.T, watchPath string) (int, func()) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:      port,
-		Host:      "localhost",
-		Theme:     "iceberg-dark",
+		Host:      testHost,
+		Theme:     testThemeName,
 		WatchPath: watchPath,
 	}
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 	go func() { _ = srv.Start() }()
 	waitForServer(t, port)
 	cleanup := func() {

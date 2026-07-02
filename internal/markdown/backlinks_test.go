@@ -8,6 +8,11 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 )
 
+const (
+	nameA  = "a.md"
+	routeA = "/a.md"
+)
+
 func writeTestFile(t *testing.T, dir, route, content string) {
 	t.Helper()
 	fullPath := filepath.Join(dir, route)
@@ -28,12 +33,12 @@ func TestBuildBacklinkIndex(t *testing.T) {
 	writeTestFile(t, dir, "c.md", "Also links to [[b]].")
 
 	files := []models.SearchableFile{
-		{Name: "a.md", Path: "/a.md"},
+		{Name: nameA, Path: routeA},
 		{Name: "b.md", Path: "/b.md"},
 		{Name: "c.md", Path: "/c.md"},
 	}
 
-	index := BuildBacklinkIndex(dir, files)
+	index := BuildBacklinkIndex(os.DirFS(dir), files)
 
 	entries := index["b.md"]
 	if len(entries) != 2 {
@@ -59,10 +64,10 @@ func TestBuildBacklinkIndexNoLinks(t *testing.T) {
 	writeTestFile(t, dir, "a.md", "No wikilinks here.")
 
 	files := []models.SearchableFile{
-		{Name: "a.md", Path: "/a.md"},
+		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(dir, files)
+	index := BuildBacklinkIndex(os.DirFS(dir), files)
 
 	if len(index) != 0 {
 		t.Errorf("expected empty index, got %d entries", len(index))
@@ -76,10 +81,10 @@ func TestBuildBacklinkIndexSelfLink(t *testing.T) {
 	writeTestFile(t, dir, "a.md", "Self-referencing [[a]].")
 
 	files := []models.SearchableFile{
-		{Name: "a.md", Path: "/a.md"},
+		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(dir, files)
+	index := BuildBacklinkIndex(os.DirFS(dir), files)
 
 	if entries := index["a.md"]; len(entries) != 0 {
 		t.Errorf("expected self-links to be excluded, got %d entries", len(entries))
@@ -94,11 +99,11 @@ func TestBuildBacklinkIndexDuplicateLinks(t *testing.T) {
 	writeTestFile(t, dir, "b.md", "Target.")
 
 	files := []models.SearchableFile{
-		{Name: "a.md", Path: "/a.md"},
+		{Name: nameA, Path: routeA},
 		{Name: "b.md", Path: "/b.md"},
 	}
 
-	index := BuildBacklinkIndex(dir, files)
+	index := BuildBacklinkIndex(os.DirFS(dir), files)
 
 	entries := index["b.md"]
 	if len(entries) != 1 {
@@ -113,10 +118,10 @@ func TestBuildBacklinkIndexUnresolved(t *testing.T) {
 	writeTestFile(t, dir, "a.md", "Link to [[nonexistent]].")
 
 	files := []models.SearchableFile{
-		{Name: "a.md", Path: "/a.md"},
+		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(dir, files)
+	index := BuildBacklinkIndex(os.DirFS(dir), files)
 
 	if len(index) != 0 {
 		t.Errorf("expected empty index for unresolved links, got %d entries", len(index))

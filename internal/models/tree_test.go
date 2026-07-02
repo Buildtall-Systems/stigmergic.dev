@@ -6,10 +6,19 @@ import (
 	"time"
 )
 
+const (
+	rootNodeName = "root"
+	fileOneName  = "file1.md"
+	readmeName   = "readme.md"
+	guideName    = "guide.md"
+	docsName     = "docs"
+	apiName      = "api.md"
+)
+
 func TestNewTree(t *testing.T) {
 	t.Parallel()
 
-	tree := NewTree("/test/path")
+	tree := NewTree("path")
 	if tree == nil {
 		t.Fatal("expected tree to be created, got nil")
 	}
@@ -24,6 +33,10 @@ func TestNewTree(t *testing.T) {
 
 	if tree.Root.Name != "path" {
 		t.Errorf("expected root name to be 'path', got %s", tree.Root.Name)
+	}
+
+	if tree.Root.Path != "." {
+		t.Errorf("expected root path to be '.', got %s", tree.Root.Path)
 	}
 
 	if tree.Root.Children == nil {
@@ -113,15 +126,15 @@ func TestTreeFind(t *testing.T) {
 	t.Parallel()
 
 	root := &Node{
-		Name:     "root",
+		Name:     rootNodeName,
 		Path:     ".",
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
 	child1 := &Node{
-		Name: "file1.md",
-		Path: "file1.md",
+		Name: fileOneName,
+		Path: fileOneName,
 		Type: NodeTypeFile,
 	}
 
@@ -142,20 +155,17 @@ func TestTreeFind(t *testing.T) {
 	root.AddChild(subdir)
 	subdir.AddChild(child2)
 
-	tree := &Tree{
-		Root:     root,
-		RootPath: "/test/root",
-	}
+	tree := &Tree{Root: root}
 
-	found := tree.Find("/test/root/file1.md")
+	found := tree.Find(fileOneName)
 	if found == nil {
 		t.Fatal("expected to find file1.md, got nil")
 	}
-	if found.Name != "file1.md" {
+	if found.Name != fileOneName {
 		t.Errorf("expected to find file1.md, got %s", found.Name)
 	}
 
-	found = tree.Find("/test/root/subdir/file2.md")
+	found = tree.Find("subdir/file2.md")
 	if found == nil {
 		t.Fatal("expected to find file2.md, got nil")
 	}
@@ -163,7 +173,7 @@ func TestTreeFind(t *testing.T) {
 		t.Errorf("expected to find file2.md, got %s", found.Name)
 	}
 
-	found = tree.Find("/test/root/nonexistent.md")
+	found = tree.Find("nonexistent.md")
 	if found != nil {
 		t.Errorf("expected nil for nonexistent file, got %v", found)
 	}
@@ -172,16 +182,27 @@ func TestTreeFind(t *testing.T) {
 func TestTreeFindRoot(t *testing.T) {
 	t.Parallel()
 
-	tree := NewTree("/test/path")
-	tree.Root.Path = "."
+	tree := NewTree("path")
 
-	absPath, _ := filepath.Abs("/test/path")
-	found := tree.Find(absPath)
+	found := tree.Find(".")
 	if found == nil {
 		t.Fatal("expected to find root node, got nil")
 	}
 	if found != tree.Root {
 		t.Error("expected to find root node")
+	}
+
+	if empty := tree.Find(""); empty != tree.Root {
+		t.Error("expected empty path to resolve to root")
+	}
+}
+
+func TestTreeFindNilRoot(t *testing.T) {
+	t.Parallel()
+
+	tree := &Tree{}
+	if found := tree.Find("anything"); found != nil {
+		t.Errorf("expected nil for tree without root, got %v", found)
 	}
 }
 
@@ -202,15 +223,15 @@ func TestTreeFindInFileNode(t *testing.T) {
 	t.Parallel()
 
 	root := &Node{
-		Name:     "root",
-		Path:     "/test/root",
+		Name:     rootNodeName,
+		Path:     ".",
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
 	fileNode := &Node{
 		Name:     "file.md",
-		Path:     "/test/root/file.md",
+		Path:     "file.md",
 		Type:     NodeTypeFile,
 		Children: nil,
 	}
@@ -218,7 +239,7 @@ func TestTreeFindInFileNode(t *testing.T) {
 	root.AddChild(fileNode)
 	tree := &Tree{Root: root}
 
-	found := tree.Find("/test/root/file.md/child")
+	found := tree.Find("file.md/child")
 	if found != nil {
 		t.Error("expected nil when searching in file node, got a result")
 	}
@@ -231,22 +252,22 @@ func TestFlattenMarkdownFiles(t *testing.T) {
 	newer := time.Now()
 
 	root := &Node{
-		Name:     "root",
+		Name:     rootNodeName,
 		Path:     ".",
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
 	file1 := &Node{
-		Name:    "readme.md",
-		Path:    "readme.md",
+		Name:    readmeName,
+		Path:    readmeName,
 		Type:    NodeTypeFile,
 		ModTime: older,
 	}
 
 	file2 := &Node{
-		Name:    "guide.md",
-		Path:    "guide.md",
+		Name:    guideName,
+		Path:    guideName,
 		Type:    NodeTypeFile,
 		ModTime: newer,
 	}
@@ -259,14 +280,14 @@ func TestFlattenMarkdownFiles(t *testing.T) {
 	}
 
 	subdir := &Node{
-		Name:     "docs",
-		Path:     "docs",
+		Name:     docsName,
+		Path:     docsName,
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
 	file3 := &Node{
-		Name:    "api.md",
+		Name:    apiName,
 		Path:    "docs/api.md",
 		Type:    NodeTypeFile,
 		ModTime: older,
@@ -278,10 +299,7 @@ func TestFlattenMarkdownFiles(t *testing.T) {
 	root.AddChild(subdir)
 	subdir.AddChild(file3)
 
-	tree := &Tree{
-		Root:     root,
-		RootPath: "/test/root",
-	}
+	tree := &Tree{Root: root}
 
 	files := tree.FlattenMarkdownFiles()
 
@@ -289,15 +307,15 @@ func TestFlattenMarkdownFiles(t *testing.T) {
 		t.Fatalf("expected 3 markdown files, got %d", len(files))
 	}
 
-	if files[0].Name != "guide.md" {
+	if files[0].Name != guideName {
 		t.Errorf("expected first file to be guide.md (newest), got %s", files[0].Name)
 	}
 
-	if files[1].Name != "readme.md" && files[1].Name != "api.md" {
+	if files[1].Name != readmeName && files[1].Name != apiName {
 		t.Errorf("expected second file to be readme.md or api.md, got %s", files[1].Name)
 	}
 
-	if files[2].Name != "api.md" && files[2].Name != "readme.md" {
+	if files[2].Name != apiName && files[2].Name != readmeName {
 		t.Errorf("expected third file to be api.md or readme.md, got %s", files[2].Name)
 	}
 
@@ -312,16 +330,13 @@ func TestFlattenMarkdownFilesEmpty(t *testing.T) {
 	t.Parallel()
 
 	root := &Node{
-		Name:     "root",
+		Name:     rootNodeName,
 		Path:     ".",
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
-	tree := &Tree{
-		Root:     root,
-		RootPath: "/test/root",
-	}
+	tree := &Tree{Root: root}
 
 	files := tree.FlattenMarkdownFiles()
 
@@ -334,21 +349,21 @@ func TestFlattenMarkdownFilesPaths(t *testing.T) {
 	t.Parallel()
 
 	root := &Node{
-		Name:     "root",
+		Name:     rootNodeName,
 		Path:     ".",
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
 	subdir := &Node{
-		Name:     "docs",
-		Path:     "docs",
+		Name:     docsName,
+		Path:     docsName,
 		Type:     NodeTypeDirectory,
 		Children: make([]*Node, 0),
 	}
 
 	file := &Node{
-		Name:    "guide.md",
+		Name:    guideName,
 		Path:    "docs/guide.md",
 		Type:    NodeTypeFile,
 		ModTime: time.Now(),
@@ -357,10 +372,7 @@ func TestFlattenMarkdownFilesPaths(t *testing.T) {
 	root.AddChild(subdir)
 	subdir.AddChild(file)
 
-	tree := &Tree{
-		Root:     root,
-		RootPath: "/test/root",
-	}
+	tree := &Tree{Root: root}
 
 	files := tree.FlattenMarkdownFiles()
 

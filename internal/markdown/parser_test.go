@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+const (
+	boldHTML          = "<strong>bold</strong>"
+	preStyleFragment  = "<pre style="
+	spanStyleFragment = "<span style="
+)
+
 func TestParseBasicMarkdown(t *testing.T) {
 	t.Parallel()
 
@@ -31,7 +37,7 @@ func TestParseBasicMarkdown(t *testing.T) {
 		{
 			name:     "bold text",
 			input:    "**bold**",
-			expected: "<strong>bold</strong>",
+			expected: boldHTML,
 		},
 		{
 			name:     "italic text",
@@ -112,12 +118,12 @@ Link to [example](https://example.com).
 		"<h1 id=\"main-title\">Main Title</h1>",
 		"<h2 id=\"section-1\">Section 1</h2>",
 		"<h3 id=\"subsection\">Subsection</h3>",
-		"<strong>bold</strong>",
+		boldHTML,
 		"<em>italic</em>",
 		"<a href=\"https://example.com\" target=\"_blank\" rel=\"noopener noreferrer\">example</a>",
 		"<ul>",
 		"<li>Item 1</li>",
-		"<pre style=",
+		preStyleFragment,
 	}
 
 	for _, expected := range expectations {
@@ -227,8 +233,8 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			name:  "go code block",
 			input: "```go\nfunc main() {\n}\n```",
 			expected: []string{
-				"<pre style=",
-				"<span style=",
+				preStyleFragment,
+				spanStyleFragment,
 				">func</span>",
 				">main</span>",
 			},
@@ -237,8 +243,8 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			name:  "python code block",
 			input: "```python\ndef hello():\n    pass\n```",
 			expected: []string{
-				"<pre style=",
-				"<span style=",
+				preStyleFragment,
+				spanStyleFragment,
 				">def</span>",
 				">hello</span>",
 			},
@@ -247,8 +253,8 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			name:  "javascript code block",
 			input: "```javascript\nconst x = 42;\n```",
 			expected: []string{
-				"<pre style=",
-				"<span style=",
+				preStyleFragment,
+				spanStyleFragment,
 				">const</span>",
 			},
 		},

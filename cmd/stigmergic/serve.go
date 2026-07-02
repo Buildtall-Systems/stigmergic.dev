@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/server"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/source"
 )
 
 func isPortAvailable(host string, port int) bool {
@@ -74,9 +75,9 @@ If no path is provided, the current directory is used.`,
 
 		portExplicitlySet := cmd.Flags().Changed("port")
 		if !portExplicitlySet {
-			availablePort, err := findAvailablePort(loadedConfig.Host, loadedConfig.Port, 100)
-			if err != nil {
-				return fmt.Errorf("failed to find available port: %w", err)
+			availablePort, portErr := findAvailablePort(loadedConfig.Host, loadedConfig.Port, 100)
+			if portErr != nil {
+				return fmt.Errorf("failed to find available port: %w", portErr)
 			}
 			if availablePort != loadedConfig.Port {
 				fmt.Printf("Port %d is occupied, using port %d instead\n", loadedConfig.Port, availablePort)
@@ -87,7 +88,12 @@ If no path is provided, the current directory is used.`,
 		fmt.Printf("Starting server at %s:%d\n", loadedConfig.Host, loadedConfig.Port)
 		fmt.Printf("Watching directory: %s\n", absPath)
 
-		srv := server.NewServer(loadedConfig)
+		src, err := source.NewFilesystem(absPath, loadedConfig.RespectGitignore, loadedConfig.IgnorePatterns)
+		if err != nil {
+			return fmt.Errorf("failed to create content source: %w", err)
+		}
+
+		srv := server.NewServer(loadedConfig, src)
 		return srv.Start()
 	},
 }

@@ -257,7 +257,7 @@ Some text with [[Simple Note]] and **bold**.
 		`<span class="wikilink-unresolved">`,
 		`<a href="/file/folder/note.md">`,
 		"<h1",
-		"<strong>bold</strong>",
+		boldHTML,
 		"<li>",
 		"<blockquote>",
 	}

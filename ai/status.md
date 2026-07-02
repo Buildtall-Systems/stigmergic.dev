@@ -2,6 +2,22 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-07-01
+
+### ContentSource Abstraction — Phase 1 Complete (pure refactor)
+
+Implemented Phase 1 of the ContentSource plan (`thoughts/plans/2026-07-01_22-25-38_stigmergic-contentsource-embedded-site.md`) on `feature/content-source`:
+
+- **`internal/source`**: new package. `ContentSource` interface (FS/Name/Close) with capability interfaces asserted by the server: `Watchable` (pre-classified change events), `GitignoreAware` (runtime toggle), `Timestamped` (meaningful mod times), `Rooted` (local absolute root — gates the copy-path button). `FilesystemSource` implements all four, absorbing watcher construction and event classification from `NewServer`/`broadcastEvents`.
+- **Scanner**: rewritten fs-generic over `fs.WalkDir` in `internal/source`; reads `.gitignore` through the source FS; route-relative forward-slash node paths; relocated from `internal/watcher`.
+- **`Tree.Find`**: now route-relative; `Tree.RootPath` and the `filepath.Abs`/`Rel` round-trip removed.
+- **Server core**: `NewServer(cfg, src)`; broadcast goroutine only for `Watchable` sources (WaitGroup arithmetic adjusted); gitignore endpoints registered only for `GitignoreAware`; shutdown closes the source. `BuildBacklinkIndex` takes `fs.FS`.
+- **UI capability flags**: `models.UICapabilities` threaded through Layout/Home/Directory/Markdown templates plus `data-gitignore-enabled` body attribute consumed by the command palette JS. All flags true for `FilesystemSource`, so serve-mode rendering is unchanged.
+- **Handler hardening**: explicit `path.Clean` + `fs.ValidPath` canonical-path gate in `handleMarkdown` (behavior-preserving; satisfies gosec taint analysis).
+- **Lint driven to zero** (36 findings fixed across source, server, timeutil, markdown, models, and their tests). Tests race-clean, build green.
+
+Awaiting operator serve-mode parity verification, then commit.
+
 ## 2026-03-26
 
 ### WireMD Integration (#21) — Implementation Complete

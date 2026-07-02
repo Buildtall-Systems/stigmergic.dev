@@ -17,11 +17,11 @@ func TestSecurityHeaders(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:  port,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	go func() {
 		_ = srv.Start()
@@ -60,11 +60,11 @@ func TestRecoveryMiddleware(t *testing.T) {
 	port := testutil.FindAvailablePort(t)
 	cfg := &config.Config{
 		Port:  port,
-		Host:  "localhost",
-		Theme: "iceberg-dark",
+		Host:  testHost,
+		Theme: testThemeName,
 	}
 
-	srv := NewServer(cfg)
+	srv := newTestServer(t, cfg)
 
 	srv.mux.HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) {
 		panic("test panic")

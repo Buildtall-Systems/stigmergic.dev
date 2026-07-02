@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/source"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/timeutil"
 	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
 )
@@ -43,8 +45,12 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/file/", s.handleMarkdown)
 	s.mux.HandleFunc("/events", s.handleSSE)
 	s.mux.HandleFunc("/api/files", s.handleFilesAPI)
-	s.mux.HandleFunc("/api/gitignore", s.handleGitignoreStatus)
-	s.mux.HandleFunc("/api/gitignore/toggle", s.handleToggleGitignore)
+
+	if s.uiCaps.GitignoreToggle {
+		s.mux.HandleFunc("/api/gitignore", s.handleGitignoreStatus)
+		s.mux.HandleFunc("/api/gitignore/toggle", s.handleToggleGitignore)
+		logger.Log.Info("gitignore routes registered")
+	}
 
 	logger.Log.Info("routes configured")
 }
@@ -68,18 +74,22 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.cachedFiles.Load().([]models.SearchableFile); ok {
 		files = v
 	}
-	recentFiles := s.computeRecentFiles(files)
+
+	var recentFiles []models.SearchableFile
+	if s.uiCaps.RecentlyUpdated {
+		recentFiles = s.computeRecentFiles(files)
+	}
 
 	indexReady := s.IsIndexReady()
 
 	if isHTMXRequest(r) {
 		logger.Log.Debug("rendering HTMX home partial")
-		if err := templates.HomeContent(tree, s.config.WatchPath, recentFiles, indexReady).Render(r.Context(), w); err != nil {
+		if err := templates.HomeContent(tree, s.source.Name(), recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home content template", "error", err)
 		}
 	} else {
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(tree, s.config.WatchPath, s.theme, files, recentFiles, indexReady).Render(r.Context(), w); err != nil {
+		if err := templates.Home(tree, s.source.Name(), s.theme, files, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
 	}
@@ -108,17 +118,22 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	filePath := strings.TrimPrefix(r.URL.Path, "/file/")
 	logger.Log.Info("file request", "path", filePath, "htmx", isHTMXRequest(r))
 
-	if filePath == "" {
-		logger.Log.Warn("empty file path")
+	// Only already-canonical fs paths are served: anything path.Clean would
+	// rewrite (empty, trailing slash, ".." or "." elements) is rejected, and
+	// fs.ValidPath rules out the rest. The source FS enforces the same
+	// semantics on every operation, so traversal is impossible by
+	// construction.
+	cleaned := path.Clean(filePath)
+	if cleaned != filePath || !fs.ValidPath(cleaned) {
+		logger.Log.Warn("invalid file path", "path", filePath)
 		http.NotFound(w, r)
 		return
 	}
+	filePath = cleaned
 
-	// os.DirFS rejects paths containing ".." or starting with "/",
-	// eliminating path traversal by construction.
-	watchFS := os.DirFS(s.config.WatchPath)
+	contentFS := s.source.FS()
 
-	info, err := fs.Stat(watchFS, filePath)
+	info, err := fs.Stat(contentFS, filePath)
 	if err != nil {
 		logger.Log.Warn("path not found", "path", filePath, "error", err)
 		http.NotFound(w, r)
@@ -136,25 +151,24 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	indexReady := s.IsIndexReady()
 
 	if info.IsDir() {
-		absPath := filepath.Join(s.config.WatchPath, filePath)
 		s.treeMux.RLock()
-		node := s.tree.Find(absPath)
+		node := s.tree.Find(filePath)
 		s.treeMux.RUnlock()
 
 		if node == nil {
-			logger.Log.Warn("directory node not found in tree", "path", absPath)
+			logger.Log.Warn("directory node not found in tree", "path", filePath)
 			http.NotFound(w, r)
 			return
 		}
 
 		if isHTMX {
 			logger.Log.Debug("rendering HTMX directory partial")
-			if renderErr := templates.DirectoryContent(breadcrumbs, node, s.config.WatchPath).Render(r.Context(), w); renderErr != nil {
+			if renderErr := templates.DirectoryContent(breadcrumbs, node, s.source.Name()).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory content template", "error", renderErr)
 			}
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			if renderErr := templates.Directory(title, breadcrumbs, node, s.config.WatchPath, s.theme, files, indexReady).Render(r.Context(), w); renderErr != nil {
+			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, files, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory template", "error", renderErr)
 			}
 		}
@@ -164,11 +178,11 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	// Serve non-markdown files directly (images, PDFs, etc.)
 	if filepath.Ext(filePath) != models.MarkdownExt {
 		logger.Log.Debug("serving static asset", "path", filePath)
-		http.ServeFileFS(w, r, watchFS, filePath)
+		http.ServeFileFS(w, r, contentFS, filePath)
 		return
 	}
 
-	content, err := fs.ReadFile(watchFS, filePath)
+	content, err := fs.ReadFile(contentFS, filePath)
 	if err != nil {
 		logger.Log.Warn("file read failed", "path", filePath, "error", err)
 		http.NotFound(w, r)
@@ -196,16 +210,19 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	}
 	fileBacklinks := backlinks[filePath]
 
-	relativePath := computeBuildtallRelativePath(s.config.WatchPath, filePath)
+	var relativePath string
+	if rooted, ok := s.source.(source.Rooted); ok {
+		relativePath = computeBuildtallRelativePath(rooted.Root(), filePath)
+	}
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, fileBacklinks, meta).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.source.Name(), relativePath, fileBacklinks, meta, s.uiCaps).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown content template", "error", renderErr)
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.config.WatchPath, relativePath, s.theme, files, indexReady, fileBacklinks, meta).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, files, indexReady, fileBacklinks, meta, s.uiCaps).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -18,33 +17,34 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/source"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
-	"github.com/Buildtall-Systems/stigmergic.dev/internal/watcher"
 )
 
 type Server struct {
-	httpServer       *http.Server
-	config           *config.Config
-	mux              *http.ServeMux
-	tree             *models.Tree
-	cachedFiles      atomic.Value
-	cachedBacklinks  atomic.Value
-	watcher          *watcher.Watcher
-	theme            *theme.Theme
-	clients          map[chan string]bool
-	ctx              context.Context
-	cancel           context.CancelFunc
-	sessionManager   *session.Manager
-	serverURL        string
-	allowedPubkeys   []string
-	treeMux          sync.RWMutex
-	clientsMux       sync.RWMutex
-	wg               sync.WaitGroup
-	indexReady       atomic.Bool
-	respectGitignore atomic.Bool
+	httpServer      *http.Server
+	config          *config.Config
+	mux             *http.ServeMux
+	tree            *models.Tree
+	cachedFiles     atomic.Value
+	cachedBacklinks atomic.Value
+	source          source.ContentSource
+	watchable       source.Watchable
+	theme           *theme.Theme
+	clients         map[chan string]bool
+	ctx             context.Context
+	cancel          context.CancelFunc
+	sessionManager  *session.Manager
+	serverURL       string
+	allowedPubkeys  []string
+	treeMux         sync.RWMutex
+	clientsMux      sync.RWMutex
+	wg              sync.WaitGroup
+	uiCaps          models.UICapabilities
+	indexReady      atomic.Bool
 }
 
-func NewServer(cfg *config.Config) *Server {
+func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 	mux := http.NewServeMux()
 
 	handler := loggingMiddleware(mux)
@@ -88,18 +88,6 @@ func NewServer(cfg *config.Config) *Server {
 	// Initialize with empty tree - background scan will populate it
 	tree := &models.Tree{}
 
-	w, err := watcher.NewWatcher()
-	if err != nil {
-		logger.Log.Error("failed to create watcher", "error", err)
-		panic(fmt.Sprintf("failed to create watcher: %v", err))
-	}
-
-	logger.Log.Info("adding watch path", "path", cfg.WatchPath)
-	if addErr := w.Add(cfg.WatchPath, cfg.RespectGitignore, cfg.IgnorePatterns); addErr != nil {
-		logger.Log.Error("failed to watch directory", "error", addErr)
-		panic(fmt.Sprintf("failed to watch directory: %v", addErr))
-	}
-
 	logger.Log.Info("loading theme", "theme", cfg.Theme)
 	thm, err := theme.Load(cfg.Theme)
 	if err != nil {
@@ -110,12 +98,26 @@ func NewServer(cfg *config.Config) *Server {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	var watchable source.Watchable
+	if w, ok := src.(source.Watchable); ok {
+		watchable = w
+	}
+	_, gitignoreAware := src.(source.GitignoreAware)
+	_, timestamped := src.(source.Timestamped)
+	_, rooted := src.(source.Rooted)
+
 	s := &Server{
-		httpServer:     srv,
-		config:         cfg,
-		mux:            mux,
-		tree:           tree,
-		watcher:        w,
+		httpServer: srv,
+		config:     cfg,
+		mux:        mux,
+		tree:       tree,
+		source:     src,
+		watchable:  watchable,
+		uiCaps: models.UICapabilities{
+			RecentlyUpdated: timestamped,
+			GitignoreToggle: gitignoreAware,
+			CopyPath:        rooted,
+		},
 		theme:          thm,
 		clients:        make(map[chan string]bool),
 		ctx:            ctx,
@@ -127,11 +129,14 @@ func NewServer(cfg *config.Config) *Server {
 
 	s.cachedFiles.Store([]models.SearchableFile{})
 	s.cachedBacklinks.Store(models.BacklinkIndex{})
-	s.respectGitignore.Store(cfg.RespectGitignore)
 
-	s.wg.Add(2)
-	go s.broadcastEvents()
+	s.wg.Add(1)
 	go s.initialScan()
+
+	if s.watchable != nil {
+		s.wg.Add(1)
+		go s.broadcastEvents()
+	}
 
 	s.setupRoutes()
 
@@ -186,9 +191,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.clients = make(map[chan string]bool)
 	s.clientsMux.Unlock()
 
-	if s.watcher != nil {
-		if err := s.watcher.Close(); err != nil {
-			logger.Log.Error("error closing watcher", "error", err)
+	if s.source != nil {
+		if err := s.source.Close(); err != nil {
+			logger.Log.Error("error closing content source", "error", err)
 		}
 	}
 
@@ -209,32 +214,13 @@ func (s *Server) broadcastEvents() {
 		case <-s.ctx.Done():
 			logger.Log.Info("broadcast context cancelled, stopping")
 			return
-		case event, ok := <-s.watcher.Events:
+		case event, ok := <-s.watchable.Events():
 			if !ok {
-				logger.Log.Info("watcher events channel closed, stopping broadcast")
+				logger.Log.Info("source events channel closed, stopping broadcast")
 				return
 			}
 
-			shouldBroadcast := false
-			ext := filepath.Ext(event.Path)
-
-			info, err := os.Stat(event.Path)
-			if err == nil {
-				if info.IsDir() {
-					shouldBroadcast = true
-				} else if ext == ".md" {
-					shouldBroadcast = true
-				}
-			} else if event.Type == watcher.EventRemove && ext == ".md" {
-				shouldBroadcast = true
-			}
-
-			if !shouldBroadcast {
-				logger.Log.Debug("ignoring non-markdown file event", "path", event.Path, "ext", ext)
-				continue
-			}
-
-			logger.Log.Info("broadcasting event to clients", "path", event.Path, "type", event.Type)
+			logger.Log.Info("broadcasting event to clients", "path", event.Path)
 
 			s.updateTree()
 
@@ -250,12 +236,12 @@ func (s *Server) broadcastEvents() {
 				}
 			}
 			s.clientsMux.RUnlock()
-		case err, ok := <-s.watcher.Errors:
+		case err, ok := <-s.watchable.Errors():
 			if !ok {
-				logger.Log.Info("watcher errors channel closed")
+				logger.Log.Info("source errors channel closed")
 				return
 			}
-			logger.Log.Error("watcher error", "error", err)
+			logger.Log.Error("source error", "error", err)
 		}
 	}
 }
@@ -281,12 +267,19 @@ func (s *Server) removeClient(client chan string) {
 	logger.Log.Info("SSE client disconnected", "remaining_clients", clientCount)
 }
 
+func (s *Server) scan() (*models.Tree, error) {
+	respectGitignore := false
+	if ga, ok := s.source.(source.GitignoreAware); ok {
+		respectGitignore = ga.RespectingGitignore()
+	}
+	return source.Scan(s.source.FS(), respectGitignore, s.config.IgnorePatterns)
+}
+
 func (s *Server) updateTree() {
-	respectGitignore := s.respectGitignore.Load()
-	logger.Log.Info("rescanning directory tree", "path", s.config.WatchPath, "respect_gitignore", respectGitignore)
-	newTree, err := watcher.ScanDirectory(s.config.WatchPath, respectGitignore, s.config.IgnorePatterns)
+	logger.Log.Info("rescanning content tree", "source", s.source.Name())
+	newTree, err := s.scan()
 	if err != nil {
-		logger.Log.Error("failed to rescan directory", "error", err)
+		logger.Log.Error("failed to rescan content tree", "error", err)
 		return
 	}
 
@@ -296,16 +289,15 @@ func (s *Server) updateTree() {
 
 	files := newTree.FlattenMarkdownFiles()
 	s.cachedFiles.Store(files)
-	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.config.WatchPath, files))
-	logger.Log.Info("directory tree updated successfully")
+	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.source.FS(), files))
+	logger.Log.Info("content tree updated successfully")
 }
 
 func (s *Server) initialScan() {
 	defer s.wg.Done()
-	respectGitignore := s.respectGitignore.Load()
-	logger.Log.Info("starting background directory scan", "path", s.config.WatchPath, "respect_gitignore", respectGitignore, "ignore_patterns", len(s.config.IgnorePatterns))
+	logger.Log.Info("starting background content scan", "source", s.source.Name(), "ignore_patterns", len(s.config.IgnorePatterns))
 
-	newTree, err := watcher.ScanDirectory(s.config.WatchPath, respectGitignore, s.config.IgnorePatterns)
+	newTree, err := s.scan()
 	if err != nil {
 		logger.Log.Error("background scan failed", "error", err)
 		s.indexReady.Store(true) // Mark ready even on failure so UI doesn't hang
@@ -318,7 +310,7 @@ func (s *Server) initialScan() {
 
 	files := newTree.FlattenMarkdownFiles()
 	s.cachedFiles.Store(files)
-	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.config.WatchPath, files))
+	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.source.FS(), files))
 	s.indexReady.Store(true)
 	logger.Log.Info("background scan complete, index ready")
 
@@ -345,20 +337,21 @@ func (s *Server) IsIndexReady() bool {
 }
 
 func (s *Server) IsRespectingGitignore() bool {
-	return s.respectGitignore.Load()
+	if ga, ok := s.source.(source.GitignoreAware); ok {
+		return ga.RespectingGitignore()
+	}
+	return false
 }
 
 func (s *Server) ToggleRespectGitignore() bool {
-	for {
-		current := s.respectGitignore.Load()
-		newVal := !current
-		if s.respectGitignore.CompareAndSwap(current, newVal) {
-			logger.Log.Info("toggled respect gitignore", "new_value", newVal)
-			s.updateTree()
-			s.broadcastReload()
-			return newVal
-		}
+	ga, ok := s.source.(source.GitignoreAware)
+	if !ok {
+		return false
 	}
+	newVal := ga.ToggleGitignore()
+	s.updateTree()
+	s.broadcastReload()
+	return newVal
 }
 
 func (s *Server) broadcastReload() {

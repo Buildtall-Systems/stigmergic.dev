@@ -9,15 +9,20 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 )
 
+const (
+	themeTestName = "test"
+	bgAltHex      = "#1e2132"
+)
+
 func testTheme() *theme.Theme {
 	return &theme.Theme{
-		Name: "test",
+		Name: themeTestName,
 		Colors: theme.Colors{
 			Background:       "#161821",
 			Foreground:       "#c6c8d1",
-			BackgroundAlt:    "#1e2132",
+			BackgroundAlt:    bgAltHex,
 			Comment:          "#6b7089",
-			CurrentLine:      "#1e2132",
+			CurrentLine:      bgAltHex,
 			Selection:        "#272c42",
 			LineNumber:       "#444b71",
 			LineNumberActive: "#cdd1e6",
@@ -30,7 +35,7 @@ func testTheme() *theme.Theme {
 			Purple:           "#a093c7",
 			Link:             "#89b8c2",
 			LinkHover:        "#84a0c6",
-			CodeBg:           "#1e2132",
+			CodeBg:           bgAltHex,
 			CodeFg:           "#c6c8d1",
 			BorderColor:      "#0f1117",
 		},
@@ -41,7 +46,7 @@ func TestHomeRendersWithoutTree(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true).Render(context.Background(), &sb)
+	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -60,7 +65,7 @@ func TestHomeRendersWithEmptyTree(t *testing.T) {
 
 	tree := &models.Tree{}
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -77,7 +82,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	tree := &models.Tree{
 		Root: &models.Node{
 			Path: "/test",
-			Name: "test",
+			Name: themeTestName,
 			Type: models.NodeTypeDirectory,
 			Children: []*models.Node{
 				{
@@ -90,7 +95,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -110,7 +115,7 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 	tree := &models.Tree{
 		Root: &models.Node{
 			Path: "/test",
-			Name: "test",
+			Name: themeTestName,
 			Type: models.NodeTypeDirectory,
 			Children: []*models.Node{
 				{
@@ -130,7 +135,7 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}

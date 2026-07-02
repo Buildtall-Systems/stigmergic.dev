@@ -8,18 +8,22 @@ function commandPalette() {
 		results: [],
 		selectedIndex: 0,
 		indexReady: document.body.dataset.indexReady === 'true',
+		gitignoreEnabled: document.body.dataset.gitignoreEnabled === 'true',
 
 		buildCommands() {
-			return [
-				{ id: 'cmd:home', type: 'command', name: 'Home', description: 'Go to index page', action: () => window.location.href = '/' },
-				{
+			const commands = [
+				{ id: 'cmd:home', type: 'command', name: 'Home', description: 'Go to index page', action: () => window.location.href = '/' }
+			];
+			if (this.gitignoreEnabled) {
+				commands.push({
 					id: 'cmd:gitignore',
 					type: 'command',
 					name: 'Toggle Gitignore',
 					description: this.respectGitignore ? 'Currently respecting .gitignore (click to show ignored files)' : 'Currently showing all files (click to respect .gitignore)',
 					action: () => this.toggleGitignore()
-				}
-			];
+				});
+			}
+			return commands;
 		},
 
 		async toggleGitignore() {
@@ -65,7 +69,9 @@ function commandPalette() {
 				return: document.getElementById('icon-return').innerHTML
 			};
 			this.commands = this.buildCommands();
-			this.loadGitignoreStatus();
+			if (this.gitignoreEnabled) {
+				this.loadGitignoreStatus();
+			}
 			this.loadFiles();
 			document.body.addEventListener('htmx:afterSwap', () => this.refreshFiles());
 			document.body.addEventListener('indexReady', () => {

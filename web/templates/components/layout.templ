@@ -226,7 +226,7 @@ templ BuildtallLogo() {
 	</svg>
 }
 
-templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, indexReady bool) {
+templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -476,7 +476,7 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 				});
 			</script>
 		</head>
-		<body class="min-h-screen" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) }>
+		<body class="min-h-screen" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) }>
 			<div x-data="scrollProgress()" class="fixed top-0 left-0 w-full h-1 z-50" style="background-color: var(--bg-alt-color);">
 				<div class="h-full transition-all duration-75" :style="{ backgroundColor: 'var(--green-color)', width: progress + '%' }"></div>
 			</div>

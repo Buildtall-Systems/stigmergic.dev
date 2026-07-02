@@ -4,13 +4,13 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, files []models.SearchableFile, indexReady bool, backlinks []models.BacklinkEntry, metadata map[string]any) {
-	@components.Layout(title, thm, files, indexReady) {
-		@MarkdownContent(breadcrumbs, content, rawContent, rootPath, relativePath, backlinks, metadata)
+templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, files []models.SearchableFile, indexReady bool, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities) {
+	@components.Layout(title, thm, files, indexReady, caps) {
+		@MarkdownContent(breadcrumbs, content, rawContent, rootPath, relativePath, backlinks, metadata, caps)
 	}
 }
 
-templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, backlinks []models.BacklinkEntry, metadata map[string]any) {
+templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities) {
 	<div class="space-y-6">
 		if len(breadcrumbs) > 0 {
 			<nav class="breadcrumb" aria-label="Breadcrumb">
@@ -34,22 +34,24 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawConten
 							</li>
 						}
 					</ol>
-					<div x-data={ "copyPath('" + relativePath + "')" }>
-						<button
-							@click="copy()"
-							class="p-1 rounded-sm transition-colors"
-							style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);"
-							:style="copied ? 'color: var(--green-color)' : 'color: var(--comment-color)'"
-							:title="copied ? 'Copied!' : 'Copy path'"
-						>
-							<span x-show="!copied">
-								@components.IconCopy("w-4 h-4", "")
-							</span>
-							<span x-show="copied" x-cloak>
-								@components.IconCheck("w-4 h-4", "")
-							</span>
-						</button>
-					</div>
+					if caps.CopyPath {
+						<div x-data={ "copyPath('" + relativePath + "')" }>
+							<button
+								@click="copy()"
+								class="p-1 rounded-sm transition-colors"
+								style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);"
+								:style="copied ? 'color: var(--green-color)' : 'color: var(--comment-color)'"
+								:title="copied ? 'Copied!' : 'Copy path'"
+							>
+								<span x-show="!copied">
+									@components.IconCopy("w-4 h-4", "")
+								</span>
+								<span x-show="copied" x-cloak>
+									@components.IconCheck("w-4 h-4", "")
+								</span>
+							</button>
+						</div>
+					}
 				</div>
 			</nav>
 		}
