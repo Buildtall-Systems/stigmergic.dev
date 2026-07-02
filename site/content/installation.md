@@ -1,5 +1,14 @@
 # Installation
 
+## Pre-built Binaries
+
+Every [release](https://github.com/Buildtall-Systems/stigmergic.dev/releases) ships binaries for Linux (x86_64, ARM64), macOS (Apple Silicon, Intel), and Windows (x86_64), with a `checksums.txt` for verification:
+
+```bash
+tar xzf stigmergic_*.tar.gz
+sudo mv stigmergic /usr/local/bin/
+```
+
 ## Nix (Recommended)
 
 The simplest way to install stigmergic. Works on Linux and macOS.
@@ -83,7 +92,9 @@ stigmergic serve --help
 ## CLI Reference
 
 ```
-stigmergic serve [path] [flags]
+stigmergic [path]             Same as "stigmergic serve [path]"
+stigmergic serve [path]       Watch and render a directory of markdown
+stigmergic site               Serve the built-in stigmergic.dev website
 
 Arguments:
   path                        Directory to watch (default: current directory)
@@ -96,6 +107,8 @@ Flags:
       --log-level string      DEBUG, INFO, WARN, ERROR (default: "ERROR")
       --respect-gitignore     Use .gitignore patterns (default: true)
 ```
+
+`serve` renders a live directory: file changes reload the browser, `.gitignore` filtering can be toggled at runtime, and recently updated files are surfaced. `site` renders content compiled into the binary — the pages of this website — so those live-filesystem features do not apply.
 
 ## Running as a Service
 

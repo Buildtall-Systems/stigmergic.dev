@@ -73,6 +73,14 @@ Supports flowcharts, sequence diagrams, class diagrams, state diagrams, and more
 
 URLs using the `nostr:` protocol are automatically parsed and rendered as clickable links. Supports npub, note, nevent, and nprofile identifiers.
 
+## Wikilinks & Backlinks
+
+`[[page]]` syntax links between documents by name, resolved against your whole tree — no relative paths to maintain. Every rendered page lists the documents that link *to* it, so connections stay visible from both ends. The navigation on this site's [[index]] uses them.
+
+## UI Wireframes
+
+Fenced code blocks tagged `wiremd` render as sketch-style interface wireframes — mock up a settings page or a form directly in your markdown. See the [[demo]] for a live example.
+
 ## Themes
 
 ### Built-in

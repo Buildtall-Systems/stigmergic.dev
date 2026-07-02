@@ -4,6 +4,17 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-01
 
+### ContentSource Abstraction — Phase 3 Complete (content curation + docs)
+
+Phase 2 committed as `f1911c9` after operator site-mode verification. Phase 3 on `feature/content-source`:
+
+- **`site/content/` curation**: index de-duplicated (single wikilink nav section, notes the site is self-hosted by `stigmergic site`), config example corrected to real Viper key (`defaultfile`); installation gains a pre-built-binaries section and a CLI reference covering root/serve/site with the source-model distinction; features gains Wikilinks & Backlinks and UI Wireframes sections (shipped features the page omitted); architecture documents the two-command/one-pipeline model, the ContentSource capability design, and a corrected project structure (`internal/source`, `site/`, example as demo corpus). demo.md's fabricated Nostr entities replaced with the real project npub (fake note reference dropped).
+- **`example/` demoted to demo corpus**: the four website pages removed; new README-style `index.md` describes the corpus, demonstrates inline image rendering, and points at `stigmergic site` for the public website. Keeps `demo.md`, `img/`, `.stigmergic.toml`.
+- **README**: documents bare-command default, the two content-source commands, and the `ContentSource` capability model; config example corrected to actual Viper keys (`loglevel`, `respectgitignore`, `ignorepatterns`, `defaultfile`, `base_url`); env var example corrected (`STIGMERGIC_LOGLEVEL`).
+- **`ai/next-phase.md` deleted** — superseded by the ContentSource plan; it misdescribed the design.
+
+Lint 0 issues, tests race-clean, build green. Awaiting operator review of site pages (voice + accuracy) and `serve ./example` demo check, then commit.
+
 ### ContentSource Abstraction — Phase 2 Complete (embedded site mode)
 
 Phase 1 committed as `22c8e43` after operator serve-parity verification. Implemented Phase 2 on `feature/content-source`:

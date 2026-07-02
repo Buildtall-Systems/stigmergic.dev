@@ -167,8 +167,7 @@ Example configuration snippet: `viper.SetDefault("port", 8080)`
 
 Join the discussion on Nostr:
 
-- Follow the project: nostr:npub1h0706bf312f273ee38df304671b38a94c6ef2313100af8b92898224990f115c
-- Latest updates: nostr:note11d681c05cb04261a2de191cde2168b867d68aebe086bd11ce5e838b77efe6e20
+- Follow the project: nostr:npub1mkq63wkt4v94cvq869njlwpszwpmf62c84p3sdvc2ptjy04jnzjs20r4tx
 
 ## Performance Benchmarks
 

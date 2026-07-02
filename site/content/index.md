@@ -36,12 +36,14 @@ Stigmergic does exactly this. Point it at a directory, and you have a live docum
 
 ---
 
-## Explore This Demo Site
+## Explore This Site
 
-- [Features](features.md) — complete feature overview with examples
-- [Installation Guide](installation.md) — install options and setup details
-- [Architecture](architecture.md) — how Stigmergic is structured internally
-- [Demo Walkthrough](demo.md) — practical usage examples
+- [[features]] — complete feature overview with examples
+- [[installation]] — install options and setup details
+- [[architecture]] — how Stigmergic is structured internally
+- [[demo]] — every supported rendering feature on one page
+
+This site is itself served by Stigmergic: the pages you are reading are markdown files compiled into the binary and rendered by the same pipeline that renders your own documents.
 
 ## Project Links
 
@@ -115,17 +117,8 @@ Create `.stigmergic.toml` in your project or `~/.config/stigmergic/config.toml`:
 port = 8080
 host = "localhost"
 theme = "iceberg-dark"
-default_file = "README.md"
+defaultfile = "README.md"
 ```
-
----
-
-## Learn More
-
-- [[features]] — Full list of capabilities with examples
-- [[installation]] — Download, install, and configure
-- [[architecture]] — How it works under the hood
-- [[demo]] — Comprehensive markdown rendering showcase
 
 ---
 

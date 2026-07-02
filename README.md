@@ -57,7 +57,16 @@ go install github.com/Buildtall-Systems/stigmergic.dev/cmd/stigmergic@latest
 stigmergic serve /path/to/markdown/docs
 ```
 
-This starts a local server at `http://localhost:8080` watching the specified directory.
+This starts a local server at `http://localhost:8080` watching the specified directory. Running bare `stigmergic` is equivalent to `stigmergic serve .`.
+
+### Content Sources
+
+One binary, two commands, one rendering pipeline:
+
+- **`stigmergic serve [path]`** renders a live directory: an fsnotify watcher pushes reloads over SSE, `.gitignore` filtering can be toggled at runtime, recently updated files are surfaced, and a copy-path button is available.
+- **`stigmergic site`** renders the public stigmergic.dev website from content compiled into the binary (`site/content/`, embedded via `go:embed`). No filesystem access, no watcher goroutines; UI features tied to a live filesystem are absent. Auth and all other config apply identically in both modes.
+
+The server core is source-agnostic — content providers implement the `ContentSource` interface in `internal/source`, advertising optional capabilities (watchability, gitignore awareness, meaningful mod times, a local root) that gate the corresponding UI features.
 
 ### Command-Line Options
 
@@ -97,11 +106,13 @@ Stigmergic supports configuration via TOML file at:
 ```toml
 port = 8080
 host = "localhost"
-log_level = "ERROR"
-respect_gitignore = true
+loglevel = "ERROR"
+respectgitignore = true
 theme = "iceberg-dark"
+defaultfile = "index.md"
+base_url = ""
 
-ignore_patterns = [
+ignorepatterns = [
     ".git",
     "node_modules",
     "*.tmp"
@@ -114,7 +125,7 @@ Configuration can also be set via environment variables with the `STIGMERGIC_` p
 
 ```bash
 export STIGMERGIC_PORT=3000
-export STIGMERGIC_LOG_LEVEL=DEBUG
+export STIGMERGIC_LOGLEVEL=DEBUG
 stigmergic serve ./docs
 ```
 

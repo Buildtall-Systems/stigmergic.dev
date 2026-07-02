@@ -2,6 +2,8 @@
 
 Stigmergic is a single [Go](https://go.dev/) binary with no runtime dependencies. Everything is embedded at compile time.
 
+One binary carries two commands over one rendering pipeline. `stigmergic serve` renders a live directory with a filesystem watcher; `stigmergic site` renders content compiled into the binary — this website. Both flow through the same content-source abstraction described below.
+
 ## How It Works
 
 ```mermaid
@@ -68,6 +70,8 @@ sequenceDiagram
 
 ## Design Decisions
 
+**Content sources with capability discovery.** The server core is agnostic about where content comes from: any source exposing a rooted [`fs.FS`](https://pkg.go.dev/io/fs) can be rendered. Optional behaviors — live change events, runtime gitignore toggling, meaningful modification times, a local filesystem root — are capabilities a source advertises, and the UI shows only what the source supports. The filesystem source behind `serve` has all of them; the embedded source behind `site` has none, so this website carries no reload machinery at all.
+
 **No database.** All state comes from the filesystem. Discovery happens on-demand by scanning the directory tree. This keeps things simple and means your content is always just files — version-controlled, portable, yours.
 
 **HTMX over SPA.** Navigation uses HTMX partial page updates instead of a JavaScript SPA framework. This means the server renders HTML, the browser swaps content, and there's no client-side routing or state management. Pages work without JavaScript (degraded but functional).
@@ -80,7 +84,7 @@ sequenceDiagram
 
 ```
 stigmergic.dev/
-├── cmd/stigmergic/       # CLI entry point
+├── cmd/stigmergic/       # CLI entry point (serve + site commands)
 ├── internal/
 │   ├── config/           # Viper configuration
 │   ├── embed/            # Embedded static assets
@@ -88,11 +92,13 @@ stigmergic.dev/
 │   ├── markdown/         # Goldmark parser + extensions
 │   ├── models/           # Data structures
 │   ├── server/           # HTTP server + handlers
+│   ├── source/           # Content sources (filesystem, embedded)
 │   ├── theme/            # Theme loading
-│   ├── watcher/          # File system watcher
+│   ├── watcher/          # File system watcher (filesystem source internals)
 │   └── workdir/          # Work directory management
+├── site/                 # This website, embedded at compile time
 ├── web/templates/        # Templ HTML templates
-├── example/              # Example content (this site!)
+├── example/              # Demo corpus for `stigmergic serve ./example`
 ├── flake.nix             # Nix packaging
 └── Makefile              # Build commands
 ```
