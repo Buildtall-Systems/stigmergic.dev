@@ -2,6 +2,15 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-07-02
+
+### ContentSource Abstraction — Phase 4 Complete (v0.3.0 released, prod cut over to embedded site)
+
+- **Phase 3 committed** as `f08689d` after operator review of site pages and the `serve ./example` demo check.
+- **Merged and released**: `feature/content-source` fast-forwarded into `develop` and `master` (no PR, operator-directed), both pushed. Version bumped to 0.3.0 (`e3e8a40`). Tagged `v0.3.0`; goreleaser published binaries for linux/darwin amd64+arm64 and windows/amd64. Release required two fixes: goreleaser must run inside the devshell (Makefile release target now uses `nix develop -c`, committed `e138fb8` on develop), and the active `gh` account (spindle-bot) has an invalid keyring token — published with the plantimals token instead. spindle-bot re-auth still pending.
+- **Deploy-repo cutover** (buildtall monorepo, `1d83917` on develop): stigmergic flake input pinned to `refs/tags/v0.3.0`; `ExecStart` → `stigmergic site --config /etc/stigmergic/config.toml` (source-tree `/example` reference gone); config.toml drops `respectgitignore`. Nonprod rehearsal exposed a develop-wide gap — listoflists-web, sayer-gateway, and sayer-worker had no nonprod secrets and crash-looped, tripping deploy-rs rollback; disabled all three in `nonprod-overrides.nix` per the catallaxy precedent.
+- **Verified on nonprod, then prod** (`https://stigmergic.dev`): root 302 → `/file/index.md`, embedded index renders, `/file/img/stigmergic.png` 200 (114931 bytes), `/file/demo.md` 200, `.stigmergic.toml` and `.gitignore` 404. The example/-as-public-site leak hazard is closed.
+
 ## 2026-07-01
 
 ### ContentSource Abstraction — Phase 3 Complete (content curation + docs)
