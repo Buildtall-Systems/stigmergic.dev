@@ -37,7 +37,7 @@ release:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=x.y.z"; exit 1; fi
 	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
 	git push origin "v$(VERSION)"
-	goreleaser release --clean
+	nix develop -c goreleaser release --clean
 
 wiremd-js:
 	pnpm exec esbuild browser/wiremd-entry.ts --bundle --format=iife --global-name=wiremd --minify --alias:node:process=./browser/shim-process.ts --alias:node:path=./browser/shim-path.ts --alias:node:url=./browser/shim-url.ts --outfile=internal/embed/web/static/js/wiremd.min.js
