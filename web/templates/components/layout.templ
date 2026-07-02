@@ -101,30 +101,8 @@ func themeCSS(thm *theme.Theme) string {
 	.prose code::after {
 		content: none;
 	}
-	.indicator-connecting {
-		background-color: var(--comment-color);
-	}
-	.indicator-connected {
-		background-color: var(--green-color);
-	}
-	.indicator-disconnected {
-		background-color: var(--red-color);
-	}
-	.indicator-reconnecting {
-		background-color: var(--yellow-color);
-		animation: indicator-spin 1s linear infinite;
-	}
-	.indicator-reloading {
-		background-color: var(--green-color);
-		animation: indicator-pulse 0.5s ease-in-out;
-	}
-	@keyframes indicator-pulse {
-		0%, 100% { opacity: 1; transform: scale(1); }
-		50% { opacity: 0.6; transform: scale(1.4); }
-	}
-	@keyframes indicator-spin {
-		from { transform: rotate(0deg); }
-		to { transform: rotate(360deg); }
+	.tree-item-current {
+		background-color: var(--selection-color);
 	}</style>`
 }
 
@@ -226,7 +204,7 @@ templ BuildtallLogo() {
 	</svg>
 }
 
-templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -254,245 +232,49 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 			<script src="/static/js/alpine-focus.min.js" defer></script>
 			<script src="/static/js/alpine.min.js" defer></script>
 			@templ.JSONScript("markdown-files", files)
-			<script>
-				function toggleDirectory(element) {
-					const isExpanded = element.getAttribute('data-expanded') === 'true';
-					const parent = element.parentElement;
-					const childrenDiv = parent.querySelector('.directory-children');
-					const chevron = element.querySelector('.chevron-btn svg');
-
-					if (isExpanded) {
-						childrenDiv.style.display = 'none';
-						chevron.classList.remove('rotate-90');
-						element.setAttribute('data-expanded', 'false');
-					} else {
-						childrenDiv.style.display = 'block';
-						chevron.classList.add('rotate-90');
-						element.setAttribute('data-expanded', 'true');
-					}
-				}
-
-				function renderMath(element) {
-					renderMathInElement(element, {
-						delimiters: [
-							{left: '$$', right: '$$', display: true},
-							{left: '$', right: '$', display: false}
-						],
-						throwOnError: false
-					});
-				}
-
-				function renderWiremd(element) {
-					element.querySelectorAll('pre.wiremd').forEach(function(block) {
-						if (block.getAttribute('data-processed') === 'true') return
-						try {
-							var source = block.textContent
-							var result = wiremd.render(source, 'sketch')
-							if (result.css && !document.getElementById('wiremd-styles')) {
-								var style = document.createElement('style')
-								style.id = 'wiremd-styles'
-								style.textContent = result.css
-								document.head.appendChild(style)
-							}
-							var div = document.createElement('div')
-							div.className = 'wiremd-rendered wmd-root wmd-sketch'
-							div.innerHTML = result.html
-							block.parentNode.replaceChild(div, block)
-						} catch (e) {
-							console.warn('wiremd render failed:', e.message)
-							block.setAttribute('data-processed', 'true')
-						}
-					})
-				}
-
-				function scrollProgress() {
-					return {
-						progress: 0,
-						init() {
-							this.updateProgress()
-							window.addEventListener('scroll', () => {
-								this.updateProgress()
-							}, { passive: true })
-						},
-						updateProgress() {
-							var winScroll = document.documentElement.scrollTop || document.body.scrollTop
-							var height = document.documentElement.scrollHeight - document.documentElement.clientHeight
-							this.progress = height > 0 ? (winScroll / height) * 100 : 0
-						}
-					}
-				}
-
-				function initCodeCopyButtons() {
-					document.querySelectorAll('pre').forEach(function(pre) {
-						if (pre.classList.contains('mermaid')) return
-						if (pre.classList.contains('wiremd')) return
-						if (pre.querySelector('.copy-btn')) return
-
-						var wrapper = document.createElement('div')
-						wrapper.className = 'code-block-wrapper relative group'
-						pre.parentNode.insertBefore(wrapper, pre)
-						wrapper.appendChild(pre)
-
-						var btn = document.createElement('button')
-						btn.className = 'copy-btn absolute top-2 right-2 px-2 py-1 text-xs rounded-sm opacity-0 group-hover:opacity-100 transition-opacity'
-						btn.style.cssText = 'background-color: var(--bg-alt-color); border: 1px solid var(--border-color); color: var(--comment-color);'
-						btn.textContent = 'Copy'
-						btn.onclick = function() {
-							var code = pre.querySelector('code') || pre
-							navigator.clipboard.writeText(code.textContent).then(function() {
-								btn.textContent = 'Copied!'
-								btn.style.color = 'var(--green-color)'
-								setTimeout(function() {
-									btn.textContent = 'Copy'
-									btn.style.color = 'var(--comment-color)'
-								}, 2000)
-							})
-						}
-						wrapper.appendChild(btn)
-					})
-				}
-
-				function copyPath(path) {
-					return {
-						copied: false,
-						path: path,
-						copy() {
-							navigator.clipboard.writeText(this.path).then(() => {
-								this.copied = true
-								setTimeout(() => {
-									this.copied = false
-								}, 2000)
-							})
-						}
-					}
-				}
-
-				function rawToggle() {
-					return {
-						showRaw: false,
-						showLineNumbers: false,
-						lines: [],
-						init() {
-							this.loadRawContent()
-							document.body.addEventListener('htmx:afterSwap', () => {
-								this.showRaw = false
-								this.showLineNumbers = false
-								this.loadRawContent()
-							})
-						},
-						loadRawContent() {
-							var el = document.getElementById('raw-content-data')
-							if (el) {
-								try {
-									var content = JSON.parse(el.textContent)
-									this.lines = content.split('\n')
-								} catch (e) {
-									this.lines = []
-								}
-							}
-						},
-						toggle() {
-							this.showRaw = !this.showRaw
-						},
-						get buttonText() {
-							return this.showRaw ? 'Rendered' : 'Source'
-						}
-					}
-				}
-
-				function initKeyboardNav() {
-					document.querySelectorAll('[data-nav-item]').forEach(function(item) {
-						item.style.backgroundColor = ''
-					})
-					var firstItem = document.querySelector('[data-nav-item]')
-					if (firstItem) {
-						firstItem.focus()
-					}
-				}
-
-				function handleNavKeydown(evt) {
-					if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return
-					var active = document.activeElement
-					if (!active || !active.hasAttribute('data-nav-item')) return
-
-					var items = Array.from(document.querySelectorAll('[data-nav-item]'))
-					var idx = items.indexOf(active)
-					if (idx === -1) return
-
-					evt.preventDefault()
-					var nextIdx
-					if (evt.key === 'ArrowDown') {
-						nextIdx = idx + 1 < items.length ? idx + 1 : 0
-					} else {
-						nextIdx = idx - 1 >= 0 ? idx - 1 : items.length - 1
-					}
-					items[nextIdx].focus()
-				}
-
-				document.addEventListener("DOMContentLoaded", function() {
-					renderMath(document.body);
-					renderWiremd(document.body);
-					initCodeCopyButtons();
-					initKeyboardNav();
-					document.addEventListener('keydown', handleNavKeydown);
-
-					document.body.addEventListener('htmx:afterSwap', function(evt) {
-						renderMath(evt.detail.target);
-						renderWiremd(evt.detail.target);
-						initCodeCopyButtons();
-						evt.detail.target.querySelectorAll('pre.mermaid').forEach(function(node, i) {
-							var id = 'mermaid-swap-' + Date.now() + '-' + i;
-							mermaid.render(id, node.textContent).then(function(result) {
-								node.innerHTML = result.svg;
-								node.setAttribute('data-processed', 'true');
-							});
-						});
-						if (evt.detail.target.id === 'main' && window.location.pathname === '/') {
-							initKeyboardNav();
-						}
-					});
-
-					document.body.addEventListener('sse:message', function(evt) {
-						var data = evt.detail ? evt.detail.data : null;
-						if (data === 'index-ready') {
-							document.body.dataset.indexReady = 'true';
-							document.body.dispatchEvent(new CustomEvent('indexReady'));
-							return;
-						}
-						htmx.ajax('GET', window.location.pathname, {target: '#main', swap: 'innerHTML'});
-					});
-
-					window.addEventListener('pageshow', function(evt) {
-						if (evt.persisted && window.location.pathname === '/') {
-							initKeyboardNav();
-						}
-					});
-
-					document.body.addEventListener('htmx:historyRestore', function() {
-						if (window.location.pathname === '/') {
-							initKeyboardNav();
-						}
-					});
-				});
-			</script>
+			<script src="/static/js/app/render.js"></script>
+			<script src="/static/js/app/nav.js"></script>
+			<script src="/static/js/app/events.js"></script>
+			<script src="/static/js/app/ui.js"></script>
 		</head>
-		<body class="min-h-screen" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) }>
+		<body class="h-screen overflow-hidden flex flex-col" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) } x-data="{ sidebarOpen: true }">
 			<div x-data="scrollProgress()" class="fixed top-0 left-0 w-full h-1 z-50" style="background-color: var(--bg-alt-color);">
 				<div class="h-full transition-all duration-75" :style="{ backgroundColor: 'var(--green-color)', width: progress + '%' }"></div>
 			</div>
 			@CommandPalette()
-			<header style="background-color: var(--bg-alt-color); border-bottom: 1px solid var(--border-color);">
-				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-					<a href="/" class="flex items-center gap-3" style="color: var(--fg-color); text-decoration: none;">
-						@BuildtallLogo()
-						<span class="text-2xl font-bold">stigmergic</span>
-					</a>
-					@LiveIndicator()
+			@Help()
+			<header class="shrink-0" style="background-color: var(--bg-alt-color); border-bottom: 1px solid var(--border-color);">
+				<div class="px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+					<div class="flex items-center gap-2">
+						<button @click="sidebarOpen = !sidebarOpen" title="Toggle sidebar" class="p-1 rounded-md transition-colors hidden md:block" style="color: var(--comment-color);">
+							<svg class="w-5 h-5 transition-transform" :class="sidebarOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+							</svg>
+						</button>
+						<a href="/" class="flex items-center gap-3" style="color: var(--fg-color); text-decoration: none;">
+							@BuildtallLogo()
+							<span class="text-2xl font-bold">stigmergic</span>
+						</a>
+					</div>
+					<div class="flex items-center gap-2">
+						<button @click="$dispatch('toggle-palette')" class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">
+							@IconSearch("w-4 h-4", "")
+							<span>Search</span>
+							<kbd class="px-1.5 py-0.5 rounded text-xs" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">Ctrl+K</kbd>
+						</button>
+						<button @click="$dispatch('toggle-help')" title="Keyboard shortcuts" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">?</button>
+					</div>
 				</div>
 			</header>
-			<main id="main" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-				{ children... }
-			</main>
+			<div class="flex flex-1 min-h-0">
+				<aside id="sidebar" x-show="sidebarOpen" class="hidden md:block w-64 shrink-0 overflow-y-auto p-3" style="background-color: var(--bg-alt-color); border-right: 1px solid var(--border-color);">
+					@Sidebar(tree, recentFiles, indexReady, caps)
+				</aside>
+				<main id="content" class="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
+					{ children... }
+				</main>
+				<aside id="outline" class="hidden min-[1100px]:block w-56 shrink-0 overflow-y-auto p-4" style="border-left: 1px solid var(--border-color);"></aside>
+			</div>
 		</body>
 	</html>
 }

@@ -12,6 +12,7 @@ import (
 const (
 	themeTestName = "test"
 	bgAltHex      = "#1e2132"
+	testTreeRoot  = "/test"
 )
 
 func testTheme() *theme.Theme {
@@ -46,7 +47,7 @@ func TestHomeRendersWithoutTree(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -65,7 +66,7 @@ func TestHomeRendersWithEmptyTree(t *testing.T) {
 
 	tree := &models.Tree{}
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -81,7 +82,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 
 	tree := &models.Tree{
 		Root: &models.Node{
-			Path: "/test",
+			Path: testTreeRoot,
 			Name: themeTestName,
 			Type: models.NodeTypeDirectory,
 			Children: []*models.Node{
@@ -95,7 +96,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -114,7 +115,7 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 
 	tree := &models.Tree{
 		Root: &models.Node{
-			Path: "/test",
+			Path: testTreeRoot,
 			Name: themeTestName,
 			Type: models.NodeTypeDirectory,
 			Children: []*models.Node{
@@ -135,7 +136,7 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -146,5 +147,90 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 	}
 	if !strings.Contains(html, "nested.md") {
 		t.Error("expected nested file in output")
+	}
+}
+
+func TestLayoutRendersThreePaneLandmarks(t *testing.T) {
+	t.Parallel()
+
+	var sb strings.Builder
+	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render: %v", err)
+	}
+
+	html := sb.String()
+	for _, landmark := range []string{`id="sidebar"`, `id="content"`, `id="outline"`} {
+		if !strings.Contains(html, landmark) {
+			t.Errorf("expected %s landmark in layout", landmark)
+		}
+	}
+	if strings.Contains(html, `id="main"`) {
+		t.Error("legacy #main swap target must be absent")
+	}
+	if strings.Contains(html, "indicator-") {
+		t.Error("live indicator markup and CSS must be absent")
+	}
+}
+
+func TestTreeLinksCarryDataPathAndContentTarget(t *testing.T) {
+	t.Parallel()
+
+	tree := &models.Tree{
+		Root: &models.Node{
+			Path: testTreeRoot,
+			Name: themeTestName,
+			Type: models.NodeTypeDirectory,
+			Children: []*models.Node{
+				{
+					Path: "/test/file.md",
+					Name: "file.md",
+					Type: models.NodeTypeFile,
+				},
+			},
+		},
+	}
+
+	var sb strings.Builder
+	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render: %v", err)
+	}
+
+	html := sb.String()
+	if !strings.Contains(html, `data-path="/test/file.md"`) {
+		t.Error("expected tree file link to carry data-path attribute")
+	}
+	if !strings.Contains(html, `hx-target="#content"`) {
+		t.Error("expected tree file link to target #content")
+	}
+	if strings.Contains(html, `hx-target="main"`) {
+		t.Error("legacy main target must be absent from tree links")
+	}
+}
+
+func TestMarkdownBreadcrumbsUseHTMXSwaps(t *testing.T) {
+	t.Parallel()
+
+	crumbs := []models.Breadcrumb{
+		{Name: "dir", Path: "/file/dir"},
+		{Name: "doc.md", Path: "/file/dir/doc.md"},
+	}
+
+	var sb strings.Builder
+	err := MarkdownContent(crumbs, "<p>hello</p>", "hello", "/root", "", nil, nil, models.UICapabilities{}).Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render: %v", err)
+	}
+
+	html := sb.String()
+	if !strings.Contains(html, `hx-get="/file/dir"`) {
+		t.Error("expected breadcrumb link to carry hx-get")
+	}
+	if !strings.Contains(html, `hx-target="#content"`) {
+		t.Error("expected breadcrumb link to target #content")
+	}
+	if !strings.Contains(html, `hx-push-url="true"`) {
+		t.Error("expected breadcrumb link to push URL")
 	}
 }

@@ -394,6 +394,102 @@ func TestWatchDirAssetNotFound(t *testing.T) {
 	}
 }
 
+func TestSidebarPartialRendersTree(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "test.md", "# Hello World\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/partial/sidebar", port)
+	deadline := time.Now().Add(5 * time.Second)
+	var body string
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+		if err != nil {
+			t.Fatalf("failed to build request: %v", err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("failed to get sidebar partial: %v", err)
+		}
+		b, readErr := io.ReadAll(resp.Body)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Fatalf("failed to close response body: %v", closeErr)
+		}
+		if readErr != nil {
+			t.Fatalf("failed to read response body: %v", readErr)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+		body = string(b)
+		if strings.Contains(body, "test.md") {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if !strings.Contains(body, "test.md") {
+		t.Errorf("expected sidebar partial to contain tree entry, got: %s", body)
+	}
+	if !strings.Contains(body, `hx-target="#content"`) {
+		t.Error("expected sidebar links to target #content")
+	}
+	if strings.Contains(body, "<html") {
+		t.Error("sidebar partial must not be a full page")
+	}
+}
+
+func TestHTMXFileRequestReturnsContentPartial(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "test.md", "# Hello World\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/file/test.md", port)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set("HX-Request", "true")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to get file partial: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+
+	html := string(b)
+	if !strings.Contains(html, "<h1") {
+		t.Errorf("expected rendered markdown in partial, got: %s", html[:min(200, len(html))])
+	}
+	if strings.Contains(html, `id="sidebar"`) {
+		t.Error("content partial must not carry sidebar markup")
+	}
+	if strings.Contains(html, "<html") {
+		t.Error("content partial must not be a full page")
+	}
+}
+
 func TestWatchDirAssetInSubdirectory(t *testing.T) {
 	t.Parallel()
 

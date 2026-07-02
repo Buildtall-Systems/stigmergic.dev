@@ -1,27 +1,32 @@
 package templates
 
+import "strconv"
+
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Home(tree *models.Tree, rootPath string, thm *theme.Theme, files []models.SearchableFile, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
-	@components.Layout("Home", thm, files, indexReady, caps) {
-		@HomeContent(tree, rootPath, recentFiles, indexReady, caps)
+templ Home(tree *models.Tree, rootPath string, thm *theme.Theme, files []models.SearchableFile, recentFiles []models.SearchableFile, fileCount int, dirCount int, indexReady bool, caps models.UICapabilities) {
+	@components.Layout("Home", thm, files, tree, recentFiles, indexReady, caps) {
+		@HomeContent(rootPath, recentFiles, fileCount, dirCount, indexReady, caps)
 	}
 }
 
-templ HomeContent(tree *models.Tree, rootPath string, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
-	<div class="space-y-4">
+templ HomeContent(rootPath string, recentFiles []models.SearchableFile, fileCount int, dirCount int, indexReady bool, caps models.UICapabilities) {
+	<div class="space-y-6">
 		<h2 class="text-xl font-semibold">{ rootPath }</h2>
 		if caps.RecentlyUpdated {
 			@components.RecentlyUpdated(recentFiles, indexReady)
 		}
-		if !indexReady {
-			<p style="color: var(--comment-color);">Indexing...</p>
-		} else if tree == nil || tree.Root == nil {
-			<p style="color: var(--comment-color);">No markdown files found.</p>
+		if indexReady {
+			<p class="text-sm" style="color: var(--comment-color);">
+				{ strconv.Itoa(fileCount) } markdown files · { strconv.Itoa(dirCount) } directories
+				if len(recentFiles) > 0 {
+					· last change { recentFiles[0].RelativeTime }
+				}
+			</p>
 		} else {
-			@components.Tree(tree.Root)
+			<p style="color: var(--comment-color);">Indexing...</p>
 		}
 	</div>
 }

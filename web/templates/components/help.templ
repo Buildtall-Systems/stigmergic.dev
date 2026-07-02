@@ -1,0 +1,37 @@
+package components
+
+templ Help() {
+	<div
+		x-data="helpOverlay()"
+		@keydown.window="onKeydown($event)"
+		@toggle-help.window="toggle()"
+	>
+		<div x-cloak x-show="open" class="fixed inset-0 bg-black/50 z-40" @click="close()"></div>
+		<div x-cloak x-show="open" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md" x-trap="open">
+			<div class="rounded-lg shadow-2xl" style="background-color: var(--bg-color); border: 1px solid var(--border-color);">
+				<div class="p-4 border-b flex items-center justify-between" style="border-bottom-color: var(--border-color);">
+					<h2 class="text-lg font-semibold">Keyboard Shortcuts</h2>
+					<button @click="close()" class="flex-shrink-0 p-1 rounded hover:opacity-80 transition-opacity" style="color: var(--comment-color);">
+						@IconClose("w-5 h-5", "")
+					</button>
+				</div>
+				<dl class="p-4 space-y-3">
+					@helpRow("Ctrl+K", "Open search palette")
+					@helpRow("S", "Toggle source view")
+					@helpRow("↑ ↓", "Navigate file lists")
+					@helpRow("?", "This overlay")
+					@helpRow("Esc", "Close overlays")
+				</dl>
+			</div>
+		</div>
+	</div>
+}
+
+templ helpRow(key string, description string) {
+	<div class="flex items-center gap-4">
+		<dt class="w-20 flex-shrink-0 text-right">
+			<kbd class="px-1.5 py-0.5 rounded text-xs" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">{ key }</kbd>
+		</dt>
+		<dd class="text-sm" style="color: var(--fg-color);">{ description }</dd>
+	</div>
+}

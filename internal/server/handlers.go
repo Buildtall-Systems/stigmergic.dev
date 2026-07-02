@@ -19,6 +19,7 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/source"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/timeutil"
 	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
+	"github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 )
 
 func isHTMXRequest(r *http.Request) bool {
@@ -45,6 +46,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/file/", s.handleMarkdown)
 	s.mux.HandleFunc("/events", s.handleSSE)
 	s.mux.HandleFunc("/api/files", s.handleFilesAPI)
+	s.mux.HandleFunc("/partial/sidebar", s.handleSidebarPartial)
 
 	if s.uiCaps.GitignoreToggle {
 		s.mux.HandleFunc("/api/gitignore", s.handleGitignoreStatus)
@@ -55,17 +57,7 @@ func (s *Server) setupRoutes() {
 	logger.Log.Info("routes configured")
 }
 
-func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-
-	if s.config.DefaultFile != "" && !isHTMXRequest(r) {
-		http.Redirect(w, r, "/file/"+s.config.DefaultFile, http.StatusFound)
-		return
-	}
-
+func (s *Server) uiData() (*models.Tree, []models.SearchableFile, []models.SearchableFile, bool) {
 	s.treeMux.RLock()
 	tree := s.tree
 	s.treeMux.RUnlock()
@@ -80,18 +72,57 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		recentFiles = s.computeRecentFiles(files)
 	}
 
-	indexReady := s.IsIndexReady()
+	return tree, files, recentFiles, s.IsIndexReady()
+}
+
+func countDirs(node *models.Node) int {
+	if node == nil {
+		return 0
+	}
+	count := 0
+	for _, child := range node.Children {
+		if child.IsDir() {
+			count += 1 + countDirs(child)
+		}
+	}
+	return count
+}
+
+func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	if s.config.DefaultFile != "" && !isHTMXRequest(r) {
+		http.Redirect(w, r, "/file/"+s.config.DefaultFile, http.StatusFound)
+		return
+	}
+
+	tree, files, recentFiles, indexReady := s.uiData()
+
+	var dirCount int
+	if tree != nil {
+		dirCount = countDirs(tree.Root)
+	}
 
 	if isHTMXRequest(r) {
 		logger.Log.Debug("rendering HTMX home partial")
-		if err := templates.HomeContent(tree, s.source.Name(), recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+		if err := templates.HomeContent(s.source.Name(), recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home content template", "error", err)
 		}
 	} else {
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(tree, s.source.Name(), s.theme, files, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+		if err := templates.Home(tree, s.source.Name(), s.theme, files, recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
+	}
+}
+
+func (s *Server) handleSidebarPartial(w http.ResponseWriter, r *http.Request) {
+	tree, _, recentFiles, indexReady := s.uiData()
+	if err := components.Sidebar(tree, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+		logger.Log.Error("failed to render sidebar partial", "error", err)
 	}
 }
 
@@ -144,11 +175,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	title := filepath.Base(filePath)
 	isHTMX := isHTMXRequest(r)
 
-	var files []models.SearchableFile
-	if v, ok := s.cachedFiles.Load().([]models.SearchableFile); ok {
-		files = v
-	}
-	indexReady := s.IsIndexReady()
+	tree, files, recentFiles, indexReady := s.uiData()
 
 	if info.IsDir() {
 		s.treeMux.RLock()
@@ -168,7 +195,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, files, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
+			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, files, tree, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory template", "error", renderErr)
 			}
 		}
@@ -222,7 +249,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, files, indexReady, fileBacklinks, meta, s.uiCaps).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, files, tree, recentFiles, indexReady, fileBacklinks, meta, s.uiCaps).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}

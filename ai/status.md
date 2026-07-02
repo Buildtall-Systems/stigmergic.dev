@@ -4,6 +4,19 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-02
 
+### UI Redesign — Phase 1 Complete (layout substrate), awaiting operator verification
+
+On `feature/ui-redesign` (from develop), per `thoughts/plans/2026-07-02_15-17-17_stigmergic-ui-redesign.md`:
+
+- **Three-pane shell**: `layout.templ` body is now header + flex row of persistent `#sidebar` (new `components.Sidebar` — tree + compact Recent list, collapsible via header chevron, hidden below `md`), `#content` (the sole htmx swap target replacing `#main`, independent scroll container), and `#outline` (empty placeholder rail, hidden below 1100px). Layout signature gains `tree` + `recentFiles`.
+- **Header refined**: live indicator removed (`live_indicator.templ` + generated file deleted; `.indicator-*` CSS and keyframes dropped from themeCSS); right cluster gains Search (dispatches `toggle-palette`, palette listens) and `?` (new `components.Help` overlay with Ctrl+K/S/arrows/?/Esc rows, `helpOverlay()` Alpine factory).
+- **Inline JS extracted** to `internal/embed/web/static/js/app/{render,nav,events,ui}.js` — behavior-preserving split of the ~220-line layout.templ script block. New in nav.js: `syncCurrentFile()` highlights the current file in the tree (`data-path` attributes, `.tree-item-current` style) and auto-expands ancestor folders. events.js keeps the bare-string SSE contract but refetches `#content` and refreshes `/partial/sidebar`; `S` now toggles source view via a window event. scrollProgress tracks `#content` scroll (body no longer scrolls). tailwind.config.js gains the JS dir in content globs so extracted class strings survive `make css`.
+- **Navigation normalized**: breadcrumbs (markdown + directory), tree, recent, and palette file-selection all swap `#content` with push-url; palette uses `htmx.ajax` sourced from its root carrying `hx-push-url="true"` (htmx resolves inherited attributes from the ajax `source`). Inline `onmouseover/onmouseout` handlers dropped from recent.templ (covered by existing `[data-nav-item]` CSS).
+- **Home is an activity surface**: tree moved out of `HomeContent`; Recently Updated primary, corpus summary line (file/dir counts + last change) via new `countDirs` and shared `uiData()` helper in handlers.go; `/partial/sidebar` route added for scoped SSE refresh.
+- **Tests**: layout landmark/indicator-absence assertions, tree `data-path`/`#content` targeting, breadcrumb htmx quartet, sidebar-partial handler test, htmx content-partial purity test (no sidebar markup, no full page).
+
+Verification: generate/css/lint/test/build all green via run_silent (lint 0 findings, tests race-clean). Halted for operator manual verification before commit.
+
 ### ContentSource Abstraction — Phase 4 Complete (v0.3.0 released, prod cut over to embedded site)
 
 - **Phase 3 committed** as `f08689d` after operator review of site pages and the `serve ./example` demo check.

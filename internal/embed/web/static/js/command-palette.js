@@ -258,7 +258,7 @@ function commandPalette() {
 				if (item.type === 'command') {
 					item.action();
 				} else {
-					window.location.href = '/file' + item.path;
+					htmx.ajax('GET', '/file' + item.path, { source: this.$root, target: '#content', swap: 'innerHTML' });
 				}
 			}
 		}
