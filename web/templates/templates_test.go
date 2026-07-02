@@ -229,6 +229,46 @@ func TestLayoutFollowToggleGatedOnCapability(t *testing.T) {
 	}
 }
 
+func TestMarkdownFullPageRendersOutlineRail(t *testing.T) {
+	t.Parallel()
+
+	outline := []models.OutlineEntry{
+		{Level: 2, Text: "Section One", ID: "section-one"},
+		{Level: 3, Text: "Detail", ID: "detail"},
+	}
+
+	var sb strings.Builder
+	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), []models.SearchableFile{}, nil, []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline).Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render: %v", err)
+	}
+
+	html := sb.String()
+	if !strings.Contains(html, `href="#section-one"`) {
+		t.Error("expected outline link anchored to heading id")
+	}
+	if !strings.Contains(html, `data-outline-target="detail"`) {
+		t.Error("expected outline link to carry data-outline-target")
+	}
+	if !strings.Contains(html, "On this page") {
+		t.Error("expected outline rail heading")
+	}
+}
+
+func TestLayoutOutlineRailEmptyWithoutEntries(t *testing.T) {
+	t.Parallel()
+
+	var sb strings.Builder
+	err := Home(nil, testTreeRoot, testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render: %v", err)
+	}
+
+	if strings.Contains(sb.String(), "On this page") {
+		t.Error("outline rail must render empty on pages without a document outline")
+	}
+}
+
 func TestMarkdownBreadcrumbsUseHTMXSwaps(t *testing.T) {
 	t.Parallel()
 

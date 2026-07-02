@@ -103,6 +103,15 @@ func themeCSS(thm *theme.Theme) string {
 	}
 	.tree-item-current {
 		background-color: var(--selection-color);
+	}
+	.outline-link {
+		color: var(--comment-color);
+	}
+	.outline-link:hover {
+		color: var(--fg-color);
+	}
+	.outline-link-active {
+		color: var(--green-color);
 	}</style>`
 }
 
@@ -204,7 +213,7 @@ templ BuildtallLogo() {
 	</svg>
 }
 
-templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities, outline []models.OutlineEntry) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -305,7 +314,9 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, tree
 				<main id="content" class="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
 					{ children... }
 				</main>
-				<aside id="outline" class="hidden min-[1100px]:block w-56 shrink-0 overflow-y-auto p-4" style="border-left: 1px solid var(--border-color);"></aside>
+				<aside id="outline" class="hidden min-[1100px]:block w-56 shrink-0 overflow-y-auto p-4" style="border-left: 1px solid var(--border-color);">
+						@Outline(outline)
+					</aside>
 			</div>
 		</body>
 	</html>

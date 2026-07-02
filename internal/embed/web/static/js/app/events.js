@@ -49,11 +49,13 @@ document.addEventListener('DOMContentLoaded', function() {
 	renderWiremd(document.body);
 	initCodeCopyButtons();
 	syncCurrentFile();
+	initScrollspy();
 	if (window.location.pathname === '/') {
 		initKeyboardNav();
 	}
 	document.addEventListener('keydown', handleNavKeydown);
 	document.addEventListener('keydown', handleSourceKeydown);
+	document.addEventListener('click', handleOutlineClick);
 
 	document.body.addEventListener('htmx:afterSwap', function(evt) {
 		renderMath(evt.detail.target);
@@ -63,12 +65,21 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (evt.detail.target.id === 'content') {
 			evt.detail.target.scrollTop = 0;
 			syncCurrentFile();
+			initScrollspy();
 			if (window.location.pathname === '/') {
 				initKeyboardNav();
 			}
 		}
 		if (evt.detail.target.id === 'sidebar') {
 			syncCurrentFile();
+		}
+	});
+
+	// The outline rail arrives as an out-of-band fragment; htmx may process
+	// it before or after the main #content swap, so both paths re-init.
+	document.body.addEventListener('htmx:oobAfterSwap', function(evt) {
+		if (evt.detail.target.id === 'outline') {
+			initScrollspy();
 		}
 	});
 

@@ -111,11 +111,20 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		if err := templates.HomeContent(s.source.Name(), recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home content template", "error", err)
 		}
+		s.renderOutlineOOB(w, r, nil)
 	} else {
 		logger.Log.Debug("rendering full home page")
 		if err := templates.Home(tree, s.source.Name(), s.theme, files, recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
+	}
+}
+
+// renderOutlineOOB appends the out-of-band outline-rail fragment to an htmx
+// partial response: entries for markdown documents, nil to clear the rail.
+func (s *Server) renderOutlineOOB(w http.ResponseWriter, r *http.Request, outline []models.OutlineEntry) {
+	if err := components.OutlineOOB(outline).Render(r.Context(), w); err != nil {
+		logger.Log.Error("failed to render outline OOB fragment", "error", err)
 	}
 }
 
@@ -193,6 +202,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			if renderErr := templates.DirectoryContent(breadcrumbs, node, s.source.Name()).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory content template", "error", renderErr)
 			}
+			s.renderOutlineOOB(w, r, nil)
 		} else {
 			logger.Log.Debug("rendering full directory page")
 			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, files, tree, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
@@ -242,14 +252,17 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		relativePath = computeBuildtallRelativePath(rooted.Root(), filePath)
 	}
 
+	outline := markdown.ExtractOutline(content)
+
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
 		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.source.Name(), relativePath, fileBacklinks, meta, s.uiCaps).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown content template", "error", renderErr)
 		}
+		s.renderOutlineOOB(w, r, outline)
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, files, tree, recentFiles, indexReady, fileBacklinks, meta, s.uiCaps).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, files, tree, recentFiles, indexReady, fileBacklinks, meta, s.uiCaps, outline).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}

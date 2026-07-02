@@ -4,6 +4,17 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-02
 
+### UI Redesign — Phase 3 Complete (document outline + scrollspy), awaiting operator verification
+
+Phase 2 committed as `a41e4c7` after operator verification. Phase 3 on `feature/ui-redesign`:
+
+- **`internal/markdown/outline.go`** (new): `ExtractOutline` — AST walk collecting level/text/anchor-id per heading, per the backlinks.go pattern. Parser mirrors `Parse`'s heading-affecting config (AutoHeadingID + frontmatter extender, so metadata blocks aren't misread as setext headings and ids match the rendered HTML exactly). Heading text flattened via manual inline-node recursion (no deprecated `Node.Text`). `OutlineEntry` model in `internal/models` alongside `BacklinkEntry`.
+- **Outline rail rendering**: new `components.Outline` (nav list, level-indented, `data-outline-target` per entry) rendered two ways — full pages via a new `outline` param on `Layout` (Home/Directory pass nil), htmx partials via `components.OutlineOOB` (`hx-swap-oob="innerHTML"` against the persistent `#outline` aside), appended by a shared `renderOutlineOOB` helper after every `#content` partial: entries for markdown, nil for home/directory (clears the rail).
+- **Scrollspy** (`nav.js`): IntersectionObserver rooted on `#content` (the scroll container, not the viewport), `-60%` bottom rootMargin; active = first visible heading, falling back to the last heading scrolled past; outline clicks smooth-scroll via `scrollIntoView`. Re-inited on DOMContentLoaded, `#content` afterSwap, and `#outline` oobAfterSwap (htmx OOB ordering relative to the main swap is not assumed). `.outline-link`/`-active` colors in themeCSS.
+- **Tests**: `ExtractOutline` table tests (nested levels, duplicate slugs → `-1` suffix, setext, empty, inline formatting — goldmark's id slug includes link destinations, verified against real behavior — frontmatter-not-a-heading); template tests for rail markup + anchor hrefs and empty-rail on non-document pages; handler tests asserting the OOB fragment with known heading in markdown partials and cleared rail in home partials.
+
+Verification: generate/css/lint/test/build all green via run_silent (lint 0 findings, tests race-clean). Halted for operator manual verification before commit.
+
 ### UI Redesign — Phase 2 Complete (structured SSE + follow mode), awaiting operator verification
 
 Phase 1 committed as `a3a13a0` after operator verification. Phase 2 on `feature/ui-redesign`:

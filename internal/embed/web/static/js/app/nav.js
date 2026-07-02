@@ -55,6 +55,80 @@ function syncCurrentFile() {
 	})
 }
 
+var outlineObserver = null
+
+function setActiveOutlineLink(id) {
+	document.querySelectorAll('#outline [data-outline-target]').forEach(function(link) {
+		link.classList.toggle('outline-link-active', link.getAttribute('data-outline-target') === id)
+	})
+}
+
+// initScrollspy rebuilds the outline observer for the current document.
+// Idempotent: called after every #content or #outline swap; tears down the
+// previous observer first. #content is the scroll container, so it is the
+// observer root — not the viewport.
+function initScrollspy() {
+	if (outlineObserver) {
+		outlineObserver.disconnect()
+		outlineObserver = null
+	}
+	var links = document.querySelectorAll('#outline [data-outline-target]')
+	if (!links.length) return
+	var content = document.getElementById('content')
+	if (!content) return
+
+	var headings = []
+	links.forEach(function(link) {
+		var heading = document.getElementById(link.getAttribute('data-outline-target'))
+		if (heading) headings.push(heading)
+	})
+	if (!headings.length) return
+
+	var visible = new Set()
+	outlineObserver = new IntersectionObserver(function(entries) {
+		entries.forEach(function(entry) {
+			if (entry.isIntersecting) {
+				visible.add(entry.target.id)
+			} else {
+				visible.delete(entry.target.id)
+			}
+		})
+		var active = null
+		for (var i = 0; i < headings.length; i++) {
+			if (visible.has(headings[i].id)) {
+				active = headings[i].id
+				break
+			}
+		}
+		if (!active) {
+			// Between sections: the section being read is the one whose
+			// heading most recently scrolled off the top.
+			var contentTop = content.getBoundingClientRect().top
+			for (var j = headings.length - 1; j >= 0; j--) {
+				if (headings[j].getBoundingClientRect().top < contentTop) {
+					active = headings[j].id
+					break
+				}
+			}
+		}
+		if (active) setActiveOutlineLink(active)
+	}, {root: content, rootMargin: '0px 0px -60% 0px'})
+
+	headings.forEach(function(h) {
+		outlineObserver.observe(h)
+	})
+}
+
+function handleOutlineClick(evt) {
+	var link = evt.target.closest('#outline [data-outline-target]')
+	if (!link) return
+	var heading = document.getElementById(link.getAttribute('data-outline-target'))
+	if (!heading) return
+	evt.preventDefault()
+	heading.scrollIntoView({behavior: 'smooth', block: 'start'})
+	setActiveOutlineLink(heading.id)
+}
+
 function expandAncestors(item) {
 	var children = item.closest('.directory-children')
 	while (children) {

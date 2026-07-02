@@ -396,6 +396,86 @@ func TestWatchDirAssetNotFound(t *testing.T) {
 	}
 }
 
+func TestHTMXMarkdownIncludesOutlineOOB(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "doc.md", "# Title\n\n## Section One\n\ntext\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/file/doc.md", port)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set("HX-Request", "true")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to get markdown partial: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	body := string(b)
+
+	if !strings.Contains(body, `id="outline" hx-swap-oob="innerHTML"`) {
+		t.Error("expected out-of-band outline fragment in markdown partial")
+	}
+	if !strings.Contains(body, `data-outline-target="section-one"`) {
+		t.Error("expected outline entry for known heading")
+	}
+}
+
+func TestHTMXHomeClearsOutlineOOB(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "doc.md", "# Title\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/", port)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set("HX-Request", "true")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to get home partial: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	body := string(b)
+
+	if !strings.Contains(body, `id="outline" hx-swap-oob="innerHTML"`) {
+		t.Error("expected out-of-band outline fragment in home partial")
+	}
+	if strings.Contains(body, "data-outline-target") {
+		t.Error("home partial must clear the outline rail, not populate it")
+	}
+}
+
 func TestSSEStreamEnvelopeFraming(t *testing.T) {
 	t.Parallel()
 
