@@ -368,6 +368,13 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, files []mode
 										<input type="radio" name="follow-scope" value="dir" :checked="$store.follow.scope === 'dir'" @change="$store.follow.setScope('dir')"/>
 										<span>Current directory only</span>
 									</label>
+									<div class="pt-2 space-y-2" style="border-top: 1px solid var(--border-color);">
+										<p class="text-sm font-semibold">Behavior</p>
+										<label class="flex items-center gap-2 text-sm cursor-pointer" title="When following, navigating by hand pauses follow so a change elsewhere doesn't pull you away from what you're reading. Press F or click Follow to resume.">
+											<input type="checkbox" :checked="$store.follow.autoPause" @change="$store.follow.setAutoPause($event.target.checked)"/>
+											<span>Auto-pause on navigation</span>
+										</label>
+									</div>
 								</div>
 							</div>
 						}

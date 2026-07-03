@@ -22,6 +22,7 @@ document.addEventListener('alpine:init', function() {
 	Alpine.store('follow', {
 		enabled: localStorage.getItem('stigmergic-follow') === 'true',
 		paused: false,
+		autoPause: localStorage.getItem('stigmergic-follow-autopause') === 'true',
 		scope: localStorage.getItem('stigmergic-follow-scope') === 'dir' ? 'dir' : 'corpus',
 		pendingPath: null,
 		timer: null,
@@ -49,6 +50,14 @@ document.addEventListener('alpine:init', function() {
 		setScope(scope) {
 			this.scope = scope
 			localStorage.setItem('stigmergic-follow-scope', scope)
+		},
+
+		// Disabling auto-pause while paused resumes immediately: with the
+		// option off there is no UI state that explains a stranded pause.
+		setAutoPause(value) {
+			this.autoPause = value
+			localStorage.setItem('stigmergic-follow-autopause', String(value))
+			if (!value) this.paused = false
 		},
 
 		pause() {
@@ -95,6 +104,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (!window.Alpine) return
 		var store = Alpine.store('follow')
 		if (!store) return
+		if (!store.autoPause) return
 		if (store.selfNav || window.stigmergicProgrammaticNav) return
 		var target = evt.detail.target
 		if (target && target.id === 'content') store.pause()
@@ -103,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	window.addEventListener('popstate', function() {
 		if (!window.Alpine) return
 		var store = Alpine.store('follow')
-		if (store) store.pause()
+		if (store && store.autoPause) store.pause()
 	})
 
 	document.addEventListener('keydown', handleFollowKeydown)
