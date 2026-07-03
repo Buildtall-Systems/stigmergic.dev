@@ -2,6 +2,27 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-07-03
+
+### UI Redesign — Phase 5 Complete (theme toggle, typography, login theming), committed `a6735ec`
+
+Phase 4 committed as `eb23587` after operator verification. Phase 5 on `feature/ui-redesign` — all five plan phases now committed and operator-verified:
+
+- **Theme system** (`internal/theme`): `Theme` gains `ChromaStyle`/`MermaidTheme` pairings (TOML keys: iceberg-dark → nord/dark, iceberg-light → github/default) and a load-time `ChromaCSS` — the chroma stylesheet generated per theme and scoped under `[data-theme="name"]` (new `chroma.go`; WriteCSS output shape verified empirically before implementation; unknown chroma styles fail at load). New `LoadEmbedded()` loads every embedded palette.
+- **Layout** (`layout.templ`): `ThemeCSS(thm, themes)` emits `:root` boot vars + per-theme `[data-theme]` variable blocks + each theme's scoped chroma CSS + shared component rules; `PrePaintScript` (the single deliberate inline script, first in `<head>`) applies the localStorage theme attribute before first paint; `theme-config` JSON registry (boot/order/mermaid map); mermaid init switched to `startOnLoad: false` with theme-aware selection; header gains a Theme control between Follow and `?`. `Layout` signature threads `themes []*theme.Theme`; Home/Directory/Markdown templates and server call sites updated (`Server.themes` from `LoadEmbedded`, boot theme prepended when custom).
+- **Class-based highlighting** (`parser.go`): `html.WithClasses(true)` replaces inline nord styles; the four inline-style test assertions became class-based contracts plus an explicit no-inline-styles check.
+- **Client JS**: `ui.js` — `applyTheme`/`cycleTheme`/`handleThemeKeydown` (`T`, input-guarded); `render.js` — mermaid source stashed in `data-mermaid-src` on first render so theme toggles re-render from source; `events.js` — key handler + initial mermaid render wired.
+- **Typography** (`markdown.templ`, `input.css`): article measure `max-w-none` → `max-w-[72ch] mx-auto`; frontmatter card collapses to a "Frontmatter" summary row (Alpine chevron expand); input.css grays reconciled to theme variables (border compat block included), dead `btn`/`btn-secondary`/`markdown-content` utilities removed, chrome-vs-content scale added (13px sidebar/outline, 17px prose).
+- **Login theming**: `LoginLayout(thm, themes)` emits shared `ThemeCSS` + pre-paint script; all hardcoded hex replaced with variables; `auth.LoginHandler` threads themes.
+- **Tests**: theme loader (embedded set, scoped chroma CSS, unknown theme/style failures), layout theme-switching scaffolding (scoped blocks, pre-paint, theme-config, no `startOnLoad: true`), login theme-variable assertions.
+- **Help**: `T — Cycle theme` row.
+
+Verification: generate/css/lint/test/build all green via run_silent (govet shadow findings in theme.go fixed properly, tests race-clean). Operator manually verified both themes, flashless load, chroma+mermaid re-theme, and login page. Committed as `a6735ec`.
+
+Context note: `goldmark-highlighting` cloned to `ai/context/goldmark-highlighting/` (monorepo root) and registered in the root context index.
+
+Next: buildtall-sop → push approval → PR to develop.
+
 ## 2026-07-02
 
 ### UI Redesign — Phase 4 Complete (full-text search), awaiting operator verification
