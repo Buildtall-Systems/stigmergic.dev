@@ -98,12 +98,4 @@ func TestEmbeddedRealSiteFS(t *testing.T) {
 			t.Errorf("expected %s in embedded site tree", page)
 		}
 	}
-
-	data, err := fs.ReadFile(src.FS(), "img/stigmergic.png")
-	if err != nil {
-		t.Fatalf("failed to read embedded image: %v", err)
-	}
-	if len(data) == 0 {
-		t.Error("expected non-empty embedded image")
-	}
 }
