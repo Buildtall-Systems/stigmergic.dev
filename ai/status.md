@@ -4,6 +4,15 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-03
 
+### Fix: keyboard scrolling of the document pane, committed `4274975`
+
+Post-redesign regression: the body became a fixed viewport (`h-screen overflow-hidden`) with independent scroll panes, so native key scrolling (arrows, PageUp/Down, Home/End, Space) no longer reached the document — `#content` was never focusable, and focus sat on the clicked sidebar anchor after navigation. Fix restores native browser scrolling rather than reimplementing keys in JS:
+
+- `layout.templ`: `tabindex="0"` on `<main id="content">` (scrollable regions must be keyboard-focusable per WCAG/axe); `#content:focus { outline: none }`.
+- `events.js`: new `focusContent()` — focuses the pane with `preventScroll: true`, skipping `/` where `initKeyboardNav` owns focus for sidebar tree nav — called at initial load, after each `#content` htmx swap, on bfcache `pageshow`, and on `htmx:historyRestore`.
+
+Verification: generate/lint/test/build green via run_silent; operator verified in LibreWolf (document load, sidebar navigation, back/forward). Known caveat: clicking non-interactive text inside the pane focuses it in Chromium but may drop focus to `<body>` in Firefox forks; a `mousedown` refocus handler is the one-line follow-up if it bites.
+
 ### Possible improvement: palette search ranking (filename precedence + quality/recency)
 
 Investigation of the Phase 4 search surfaced two ranking gaps, noted here as a candidate future unit (not scheduled):
