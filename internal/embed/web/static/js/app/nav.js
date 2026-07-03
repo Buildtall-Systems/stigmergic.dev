@@ -119,6 +119,58 @@ function initScrollspy() {
 	})
 }
 
+// outlineHeadings resolves the outline rail's links to their heading elements
+// in document order — the same list the scrollspy observes.
+function outlineHeadings() {
+	var headings = []
+	document.querySelectorAll('#outline [data-outline-target]').forEach(function(link) {
+		var heading = document.getElementById(link.getAttribute('data-outline-target'))
+		if (heading) headings.push(heading)
+	})
+	return headings
+}
+
+// jumpToSection scrolls to the nearest heading beyond the top of the reading
+// pane in the given direction. Geometry-based rather than active-link-based:
+// backward from mid-section lands on the current section's heading first,
+// matching media-player prev semantics. The 1px tolerance keeps a heading
+// parked exactly at the top from matching itself.
+function jumpToSection(direction) {
+	var content = document.getElementById('content')
+	if (!content) return
+	var headings = outlineHeadings()
+	if (!headings.length) return
+
+	var contentTop = content.getBoundingClientRect().top
+	var target = null
+	if (direction > 0) {
+		for (var i = 0; i < headings.length; i++) {
+			if (headings[i].getBoundingClientRect().top > contentTop + 1) {
+				target = headings[i]
+				break
+			}
+		}
+	} else {
+		for (var j = headings.length - 1; j >= 0; j--) {
+			if (headings[j].getBoundingClientRect().top < contentTop - 1) {
+				target = headings[j]
+				break
+			}
+		}
+	}
+	if (!target) return
+	target.scrollIntoView({behavior: 'smooth', block: 'start'})
+	setActiveOutlineLink(target.id)
+}
+
+function handleSectionKeydown(evt) {
+	if (evt.key !== 'n' && evt.key !== 'N' && evt.key !== 'p' && evt.key !== 'P') return
+	if (evt.ctrlKey || evt.metaKey || evt.altKey) return
+	var t = evt.target
+	if (t && (t.matches('input, textarea, select') || t.isContentEditable)) return
+	jumpToSection(evt.key === 'n' || evt.key === 'N' ? 1 : -1)
+}
+
 function handleOutlineClick(evt) {
 	var link = evt.target.closest('#outline [data-outline-target]')
 	if (!link) return

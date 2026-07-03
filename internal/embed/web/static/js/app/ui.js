@@ -113,6 +113,32 @@ function handleThemeKeydown(evt) {
 	cycleTheme()
 }
 
+// toggleReader flips the [data-reader] attribute that drives the reader-mode
+// CSS (collapsed rails, scaled prose), persists the choice, and notifies the
+// header button's Alpine state via a window event.
+function toggleReader() {
+	var on = !document.documentElement.hasAttribute('data-reader')
+	if (on) {
+		document.documentElement.setAttribute('data-reader', 'true')
+	} else {
+		document.documentElement.removeAttribute('data-reader')
+	}
+	try {
+		localStorage.setItem('stigmergic-reader', on ? 'true' : 'false')
+	} catch (e) {
+		console.warn('reader preference not persisted', e)
+	}
+	window.dispatchEvent(new CustomEvent('reader-toggled'))
+}
+
+function handleReaderKeydown(evt) {
+	if (evt.key !== 'r' && evt.key !== 'R') return
+	if (evt.ctrlKey || evt.metaKey || evt.altKey) return
+	var t = evt.target
+	if (t && (t.matches('input, textarea, select') || t.isContentEditable)) return
+	toggleReader()
+}
+
 function helpOverlay() {
 	return {
 		open: false,

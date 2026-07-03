@@ -446,3 +446,17 @@ Files modified:
 
 PR: https://github.com/Buildtall-Systems/stigmergic.dev/pull/17
 Verification: `make generate && make build && make test` — all pass.
+
+## 2026-07-03
+
+Added n/p section jumping and reader mode (branch `feature/section-jump-keys`).
+
+**Section jumping**: `n`/`p` leap the reading pane to the next/previous outline heading. Geometry-based against the scrollspy's heading list (`nav.js`), smooth scroll + outline highlight, standard modifier/input-target guards.
+
+**Reader mode**: header Reader button or `r` stamps `[data-reader]` on `<html>`. CSS collapses both rails (without touching Alpine `sidebarOpen` state) and scales `.prose` to 2em — the 72ch cap widens with the font, so the column grows toward screen width at constant line measure while the header keeps its zoom. Persisted via localStorage, applied in `PrePaintScript` to avoid rail-flash on reload. Help overlay documents N/P/R.
+
+**Toolchain fix required en route**: lint failed on `undefined: templ.ResolveAttributeValue` — devshell templ v0.3.943 (stale flake.lock) silently refused to regenerate templates (`updates=0`), go.mod pinned v0.3.960, stale artifacts stamped v0.3.1020. Bumped nixpkgs input (devshell templ now v0.3.1020), matched go.mod, resynced vendor/ (required: `vendorHash = null` consumes it).
+
+Commits: `eefc58f` (toolchain), `e8deffc` (features). Verification: `make build && make lint && make test` in devshell — all pass. Operator verified both features in browser.
+
+Remodeled the embedded site landing page (`site/content/index.md`): themed HTML hero with download CTAs, responsive feature-card grid, one-per-line keyboard shortcut list — all bare HTML blocks through the existing `WithUnsafe()` pipeline, styled with theme variables and em units so themes and reader mode compose. Stale screenshots removed (operator will retake); dropped the embedded-image assertion from `TestEmbeddedRealSiteFS` accordingly. Commit `9723e4a`. Verification: build, lint, tests all pass; operator reviewed in browser.
