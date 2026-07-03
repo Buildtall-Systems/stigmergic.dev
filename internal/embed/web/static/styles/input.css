@@ -61,3 +61,17 @@
     @apply bg-gray-50 text-gray-900;
   }
 }
+
+/* Reader mode: [data-reader] on <html> collapses both rails and scales the
+   document. The prose column is capped in ch units, so the em bump widens
+   the column proportionally while line measure stays constant. !important
+   outranks the sidebar's Alpine x-show inline style without touching its
+   sidebarOpen state. */
+[data-reader] #sidebar,
+[data-reader] #outline {
+  display: none !important;
+}
+
+[data-reader] #content .prose {
+  font-size: 2em;
+}

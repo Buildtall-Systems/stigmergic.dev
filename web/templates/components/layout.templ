@@ -55,10 +55,11 @@ func ThemeCSS(thm *theme.Theme, themes []*theme.Theme) string {
 	return b.String()
 }
 
-// PrePaintScript applies the persisted theme attribute before first paint —
-// the one script that must stay inline to avoid a flash of the boot theme.
+// PrePaintScript applies the persisted theme and reader-mode attributes
+// before first paint — the one script that must stay inline to avoid a flash
+// of the boot theme or of rails that reader mode collapses.
 func PrePaintScript(bootTheme string) string {
-	return `<script>(function(){var t=null;try{t=localStorage.getItem('stigmergic-theme')}catch(e){}document.documentElement.setAttribute('data-theme',t||` + strconv.Quote(bootTheme) + `)})()</script>`
+	return `<script>(function(){var t=null,r=null;try{t=localStorage.getItem('stigmergic-theme');r=localStorage.getItem('stigmergic-reader')}catch(e){}document.documentElement.setAttribute('data-theme',t||` + strconv.Quote(bootTheme) + `);if(r==='true'){document.documentElement.setAttribute('data-reader','true')}})()</script>`
 }
 
 // ThemeConfig is the client-side theme registry emitted as JSON: the boot
@@ -378,6 +379,15 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, files []mode
 								</div>
 							</div>
 						}
+						<button
+							x-data="{ reader: document.documentElement.hasAttribute('data-reader') }"
+							@reader-toggled.window="reader = document.documentElement.hasAttribute('data-reader')"
+							@click="toggleReader()"
+							title="Toggle reader mode (R)"
+							class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer"
+							style="background-color: var(--bg-color); border: 1px solid var(--border-color);"
+							:style="reader ? 'color: var(--green-color); font-weight: 600;' : 'color: var(--comment-color);'"
+						>Reader</button>
 						<button @click="cycleTheme()" title="Cycle theme (T)" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">Theme</button>
 						<button @click="$dispatch('toggle-help')" title="Keyboard shortcuts" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">?</button>
 					</div>
