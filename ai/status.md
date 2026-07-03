@@ -4,6 +4,15 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-03
 
+### Follow mode persistence: auto-pause now opt-in, committed `410bed7`
+
+Follow auto-paused on every user-initiated `#content` load (`htmx:beforeRequest`) and on `popstate`, which the operator experienced as the toggle flipping off whenever a new document was opened. Decision: follow stays on until manually toggled; auto-pause becomes an opt-in behavior.
+
+- `follow.js`: new persisted `autoPause` preference (localStorage `stigmergic-follow-autopause`, default off) gates both pause triggers; `setAutoPause(value)` persists and, when disabling while paused, clears `paused` so follow resumes immediately (no stranded pause the UI can't explain). The `selfNav`/`stigmergicProgrammaticNav` exemptions remain for when auto-pause is on.
+- `layout.templ`: follow dropdown gains a "Behavior" section below the scope radios — "Auto-pause on navigation" checkbox with a tooltip explaining the pause-and-F-to-resume behavior.
+
+Verification: generate/lint/test/build green via run_silent; operator verified in LibreWolf (persistence across navigation and back/forward, opt-in pause + F resume, resume-on-disable, reload persistence, tooltip).
+
 ### Fix: keyboard scrolling of the document pane, committed `4274975`
 
 Post-redesign regression: the body became a fixed viewport (`h-screen overflow-hidden`) with independent scroll panes, so native key scrolling (arrows, PageUp/Down, Home/End, Space) no longer reached the document — `#content` was never focusable, and focus sat on the clicked sidebar anchor after navigation. Fix restores native browser scrolling rather than reimplementing keys in JS:
