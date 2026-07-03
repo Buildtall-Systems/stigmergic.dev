@@ -2,34 +2,93 @@ package components
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 )
 
-func themeCSS(thm *theme.Theme) string {
-	return `<style type="text/css">:root {
-		--bg-color: ` + thm.Colors.Background + `;
-		--fg-color: ` + thm.Colors.Foreground + `;
-		--bg-alt-color: ` + thm.Colors.BackgroundAlt + `;
-		--comment-color: ` + thm.Colors.Comment + `;
-		--current-line-color: ` + thm.Colors.CurrentLine + `;
-		--selection-color: ` + thm.Colors.Selection + `;
-		--line-number-color: ` + thm.Colors.LineNumber + `;
-		--line-number-active-color: ` + thm.Colors.LineNumberActive + `;
-		--red-color: ` + thm.Colors.Red + `;
-		--orange-color: ` + thm.Colors.Orange + `;
-		--yellow-color: ` + thm.Colors.Yellow + `;
-		--green-color: ` + thm.Colors.Green + `;
-		--cyan-color: ` + thm.Colors.Cyan + `;
-		--blue-color: ` + thm.Colors.Blue + `;
-		--purple-color: ` + thm.Colors.Purple + `;
-		--link-color: ` + thm.Colors.Link + `;
-		--link-hover-color: ` + thm.Colors.LinkHover + `;
-		--code-bg-color: ` + thm.Colors.CodeBg + `;
-		--code-fg-color: ` + thm.Colors.CodeFg + `;
-		--border-color: ` + thm.Colors.BorderColor + `;
+func themeVars(c theme.Colors) string {
+	return `
+		--bg-color: ` + c.Background + `;
+		--fg-color: ` + c.Foreground + `;
+		--bg-alt-color: ` + c.BackgroundAlt + `;
+		--comment-color: ` + c.Comment + `;
+		--current-line-color: ` + c.CurrentLine + `;
+		--selection-color: ` + c.Selection + `;
+		--line-number-color: ` + c.LineNumber + `;
+		--line-number-active-color: ` + c.LineNumberActive + `;
+		--red-color: ` + c.Red + `;
+		--orange-color: ` + c.Orange + `;
+		--yellow-color: ` + c.Yellow + `;
+		--green-color: ` + c.Green + `;
+		--cyan-color: ` + c.Cyan + `;
+		--blue-color: ` + c.Blue + `;
+		--purple-color: ` + c.Purple + `;
+		--link-color: ` + c.Link + `;
+		--link-hover-color: ` + c.LinkHover + `;
+		--code-bg-color: ` + c.CodeBg + `;
+		--code-fg-color: ` + c.CodeFg + `;
+		--border-color: ` + c.BorderColor + `;
+	`
+}
+
+// ThemeCSS emits the boot theme's variables on :root, a [data-theme]-scoped
+// variable block per embedded theme so the pre-paint attribute switches
+// palettes without a round trip, each theme's scoped chroma stylesheet, and
+// the shared component rules. Shared by the main layout and the login page.
+func ThemeCSS(thm *theme.Theme, themes []*theme.Theme) string {
+	var b strings.Builder
+	b.WriteString(`<style type="text/css">:root {`)
+	b.WriteString(themeVars(thm.Colors))
+	b.WriteString("}\n")
+	for _, t := range themes {
+		b.WriteString(`[data-theme="` + t.Name + `"] {`)
+		b.WriteString(themeVars(t.Colors))
+		b.WriteString("}\n")
 	}
+	for _, t := range themes {
+		b.WriteString(t.ChromaCSS)
+	}
+	b.WriteString(sharedThemeRules)
+	b.WriteString(`</style>`)
+	return b.String()
+}
+
+// PrePaintScript applies the persisted theme attribute before first paint —
+// the one script that must stay inline to avoid a flash of the boot theme.
+func PrePaintScript(bootTheme string) string {
+	return `<script>(function(){var t=null;try{t=localStorage.getItem('stigmergic-theme')}catch(e){}document.documentElement.setAttribute('data-theme',t||` + strconv.Quote(bootTheme) + `)})()</script>`
+}
+
+// ThemeConfig is the client-side theme registry emitted as JSON: the boot
+// theme, the cycle order, and each theme's paired mermaid theme.
+type ThemeConfig struct {
+	Boot    string            `json:"boot"`
+	Order   []string          `json:"order"`
+	Mermaid map[string]string `json:"mermaid"`
+}
+
+func buildThemeConfig(thm *theme.Theme, themes []*theme.Theme) ThemeConfig {
+	cfg := ThemeConfig{Boot: thm.Name, Mermaid: map[string]string{thm.Name: thm.MermaidTheme}}
+	for _, t := range themes {
+		cfg.Order = append(cfg.Order, t.Name)
+		cfg.Mermaid[t.Name] = t.MermaidTheme
+	}
+	bootListed := false
+	for _, name := range cfg.Order {
+		if name == thm.Name {
+			bootListed = true
+			break
+		}
+	}
+	if !bootListed {
+		cfg.Order = append([]string{thm.Name}, cfg.Order...)
+	}
+	return cfg
+}
+
+const sharedThemeRules = `
 	body {
 		background-color: var(--bg-color);
 		color: var(--fg-color);
@@ -101,32 +160,19 @@ func themeCSS(thm *theme.Theme) string {
 	.prose code::after {
 		content: none;
 	}
-	.indicator-connecting {
-		background-color: var(--comment-color);
+	.tree-item-current {
+		background-color: var(--selection-color);
 	}
-	.indicator-connected {
-		background-color: var(--green-color);
+	.outline-link {
+		color: var(--comment-color);
 	}
-	.indicator-disconnected {
-		background-color: var(--red-color);
+	.outline-link:hover {
+		color: var(--fg-color);
 	}
-	.indicator-reconnecting {
-		background-color: var(--yellow-color);
-		animation: indicator-spin 1s linear infinite;
+	.outline-link-active {
+		color: var(--green-color);
 	}
-	.indicator-reloading {
-		background-color: var(--green-color);
-		animation: indicator-pulse 0.5s ease-in-out;
-	}
-	@keyframes indicator-pulse {
-		0%, 100% { opacity: 1; transform: scale(1); }
-		50% { opacity: 0.6; transform: scale(1.4); }
-	}
-	@keyframes indicator-spin {
-		from { transform: rotate(0deg); }
-		to { transform: rotate(360deg); }
-	}</style>`
-}
+`
 
 templ BuildtallLogo() {
 	<svg class="h-8 w-8" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" style="fill: var(--fg-color);">
@@ -226,26 +272,32 @@ templ BuildtallLogo() {
 	</svg>
 }
 
-templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities, outline []models.OutlineEntry) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
+			@templ.Raw(PrePaintScript(thm.Name))
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<meta name="description" content="Markdown file watcher and renderer"/>
 			<title>{ title } - stigmergic</title>
 			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
 			<link rel="stylesheet" href="/static/styles/output.css"/>
-			@templ.Raw(themeCSS(thm))
+			@templ.Raw(ThemeCSS(thm, themes))
 			<link rel="stylesheet" href="/static/css/katex.min.css"/>
 			<script defer src="/static/js/katex.min.js"></script>
 			<script defer src="/static/js/katex-auto-render.min.js"></script>
 			<script src="/static/js/mermaid.min.js"></script>
+			@templ.JSONScript("theme-config", buildThemeConfig(thm, themes))
 			<script>
-				mermaid.initialize({
-					startOnLoad: true,
-					theme: 'dark'
-				});
+				(function(){
+					var cfg = JSON.parse(document.getElementById('theme-config').textContent);
+					var active = document.documentElement.getAttribute('data-theme') || cfg.boot;
+					mermaid.initialize({
+						startOnLoad: false,
+						theme: cfg.mermaid[active] || 'dark'
+					});
+				})();
 			</script>
 			<script src="/static/js/wiremd.min.js"></script>
 			<script src="/static/js/htmx.min.js"></script>
@@ -254,245 +306,84 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, inde
 			<script src="/static/js/alpine-focus.min.js" defer></script>
 			<script src="/static/js/alpine.min.js" defer></script>
 			@templ.JSONScript("markdown-files", files)
-			<script>
-				function toggleDirectory(element) {
-					const isExpanded = element.getAttribute('data-expanded') === 'true';
-					const parent = element.parentElement;
-					const childrenDiv = parent.querySelector('.directory-children');
-					const chevron = element.querySelector('.chevron-btn svg');
-
-					if (isExpanded) {
-						childrenDiv.style.display = 'none';
-						chevron.classList.remove('rotate-90');
-						element.setAttribute('data-expanded', 'false');
-					} else {
-						childrenDiv.style.display = 'block';
-						chevron.classList.add('rotate-90');
-						element.setAttribute('data-expanded', 'true');
-					}
-				}
-
-				function renderMath(element) {
-					renderMathInElement(element, {
-						delimiters: [
-							{left: '$$', right: '$$', display: true},
-							{left: '$', right: '$', display: false}
-						],
-						throwOnError: false
-					});
-				}
-
-				function renderWiremd(element) {
-					element.querySelectorAll('pre.wiremd').forEach(function(block) {
-						if (block.getAttribute('data-processed') === 'true') return
-						try {
-							var source = block.textContent
-							var result = wiremd.render(source, 'sketch')
-							if (result.css && !document.getElementById('wiremd-styles')) {
-								var style = document.createElement('style')
-								style.id = 'wiremd-styles'
-								style.textContent = result.css
-								document.head.appendChild(style)
-							}
-							var div = document.createElement('div')
-							div.className = 'wiremd-rendered wmd-root wmd-sketch'
-							div.innerHTML = result.html
-							block.parentNode.replaceChild(div, block)
-						} catch (e) {
-							console.warn('wiremd render failed:', e.message)
-							block.setAttribute('data-processed', 'true')
-						}
-					})
-				}
-
-				function scrollProgress() {
-					return {
-						progress: 0,
-						init() {
-							this.updateProgress()
-							window.addEventListener('scroll', () => {
-								this.updateProgress()
-							}, { passive: true })
-						},
-						updateProgress() {
-							var winScroll = document.documentElement.scrollTop || document.body.scrollTop
-							var height = document.documentElement.scrollHeight - document.documentElement.clientHeight
-							this.progress = height > 0 ? (winScroll / height) * 100 : 0
-						}
-					}
-				}
-
-				function initCodeCopyButtons() {
-					document.querySelectorAll('pre').forEach(function(pre) {
-						if (pre.classList.contains('mermaid')) return
-						if (pre.classList.contains('wiremd')) return
-						if (pre.querySelector('.copy-btn')) return
-
-						var wrapper = document.createElement('div')
-						wrapper.className = 'code-block-wrapper relative group'
-						pre.parentNode.insertBefore(wrapper, pre)
-						wrapper.appendChild(pre)
-
-						var btn = document.createElement('button')
-						btn.className = 'copy-btn absolute top-2 right-2 px-2 py-1 text-xs rounded-sm opacity-0 group-hover:opacity-100 transition-opacity'
-						btn.style.cssText = 'background-color: var(--bg-alt-color); border: 1px solid var(--border-color); color: var(--comment-color);'
-						btn.textContent = 'Copy'
-						btn.onclick = function() {
-							var code = pre.querySelector('code') || pre
-							navigator.clipboard.writeText(code.textContent).then(function() {
-								btn.textContent = 'Copied!'
-								btn.style.color = 'var(--green-color)'
-								setTimeout(function() {
-									btn.textContent = 'Copy'
-									btn.style.color = 'var(--comment-color)'
-								}, 2000)
-							})
-						}
-						wrapper.appendChild(btn)
-					})
-				}
-
-				function copyPath(path) {
-					return {
-						copied: false,
-						path: path,
-						copy() {
-							navigator.clipboard.writeText(this.path).then(() => {
-								this.copied = true
-								setTimeout(() => {
-									this.copied = false
-								}, 2000)
-							})
-						}
-					}
-				}
-
-				function rawToggle() {
-					return {
-						showRaw: false,
-						showLineNumbers: false,
-						lines: [],
-						init() {
-							this.loadRawContent()
-							document.body.addEventListener('htmx:afterSwap', () => {
-								this.showRaw = false
-								this.showLineNumbers = false
-								this.loadRawContent()
-							})
-						},
-						loadRawContent() {
-							var el = document.getElementById('raw-content-data')
-							if (el) {
-								try {
-									var content = JSON.parse(el.textContent)
-									this.lines = content.split('\n')
-								} catch (e) {
-									this.lines = []
-								}
-							}
-						},
-						toggle() {
-							this.showRaw = !this.showRaw
-						},
-						get buttonText() {
-							return this.showRaw ? 'Rendered' : 'Source'
-						}
-					}
-				}
-
-				function initKeyboardNav() {
-					document.querySelectorAll('[data-nav-item]').forEach(function(item) {
-						item.style.backgroundColor = ''
-					})
-					var firstItem = document.querySelector('[data-nav-item]')
-					if (firstItem) {
-						firstItem.focus()
-					}
-				}
-
-				function handleNavKeydown(evt) {
-					if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return
-					var active = document.activeElement
-					if (!active || !active.hasAttribute('data-nav-item')) return
-
-					var items = Array.from(document.querySelectorAll('[data-nav-item]'))
-					var idx = items.indexOf(active)
-					if (idx === -1) return
-
-					evt.preventDefault()
-					var nextIdx
-					if (evt.key === 'ArrowDown') {
-						nextIdx = idx + 1 < items.length ? idx + 1 : 0
-					} else {
-						nextIdx = idx - 1 >= 0 ? idx - 1 : items.length - 1
-					}
-					items[nextIdx].focus()
-				}
-
-				document.addEventListener("DOMContentLoaded", function() {
-					renderMath(document.body);
-					renderWiremd(document.body);
-					initCodeCopyButtons();
-					initKeyboardNav();
-					document.addEventListener('keydown', handleNavKeydown);
-
-					document.body.addEventListener('htmx:afterSwap', function(evt) {
-						renderMath(evt.detail.target);
-						renderWiremd(evt.detail.target);
-						initCodeCopyButtons();
-						evt.detail.target.querySelectorAll('pre.mermaid').forEach(function(node, i) {
-							var id = 'mermaid-swap-' + Date.now() + '-' + i;
-							mermaid.render(id, node.textContent).then(function(result) {
-								node.innerHTML = result.svg;
-								node.setAttribute('data-processed', 'true');
-							});
-						});
-						if (evt.detail.target.id === 'main' && window.location.pathname === '/') {
-							initKeyboardNav();
-						}
-					});
-
-					document.body.addEventListener('sse:message', function(evt) {
-						var data = evt.detail ? evt.detail.data : null;
-						if (data === 'index-ready') {
-							document.body.dataset.indexReady = 'true';
-							document.body.dispatchEvent(new CustomEvent('indexReady'));
-							return;
-						}
-						htmx.ajax('GET', window.location.pathname, {target: '#main', swap: 'innerHTML'});
-					});
-
-					window.addEventListener('pageshow', function(evt) {
-						if (evt.persisted && window.location.pathname === '/') {
-							initKeyboardNav();
-						}
-					});
-
-					document.body.addEventListener('htmx:historyRestore', function() {
-						if (window.location.pathname === '/') {
-							initKeyboardNav();
-						}
-					});
-				});
-			</script>
+			<script src="/static/js/app/render.js"></script>
+			<script src="/static/js/app/nav.js"></script>
+			<script src="/static/js/app/events.js"></script>
+			<script src="/static/js/app/follow.js"></script>
+			<script src="/static/js/app/ui.js"></script>
 		</head>
-		<body class="min-h-screen" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) }>
+		<body class="h-screen overflow-hidden flex flex-col" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) } x-data="{ sidebarOpen: true }">
 			<div x-data="scrollProgress()" class="fixed top-0 left-0 w-full h-1 z-50" style="background-color: var(--bg-alt-color);">
 				<div class="h-full transition-all duration-75" :style="{ backgroundColor: 'var(--green-color)', width: progress + '%' }"></div>
 			</div>
 			@CommandPalette()
-			<header style="background-color: var(--bg-alt-color); border-bottom: 1px solid var(--border-color);">
-				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-					<a href="/" class="flex items-center gap-3" style="color: var(--fg-color); text-decoration: none;">
-						@BuildtallLogo()
-						<span class="text-2xl font-bold">stigmergic</span>
-					</a>
-					@LiveIndicator()
+			@Help()
+			<header class="shrink-0" style="background-color: var(--bg-alt-color); border-bottom: 1px solid var(--border-color);">
+				<div class="px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+					<div class="flex items-center gap-2">
+						<button @click="sidebarOpen = !sidebarOpen" title="Toggle sidebar" class="p-1 rounded-md transition-colors hidden md:block" style="color: var(--comment-color);">
+							<svg class="w-5 h-5 transition-transform" :class="sidebarOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+							</svg>
+						</button>
+						<a href="/" class="flex items-center gap-3" style="color: var(--fg-color); text-decoration: none;">
+							@BuildtallLogo()
+							<span class="text-2xl font-bold">stigmergic</span>
+						</a>
+					</div>
+					<div class="flex items-center gap-2">
+						<button @click="$dispatch('toggle-palette')" class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">
+							@IconSearch("w-4 h-4", "")
+							<span>Search</span>
+							<kbd class="px-1.5 py-0.5 rounded text-xs" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">Ctrl+K</kbd>
+						</button>
+						if caps.FollowMode {
+							<div x-data="{ scopeOpen: false }" class="relative">
+								<div class="flex items-center rounded-md" style="background-color: var(--bg-color); border: 1px solid var(--border-color);">
+									<button
+										data-follow-toggle
+										hx-push-url="true"
+										@click="$store.follow.toggle()"
+										title="Toggle follow mode (F)"
+										class="px-3 py-1.5 text-sm rounded-l-md transition-colors cursor-pointer"
+										:style="$store.follow.active ? 'color: var(--green-color); font-weight: 600;' : ($store.follow.enabled ? 'color: var(--orange-color);' : 'color: var(--comment-color);')"
+										x-text="$store.follow.label()"
+									>Follow</button>
+									<button @click="scopeOpen = !scopeOpen" title="Follow scope" class="px-1.5 py-2 rounded-r-md transition-colors cursor-pointer" style="color: var(--comment-color); border-left: 1px solid var(--border-color);">
+										<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+										</svg>
+									</button>
+								</div>
+								<div x-cloak x-show="scopeOpen" @click.outside="scopeOpen = false" class="absolute right-0 top-full mt-1 z-50 w-64 rounded-md shadow-2xl p-3 space-y-2" style="background-color: var(--bg-color); border: 1px solid var(--border-color);">
+									<p class="text-sm font-semibold">Follow scope</p>
+									<label class="flex items-center gap-2 text-sm cursor-pointer">
+										<input type="radio" name="follow-scope" value="corpus" :checked="$store.follow.scope === 'corpus'" @change="$store.follow.setScope('corpus')"/>
+										<span>Entire corpus</span>
+									</label>
+									<label class="flex items-center gap-2 text-sm cursor-pointer">
+										<input type="radio" name="follow-scope" value="dir" :checked="$store.follow.scope === 'dir'" @change="$store.follow.setScope('dir')"/>
+										<span>Current directory only</span>
+									</label>
+								</div>
+							</div>
+						}
+						<button @click="cycleTheme()" title="Cycle theme (T)" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">Theme</button>
+						<button @click="$dispatch('toggle-help')" title="Keyboard shortcuts" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">?</button>
+					</div>
 				</div>
 			</header>
-			<main id="main" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-				{ children... }
-			</main>
+			<div class="flex flex-1 min-h-0">
+				<aside id="sidebar" x-show="sidebarOpen" class="hidden md:block w-64 shrink-0 overflow-y-auto p-3" style="background-color: var(--bg-alt-color); border-right: 1px solid var(--border-color);">
+					@Sidebar(tree, recentFiles, indexReady, caps)
+				</aside>
+				<main id="content" class="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
+					{ children... }
+				</main>
+				<aside id="outline" class="hidden min-[1100px]:block w-56 shrink-0 overflow-y-auto p-4" style="border-left: 1px solid var(--border-color);">
+						@Outline(outline)
+					</aside>
+			</div>
 		</body>
 	</html>
 }

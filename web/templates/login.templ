@@ -1,9 +1,10 @@
 package templates
 
+import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Login(serverURL string) {
-	@components.LoginLayout() {
+templ Login(serverURL string, thm *theme.Theme, themes []*theme.Theme) {
+	@components.LoginLayout(thm, themes) {
 		<div class="container">
 			@components.BuildtallLogo()
 			<h1>stigmergic</h1>

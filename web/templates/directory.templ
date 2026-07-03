@@ -4,8 +4,8 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, thm *theme.Theme, files []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
-	@components.Layout(title, thm, files, indexReady, caps) {
+templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, thm *theme.Theme, themes []*theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+	@components.Layout(title, thm, themes, files, tree, recentFiles, indexReady, caps, nil) {
 		@DirectoryContent(breadcrumbs, node, rootPath)
 	}
 }
@@ -16,7 +16,7 @@ templ DirectoryContent(breadcrumbs []models.Breadcrumb, node *models.Node, rootP
 			<nav class="breadcrumb" aria-label="Breadcrumb">
 				<ol class="flex items-center space-x-2">
 					<li class="inline-flex items-center">
-						<a href="/" class="font-medium transition-colors">
+						<a href="/" hx-get="/" hx-target="#content" hx-swap="innerHTML" hx-push-url="true" class="font-medium transition-colors">
 							{ rootPath }
 						</a>
 					</li>
@@ -27,7 +27,7 @@ templ DirectoryContent(breadcrumbs []models.Breadcrumb, node *models.Node, rootP
 								if i == len(breadcrumbs) - 1 {
 									<span class="font-medium">{ crumb.Name }</span>
 								} else {
-									<a href={ templ.SafeURL(crumb.Path) } class="font-medium transition-colors" style="color: var(--comment-color);">{ crumb.Name }</a>
+									<a href={ templ.SafeURL(crumb.Path) } hx-get={ crumb.Path } hx-target="#content" hx-swap="innerHTML" hx-push-url="true" class="font-medium transition-colors" style="color: var(--comment-color);">{ crumb.Name }</a>
 								}
 							</div>
 						</li>

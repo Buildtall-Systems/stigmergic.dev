@@ -38,7 +38,7 @@ func TestBuildBacklinkIndex(t *testing.T) {
 		{Name: "c.md", Path: "/c.md"},
 	}
 
-	index := BuildBacklinkIndex(os.DirFS(dir), files)
+	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
 
 	entries := index["b.md"]
 	if len(entries) != 2 {
@@ -67,7 +67,7 @@ func TestBuildBacklinkIndexNoLinks(t *testing.T) {
 		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(os.DirFS(dir), files)
+	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
 
 	if len(index) != 0 {
 		t.Errorf("expected empty index, got %d entries", len(index))
@@ -84,7 +84,7 @@ func TestBuildBacklinkIndexSelfLink(t *testing.T) {
 		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(os.DirFS(dir), files)
+	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
 
 	if entries := index["a.md"]; len(entries) != 0 {
 		t.Errorf("expected self-links to be excluded, got %d entries", len(entries))
@@ -103,7 +103,7 @@ func TestBuildBacklinkIndexDuplicateLinks(t *testing.T) {
 		{Name: "b.md", Path: "/b.md"},
 	}
 
-	index := BuildBacklinkIndex(os.DirFS(dir), files)
+	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
 
 	entries := index["b.md"]
 	if len(entries) != 1 {
@@ -121,7 +121,7 @@ func TestBuildBacklinkIndexUnresolved(t *testing.T) {
 		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(os.DirFS(dir), files)
+	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
 
 	if len(index) != 0 {
 		t.Errorf("expected empty index for unresolved links, got %d entries", len(index))

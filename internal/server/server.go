@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -28,9 +29,11 @@ type Server struct {
 	tree            *models.Tree
 	cachedFiles     atomic.Value
 	cachedBacklinks atomic.Value
+	cachedContent   atomic.Value
 	source          source.ContentSource
 	watchable       source.Watchable
 	theme           *theme.Theme
+	themes          []*theme.Theme
 	clients         map[chan string]bool
 	ctx             context.Context
 	cancel          context.CancelFunc
@@ -96,6 +99,22 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 	}
 	logger.Log.Info("theme loaded successfully", "theme", cfg.Theme)
 
+	themes, err := theme.LoadEmbedded()
+	if err != nil {
+		logger.Log.Error("failed to load embedded themes", "error", err)
+		panic(fmt.Sprintf("failed to load embedded themes: %v", err))
+	}
+	bootEmbedded := false
+	for _, t := range themes {
+		if t.Name == thm.Name {
+			bootEmbedded = true
+			break
+		}
+	}
+	if !bootEmbedded {
+		themes = append([]*theme.Theme{thm}, themes...)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var watchable source.Watchable
@@ -117,8 +136,10 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 			RecentlyUpdated: timestamped,
 			GitignoreToggle: gitignoreAware,
 			CopyPath:        rooted,
+			FollowMode:      watchable != nil,
 		},
 		theme:          thm,
+		themes:         themes,
 		clients:        make(map[chan string]bool),
 		ctx:            ctx,
 		cancel:         cancel,
@@ -129,6 +150,7 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 
 	s.cachedFiles.Store([]models.SearchableFile{})
 	s.cachedBacklinks.Store(models.BacklinkIndex{})
+	s.cachedContent.Store(searchIndex{})
 
 	s.wg.Add(1)
 	go s.initialScan()
@@ -202,6 +224,49 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
+// sseEvent is the JSON envelope pushed to SSE clients. Type is "reload"
+// (Path names the changed file when known; empty means refresh regardless)
+// or "index-ready".
+type sseEvent struct {
+	Type string `json:"type"`
+	Path string `json:"path,omitempty"`
+}
+
+const (
+	sseTypeReload     = "reload"
+	sseTypeIndexReady = "index-ready"
+)
+
+func encodeSSEEvent(eventType, path string) (string, bool) {
+	payload, err := json.Marshal(sseEvent{Type: eventType, Path: path})
+	if err != nil {
+		logger.Log.Error("failed to marshal SSE event", "error", err, "event_type", eventType, "path", path)
+		return "", false
+	}
+	return string(payload), true
+}
+
+func (s *Server) broadcast(payload string) {
+	s.clientsMux.RLock()
+	defer s.clientsMux.RUnlock()
+	logger.Log.Debug("broadcasting to SSE clients", "count", len(s.clients), "payload", payload)
+	for client := range s.clients {
+		select {
+		case client <- payload:
+		default:
+			logger.Log.Warn("client channel full, skipping")
+		}
+	}
+}
+
+func (s *Server) broadcastChange(path string) {
+	payload, ok := encodeSSEEvent(sseTypeReload, path)
+	if !ok {
+		return
+	}
+	s.broadcast(payload)
+}
+
 func (s *Server) broadcastEvents() {
 	logger.Log.Info("broadcast events goroutine started")
 	defer func() {
@@ -224,18 +289,7 @@ func (s *Server) broadcastEvents() {
 
 			s.updateTree()
 
-			s.clientsMux.RLock()
-			clientCount := len(s.clients)
-			logger.Log.Debug("active SSE clients", "count", clientCount)
-			for client := range s.clients {
-				select {
-				case client <- "reload":
-					logger.Log.Debug("sent event to client")
-				default:
-					logger.Log.Warn("client channel full, skipping")
-				}
-			}
-			s.clientsMux.RUnlock()
+			s.broadcastChange(event.Path)
 		case err, ok := <-s.watchable.Errors():
 			if !ok {
 				logger.Log.Info("source errors channel closed")
@@ -287,10 +341,19 @@ func (s *Server) updateTree() {
 	s.tree = newTree
 	s.treeMux.Unlock()
 
+	s.rebuildIndexes(newTree)
+	logger.Log.Info("content tree updated successfully")
+}
+
+// rebuildIndexes refreshes every content-derived cache from a single read
+// of the corpus: the searchable file list, the backlink index, and the
+// full-text search index.
+func (s *Server) rebuildIndexes(newTree *models.Tree) {
 	files := newTree.FlattenMarkdownFiles()
 	s.cachedFiles.Store(files)
-	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.source.FS(), files))
-	logger.Log.Info("content tree updated successfully")
+	contents := markdown.ReadCorpus(s.source.FS(), files)
+	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(contents, files))
+	s.cachedContent.Store(buildSearchIndex(contents, files))
 }
 
 func (s *Server) initialScan() {
@@ -308,9 +371,7 @@ func (s *Server) initialScan() {
 	s.tree = newTree
 	s.treeMux.Unlock()
 
-	files := newTree.FlattenMarkdownFiles()
-	s.cachedFiles.Store(files)
-	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.source.FS(), files))
+	s.rebuildIndexes(newTree)
 	s.indexReady.Store(true)
 	logger.Log.Info("background scan complete, index ready")
 
@@ -318,18 +379,12 @@ func (s *Server) initialScan() {
 }
 
 func (s *Server) broadcastIndexReady() {
-	s.clientsMux.RLock()
-	clientCount := len(s.clients)
-	logger.Log.Info("broadcasting index-ready to clients", "count", clientCount)
-	for client := range s.clients {
-		select {
-		case client <- "index-ready":
-			logger.Log.Debug("sent index-ready to client")
-		default:
-			logger.Log.Warn("client channel full, skipping index-ready")
-		}
+	payload, ok := encodeSSEEvent(sseTypeIndexReady, "")
+	if !ok {
+		return
 	}
-	s.clientsMux.RUnlock()
+	logger.Log.Info("broadcasting index-ready to clients")
+	s.broadcast(payload)
 }
 
 func (s *Server) IsIndexReady() bool {
@@ -355,14 +410,7 @@ func (s *Server) ToggleRespectGitignore() bool {
 }
 
 func (s *Server) broadcastReload() {
-	s.clientsMux.RLock()
-	for client := range s.clients {
-		select {
-		case client <- "reload":
-		default:
-		}
-	}
-	s.clientsMux.RUnlock()
+	s.broadcastChange("")
 }
 
 // WaitForIndexReady blocks until the background index scan completes or ctx is cancelled.

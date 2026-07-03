@@ -17,6 +17,8 @@ type ContentSource interface {
 
 // Event is a content change already classified as relevant to rendering
 // (a markdown file or a directory). Consumers never need to stat the path.
+// Path is corpus-relative with forward slashes (fs.ValidPath semantics),
+// matching the paths served under /file/.
 type Event struct {
 	Path string
 }

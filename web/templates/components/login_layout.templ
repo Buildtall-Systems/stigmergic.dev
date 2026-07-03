@@ -1,19 +1,21 @@
 package components
 
-templ LoginLayout() {
+import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
+
+templ LoginLayout(thm *theme.Theme, themes []*theme.Theme) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
+			@templ.Raw(PrePaintScript(thm.Name))
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>Sign In — stigmergic</title>
 			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
+			@templ.Raw(ThemeCSS(thm, themes))
 			<style>
 				* { margin: 0; padding: 0; box-sizing: border-box; }
 				body {
 					font-family: system-ui, -apple-system, sans-serif;
-					background: #161821;
-					color: #c6c8d1;
 					display: flex;
 					align-items: center;
 					justify-content: center;
@@ -31,52 +33,50 @@ templ LoginLayout() {
 				h1 {
 					font-size: 1.5rem;
 					margin-bottom: 0.5rem;
-					color: #d2d4de;
 				}
 				.subtitle {
-					color: #6b7089;
+					color: var(--comment-color);
 					margin-bottom: 2rem;
 					font-size: 0.9rem;
 				}
 				.btn {
 					display: inline-block;
 					padding: 0.75rem 1.5rem;
-					border: 1px solid #89b8c2;
-					color: #89b8c2;
+					border: 1px solid var(--cyan-color);
+					color: var(--cyan-color);
 					background: transparent;
 					border-radius: 6px;
 					font-size: 1rem;
 					cursor: pointer;
 					transition: all 0.2s;
 				}
-				.btn:hover { background: #89b8c2; color: #161821; }
+				.btn:hover { background: var(--cyan-color); color: var(--bg-color); }
 				.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 				.error-msg {
-					background: #e2787844;
-					border: 1px solid #e27878;
-					color: #e27878;
+					background: var(--bg-alt-color);
+					border: 1px solid var(--red-color);
+					color: var(--red-color);
 					padding: 0.75rem;
 					border-radius: 6px;
 					margin-bottom: 1rem;
 					font-size: 0.875rem;
 				}
 				.info {
-					color: #6b7089;
+					color: var(--comment-color);
 					margin-top: 1.5rem;
 					font-size: 0.8rem;
 				}
-				.info a { color: #89b8c2; }
 				#status {
 					margin-top: 1rem;
 					font-size: 0.875rem;
-					color: #6b7089;
+					color: var(--comment-color);
 				}
 				.spinner {
 					display: inline-block;
 					width: 16px;
 					height: 16px;
-					border: 2px solid #6b7089;
-					border-top-color: #89b8c2;
+					border: 2px solid var(--comment-color);
+					border-top-color: var(--cyan-color);
 					border-radius: 50%;
 					animation: spin 0.6s linear infinite;
 					margin-right: 0.5rem;

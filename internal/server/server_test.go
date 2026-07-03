@@ -425,3 +425,106 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 		t.Error("expected new-file.md to be in tree after file creation event")
 	}
 }
+
+// readBroadcast drains the client channel until a payload other than the
+// index-ready envelope arrives; the background scan may race one in.
+func readBroadcast(t *testing.T, client chan string) string {
+	t.Helper()
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case payload := <-client:
+			if payload != `{"type":"index-ready"}` {
+				return payload
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for broadcast payload")
+		}
+	}
+}
+
+func TestBroadcastChangePayloadShape(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Port:  8080,
+		Host:  testHost,
+		Theme: testThemeName,
+	}
+	srv := newTestServer(t, cfg)
+
+	client := make(chan string, 10)
+	srv.addClient(client)
+	defer srv.removeClient(client)
+
+	srv.broadcastChange("docs/example.md")
+
+	want := `{"type":"reload","path":"docs/example.md"}`
+	if got := readBroadcast(t, client); got != want {
+		t.Errorf("expected payload %s, got %s", want, got)
+	}
+}
+
+func TestBroadcastReloadOmitsPath(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Port:  8080,
+		Host:  testHost,
+		Theme: testThemeName,
+	}
+	srv := newTestServer(t, cfg)
+
+	client := make(chan string, 10)
+	srv.addClient(client)
+	defer srv.removeClient(client)
+
+	srv.broadcastReload()
+
+	want := `{"type":"reload"}`
+	if got := readBroadcast(t, client); got != want {
+		t.Errorf("expected payload %s, got %s", want, got)
+	}
+}
+
+func TestBroadcastIndexReadyPayloadShape(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Port:  8080,
+		Host:  testHost,
+		Theme: testThemeName,
+	}
+	srv := newTestServer(t, cfg)
+
+	client := make(chan string, 10)
+	srv.addClient(client)
+	defer srv.removeClient(client)
+
+	srv.broadcastIndexReady()
+
+	want := `{"type":"index-ready"}`
+	select {
+	case got := <-client:
+		if got != want {
+			t.Errorf("expected payload %s, got %s", want, got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for index-ready payload")
+	}
+}
+
+func TestFollowModeCapabilityForFilesystemSource(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Port:  8080,
+		Host:  testHost,
+		Theme: testThemeName,
+	}
+	srv := newTestServer(t, cfg)
+
+	if !srv.uiCaps.FollowMode {
+		t.Error("expected FollowMode capability for watchable filesystem source")
+	}
+}

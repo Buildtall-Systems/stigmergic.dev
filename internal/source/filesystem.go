@@ -142,8 +142,13 @@ func (f *FilesystemSource) pump() {
 				logger.Log.Debug("ignoring non-markdown file event", "path", ev.Path)
 				continue
 			}
+			rel, err := filepath.Rel(f.root, ev.Path)
+			if err != nil {
+				logger.Log.Error("failed to relativize event path", "error", err, "path", ev.Path, "root", f.root)
+				continue
+			}
 			select {
-			case f.events <- Event{Path: ev.Path}:
+			case f.events <- Event{Path: filepath.ToSlash(rel)}:
 			case <-f.done:
 				return
 			}

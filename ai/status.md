@@ -2,7 +2,79 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-07-03
+
+### UI Redesign — Phase 5 Complete (theme toggle, typography, login theming), committed `a6735ec`
+
+Phase 4 committed as `eb23587` after operator verification. Phase 5 on `feature/ui-redesign` — all five plan phases now committed and operator-verified:
+
+- **Theme system** (`internal/theme`): `Theme` gains `ChromaStyle`/`MermaidTheme` pairings (TOML keys: iceberg-dark → nord/dark, iceberg-light → github/default) and a load-time `ChromaCSS` — the chroma stylesheet generated per theme and scoped under `[data-theme="name"]` (new `chroma.go`; WriteCSS output shape verified empirically before implementation; unknown chroma styles fail at load). New `LoadEmbedded()` loads every embedded palette.
+- **Layout** (`layout.templ`): `ThemeCSS(thm, themes)` emits `:root` boot vars + per-theme `[data-theme]` variable blocks + each theme's scoped chroma CSS + shared component rules; `PrePaintScript` (the single deliberate inline script, first in `<head>`) applies the localStorage theme attribute before first paint; `theme-config` JSON registry (boot/order/mermaid map); mermaid init switched to `startOnLoad: false` with theme-aware selection; header gains a Theme control between Follow and `?`. `Layout` signature threads `themes []*theme.Theme`; Home/Directory/Markdown templates and server call sites updated (`Server.themes` from `LoadEmbedded`, boot theme prepended when custom).
+- **Class-based highlighting** (`parser.go`): `html.WithClasses(true)` replaces inline nord styles; the four inline-style test assertions became class-based contracts plus an explicit no-inline-styles check.
+- **Client JS**: `ui.js` — `applyTheme`/`cycleTheme`/`handleThemeKeydown` (`T`, input-guarded); `render.js` — mermaid source stashed in `data-mermaid-src` on first render so theme toggles re-render from source; `events.js` — key handler + initial mermaid render wired.
+- **Typography** (`markdown.templ`, `input.css`): article measure `max-w-none` → `max-w-[72ch] mx-auto`; frontmatter card collapses to a "Frontmatter" summary row (Alpine chevron expand); input.css grays reconciled to theme variables (border compat block included), dead `btn`/`btn-secondary`/`markdown-content` utilities removed, chrome-vs-content scale added (13px sidebar/outline, 17px prose).
+- **Login theming**: `LoginLayout(thm, themes)` emits shared `ThemeCSS` + pre-paint script; all hardcoded hex replaced with variables; `auth.LoginHandler` threads themes.
+- **Tests**: theme loader (embedded set, scoped chroma CSS, unknown theme/style failures), layout theme-switching scaffolding (scoped blocks, pre-paint, theme-config, no `startOnLoad: true`), login theme-variable assertions.
+- **Help**: `T — Cycle theme` row.
+
+Verification: generate/css/lint/test/build all green via run_silent (govet shadow findings in theme.go fixed properly, tests race-clean). Operator manually verified both themes, flashless load, chroma+mermaid re-theme, and login page. Committed as `a6735ec`.
+
+Context note: `goldmark-highlighting` cloned to `ai/context/goldmark-highlighting/` (monorepo root) and registered in the root context index.
+
+Next: buildtall-sop → push approval → PR to develop.
+
 ## 2026-07-02
+
+### UI Redesign — Phase 4 Complete (full-text search), awaiting operator verification
+
+Phase 3 committed as `0c752a6` after operator verification. Phase 4 on `feature/ui-redesign`:
+
+- **Single-pass corpus read**: new `markdown.ReadCorpus` reads every file once per rescan; `BuildBacklinkIndex` now takes the pre-read map instead of an `fs.FS` (5 test call sites updated); new `rebuildIndexes` helper on Server feeds file list, backlink index, and the new search index from that one read (`initialScan` + `updateTree` both use it).
+- **Search index** (`internal/server/search.go`, new): `searchIndex` holds original + lowercased content per doc in mod-time order; `search()` returns first case-insensitive occurrence per doc, capped at 20 with a truncation flag; snippets window ±40 bytes widened to rune boundaries, line breaks flattened byte-preserving so match offsets stay valid; non-ASCII-width case pairs fall back to the lowered copy for offset correctness.
+- **`GET /api/search`**: registered unconditionally (serve + site modes); JSON `{query, results:[{path,title,snippet,matchStart,matchEnd}], truncated}`.
+- **Palette Content group**: sequenced debounced fetch merged into a new `displayGroups` rendering (template's two static sections replaced by one dynamic group loop); ranking per mockup 5 — Content above Files when the query is prose-like (>2 words or no `[./_-]` characters); snippets render with `<strong>` match emphasis via offsets (HTML-escaped around); selection navigates via the established htmx path; stale responses discarded by sequence + query check; empty-state and placeholder copy updated.
+- **Tests**: unit — match+snippet offsets, case-insensitivity, boundary windowing (whole-doc snippet), 25-doc cap+truncation, empty/whitespace/no-match queries; integration — `/api/search` over both `FilesystemSource` and `EmbeddedSource`, and rebuild-on-change (new file's content searchable after watcher rescan).
+
+Verification: generate/lint/test/build all green via run_silent (lint 0 findings after goconst/prealloc fixes, tests race-clean). Halted for operator manual verification before commit.
+
+### UI Redesign — Phase 3 Complete (document outline + scrollspy), awaiting operator verification
+
+Phase 2 committed as `a41e4c7` after operator verification. Phase 3 on `feature/ui-redesign`:
+
+- **`internal/markdown/outline.go`** (new): `ExtractOutline` — AST walk collecting level/text/anchor-id per heading, per the backlinks.go pattern. Parser mirrors `Parse`'s heading-affecting config (AutoHeadingID + frontmatter extender, so metadata blocks aren't misread as setext headings and ids match the rendered HTML exactly). Heading text flattened via manual inline-node recursion (no deprecated `Node.Text`). `OutlineEntry` model in `internal/models` alongside `BacklinkEntry`.
+- **Outline rail rendering**: new `components.Outline` (nav list, level-indented, `data-outline-target` per entry) rendered two ways — full pages via a new `outline` param on `Layout` (Home/Directory pass nil), htmx partials via `components.OutlineOOB` (`hx-swap-oob="innerHTML"` against the persistent `#outline` aside), appended by a shared `renderOutlineOOB` helper after every `#content` partial: entries for markdown, nil for home/directory (clears the rail).
+- **Scrollspy** (`nav.js`): IntersectionObserver rooted on `#content` (the scroll container, not the viewport), `-60%` bottom rootMargin; active = first visible heading, falling back to the last heading scrolled past; outline clicks smooth-scroll via `scrollIntoView`. Re-inited on DOMContentLoaded, `#content` afterSwap, and `#outline` oobAfterSwap (htmx OOB ordering relative to the main swap is not assumed). `.outline-link`/`-active` colors in themeCSS.
+- **Tests**: `ExtractOutline` table tests (nested levels, duplicate slugs → `-1` suffix, setext, empty, inline formatting — goldmark's id slug includes link destinations, verified against real behavior — frontmatter-not-a-heading); template tests for rail markup + anchor hrefs and empty-rail on non-document pages; handler tests asserting the OOB fragment with known heading in markdown partials and cleared rail in home partials.
+
+Verification: generate/css/lint/test/build all green via run_silent (lint 0 findings, tests race-clean). Halted for operator manual verification before commit.
+
+### UI Redesign — Phase 2 Complete (structured SSE + follow mode), awaiting operator verification
+
+Phase 1 committed as `a3a13a0` after operator verification. Phase 2 on `feature/ui-redesign`:
+
+- **SSE JSON envelope**: `broadcastEvents`/`broadcastIndexReady`/`broadcastReload` now push `{"type":"reload","path":"..."}` / `{"type":"index-ready"}` (path omitted when empty = refresh regardless) via a shared `encodeSSEEvent` + `broadcast` helper pair; the three hand-rolled client loops collapsed into one.
+- **Corpus-relative event paths** (defect found while testing): `FilesystemSource.pump` was forwarding the watcher's absolute path; clients need corpus-relative to build `/file/` URLs. Now relativized against the source root with `filepath.Rel` + `ToSlash`; `source.Event` doc updated to state the contract, source test pins it exactly.
+- **`FollowMode` capability**: new `UICapabilities` flag set from the `Watchable` assertion — embedded/site mode renders no toggle.
+- **Header Follow control** (caps-gated): toggle button (Off / Following in green / Paused in orange, one-click resume) with `data-follow-toggle` carrying `hx-push-url="true"` as the htmx.ajax inheritance source, plus a scope dropdown (entire corpus vs current directory).
+- **`js/app/follow.js`** (new): Alpine store — localStorage persistence (`stigmergic-follow`, `stigmergic-follow-scope`), `F` keybinding, 150ms newest-event-wins debounce atop the server's watcher debounce, subtree-prefix directory scoping, pause on any user-initiated `#content` request or popstate (SSE refreshes flagged via `stigmergicProgrammaticNav`), same-file navigation skips the history push.
+- **events.js dispatcher**: parses the envelope with bare-string legacy fallback; sidebar always refreshes; follow store gets first claim on the event; otherwise `#content` refetches only when it shows the changed path (the file itself, an ancestor directory listing, or home).
+- **help.templ**: `F` row added.
+- **Tests**: exact payload-shape assertions for change/reload/index-ready broadcasts, FollowMode true for filesystem + false for embedded, SSE stream framing integration test (end-to-end: file write → framed JSON envelope on the wire), template test gating the toggle on the capability.
+
+Verification: generate/lint/test/build all green via run_silent (lint 0 findings, tests race-clean). Halted for operator manual verification before commit.
+
+### UI Redesign — Phase 1 Complete (layout substrate), awaiting operator verification
+
+On `feature/ui-redesign` (from develop), per `thoughts/plans/2026-07-02_15-17-17_stigmergic-ui-redesign.md`:
+
+- **Three-pane shell**: `layout.templ` body is now header + flex row of persistent `#sidebar` (new `components.Sidebar` — tree + compact Recent list, collapsible via header chevron, hidden below `md`), `#content` (the sole htmx swap target replacing `#main`, independent scroll container), and `#outline` (empty placeholder rail, hidden below 1100px). Layout signature gains `tree` + `recentFiles`.
+- **Header refined**: live indicator removed (`live_indicator.templ` + generated file deleted; `.indicator-*` CSS and keyframes dropped from themeCSS); right cluster gains Search (dispatches `toggle-palette`, palette listens) and `?` (new `components.Help` overlay with Ctrl+K/S/arrows/?/Esc rows, `helpOverlay()` Alpine factory).
+- **Inline JS extracted** to `internal/embed/web/static/js/app/{render,nav,events,ui}.js` — behavior-preserving split of the ~220-line layout.templ script block. New in nav.js: `syncCurrentFile()` highlights the current file in the tree (`data-path` attributes, `.tree-item-current` style) and auto-expands ancestor folders. events.js keeps the bare-string SSE contract but refetches `#content` and refreshes `/partial/sidebar`; `S` now toggles source view via a window event. scrollProgress tracks `#content` scroll (body no longer scrolls). tailwind.config.js gains the JS dir in content globs so extracted class strings survive `make css`.
+- **Navigation normalized**: breadcrumbs (markdown + directory), tree, recent, and palette file-selection all swap `#content` with push-url; palette uses `htmx.ajax` sourced from its root carrying `hx-push-url="true"` (htmx resolves inherited attributes from the ajax `source`). Inline `onmouseover/onmouseout` handlers dropped from recent.templ (covered by existing `[data-nav-item]` CSS).
+- **Home is an activity surface**: tree moved out of `HomeContent`; Recently Updated primary, corpus summary line (file/dir counts + last change) via new `countDirs` and shared `uiData()` helper in handlers.go; `/partial/sidebar` route added for scoped SSE refresh.
+- **Tests**: layout landmark/indicator-absence assertions, tree `data-path`/`#content` targeting, breadcrumb htmx quartet, sidebar-partial handler test, htmx content-partial purity test (no sidebar markup, no full page).
+
+Verification: generate/css/lint/test/build all green via run_silent (lint 0 findings, tests race-clean). Halted for operator manual verification before commit.
 
 ### ContentSource Abstraction — Phase 4 Complete (v0.3.0 released, prod cut over to embedded site)
 

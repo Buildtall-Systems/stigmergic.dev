@@ -4,8 +4,8 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, files []models.SearchableFile, indexReady bool, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities) {
-	@components.Layout(title, thm, files, indexReady, caps) {
+templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, themes []*theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities, outline []models.OutlineEntry) {
+	@components.Layout(title, thm, themes, files, tree, recentFiles, indexReady, caps, outline) {
 		@MarkdownContent(breadcrumbs, content, rawContent, rootPath, relativePath, backlinks, metadata, caps)
 	}
 }
@@ -17,7 +17,7 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawConten
 				<div class="flex items-center justify-between gap-4">
 					<ol class="flex items-center space-x-2">
 						<li class="inline-flex items-center">
-							<a href="/" class="font-medium transition-colors">
+							<a href="/" hx-get="/" hx-target="#content" hx-swap="innerHTML" hx-push-url="true" class="font-medium transition-colors">
 								{ rootPath }
 							</a>
 						</li>
@@ -28,7 +28,7 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawConten
 									if i == len(breadcrumbs) - 1 {
 										<span class="font-medium">{ crumb.Name }</span>
 									} else {
-										<a href={ templ.SafeURL(crumb.Path) } class="font-medium transition-colors" style="color: var(--comment-color);">{ crumb.Name }</a>
+										<a href={ templ.SafeURL(crumb.Path) } hx-get={ crumb.Path } hx-target="#content" hx-swap="innerHTML" hx-push-url="true" class="font-medium transition-colors" style="color: var(--comment-color);">{ crumb.Name }</a>
 									}
 								</div>
 							</li>
@@ -56,29 +56,37 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawConten
 			</nav>
 		}
 		if len(metadata) > 0 {
-			<div class="rounded-md px-4 py-3" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">
-				<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-baseline">
-					for _, key := range SortedMetadataKeys(metadata) {
-						if mv := ClassifyMetadataValue(metadata[key]); !mv.IsHidden {
-							<dt class="text-right" style="color: var(--comment-color); font-family: monospace; font-size: 0.875rem;">{ key }</dt>
-							<dd style="font-size: 0.875rem;">
-								if mv.IsArray {
-									<div class="flex flex-wrap gap-1">
-										for _, tag := range mv.ArrayVal {
-											<span class="inline-block rounded-full px-2 py-0.5 text-xs" style="background-color: var(--cyan-color); color: var(--bg-color);">{ tag }</span>
-										}
-									</div>
-								} else {
-									<span style="color: var(--fg-color);">{ mv.StringVal }</span>
-								}
-							</dd>
+			<div x-data="{ fmOpen: false }" class="rounded-md" style="background-color: var(--bg-alt-color); border: 1px solid var(--border-color);">
+				<button @click="fmOpen = !fmOpen" class="w-full flex items-center justify-between px-4 py-2 text-sm cursor-pointer" style="color: var(--comment-color);">
+					<span style="font-family: monospace;">Frontmatter</span>
+					<svg class="w-4 h-4 transition-transform" :class="fmOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+					</svg>
+				</button>
+				<div x-show="fmOpen" x-cloak class="px-4 pb-3">
+					<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-baseline">
+						for _, key := range SortedMetadataKeys(metadata) {
+							if mv := ClassifyMetadataValue(metadata[key]); !mv.IsHidden {
+								<dt class="text-right" style="color: var(--comment-color); font-family: monospace; font-size: 0.875rem;">{ key }</dt>
+								<dd style="font-size: 0.875rem;">
+									if mv.IsArray {
+										<div class="flex flex-wrap gap-1">
+											for _, tag := range mv.ArrayVal {
+												<span class="inline-block rounded-full px-2 py-0.5 text-xs" style="background-color: var(--cyan-color); color: var(--bg-color);">{ tag }</span>
+											}
+										</div>
+									} else {
+										<span style="color: var(--fg-color);">{ mv.StringVal }</span>
+									}
+								</dd>
+							}
 						}
-					}
-				</dl>
+					</dl>
+				</div>
 			</div>
 		}
 		@templ.JSONScript("raw-content-data", rawContent)
-		<div x-data="rawToggle()">
+		<div x-data="rawToggle()" @toggle-source.window="toggle()">
 			<div class="flex justify-end gap-2 mb-4">
 				<button
 					x-show="showRaw"
@@ -96,7 +104,7 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawConten
 					x-text="buttonText"
 				></button>
 			</div>
-			<article x-show="!showRaw" class="prose prose-headings:font-bold prose-a:no-underline prose-a:hover:underline max-w-none">
+			<article x-show="!showRaw" class="prose prose-headings:font-bold prose-a:no-underline prose-a:hover:underline max-w-[72ch] mx-auto">
 				@templ.Raw(content)
 			</article>
 			<div x-show="showRaw" x-cloak class="overflow-x-auto rounded-md" style="background-color: var(--code-bg-color);">

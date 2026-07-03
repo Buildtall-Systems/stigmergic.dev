@@ -1,0 +1,45 @@
+package components
+
+import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+
+func outlineIndent(level int) string {
+	switch {
+	case level <= 2:
+		return "pl-0"
+	case level == 3:
+		return "pl-3"
+	case level == 4:
+		return "pl-6"
+	default:
+		return "pl-9"
+	}
+}
+
+templ Outline(entries []models.OutlineEntry) {
+	if len(entries) > 0 {
+		<nav aria-label="Document outline">
+			<h3 class="text-xs font-semibold uppercase tracking-wide mb-2" style="color: var(--comment-color);">On this page</h3>
+			<ul class="space-y-1">
+				for _, entry := range entries {
+					<li>
+						<a
+							href={ templ.SafeURL("#" + entry.ID) }
+							data-outline-target={ entry.ID }
+							class={ "outline-link block text-sm transition-colors", outlineIndent(entry.Level) }
+						>{ entry.Text }</a>
+					</li>
+				}
+			</ul>
+		</nav>
+	}
+}
+
+// OutlineOOB retargets the persistent #outline rail from an htmx partial
+// response via an out-of-band swap. Rendered after every #content partial:
+// with entries for markdown documents, empty for home and directory views
+// (clearing the rail).
+templ OutlineOOB(entries []models.OutlineEntry) {
+	<div id="outline" hx-swap-oob="innerHTML">
+		@Outline(entries)
+	</div>
+}

@@ -1,0 +1,38 @@
+package components
+
+import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
+
+templ Sidebar(tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+	<nav aria-label="File tree">
+		if !indexReady {
+			<p class="px-3 py-2 text-sm" style="color: var(--comment-color);">Indexing...</p>
+		} else if tree == nil || tree.Root == nil {
+			<p class="px-3 py-2 text-sm" style="color: var(--comment-color);">No markdown files found.</p>
+		} else {
+			@Tree(tree.Root)
+		}
+	</nav>
+	if caps.RecentlyUpdated && len(recentFiles) > 0 {
+		<div class="mt-6 pt-4" style="border-top: 1px solid var(--border-color);">
+			<h3 class="px-3 mb-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--comment-color);">Recent</h3>
+			<ul class="space-y-1">
+				for _, f := range recentFiles {
+					<li>
+						<a
+							href={ templ.SafeURL("/file" + f.Path) }
+							hx-get={ "/file" + f.Path }
+							hx-target="#content"
+							hx-swap="innerHTML"
+							hx-push-url="true"
+							data-nav-item
+							class="block px-3 py-1.5 rounded-md text-sm transition-colors cursor-pointer focus:outline-hidden truncate"
+						>
+							<span style="color: var(--fg-color);">{ trimMdExtension(f.Name) }</span>
+							<span style="color: var(--comment-color);">{ " · " }{ f.RelativeTime }</span>
+						</a>
+					</li>
+				}
+			</ul>
+		</div>
+	}
+}

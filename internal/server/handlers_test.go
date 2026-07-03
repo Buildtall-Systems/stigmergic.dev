@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -391,6 +393,253 @@ func TestWatchDirAssetNotFound(t *testing.T) {
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestHTMXMarkdownIncludesOutlineOOB(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "doc.md", "# Title\n\n## Section One\n\ntext\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/file/doc.md", port)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set("HX-Request", "true")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to get markdown partial: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	body := string(b)
+
+	if !strings.Contains(body, `id="outline" hx-swap-oob="innerHTML"`) {
+		t.Error("expected out-of-band outline fragment in markdown partial")
+	}
+	if !strings.Contains(body, `data-outline-target="section-one"`) {
+		t.Error("expected outline entry for known heading")
+	}
+}
+
+func TestHTMXHomeClearsOutlineOOB(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "doc.md", "# Title\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/", port)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set("HX-Request", "true")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to get home partial: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	body := string(b)
+
+	if !strings.Contains(body, `id="outline" hx-swap-oob="innerHTML"`) {
+		t.Error("expected out-of-band outline fragment in home partial")
+	}
+	if strings.Contains(body, "data-outline-target") {
+		t.Error("home partial must clear the outline rail, not populate it")
+	}
+}
+
+func TestSSEStreamEnvelopeFraming(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	url := fmt.Sprintf("http://localhost:%d/events", port)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to connect to SSE endpoint: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
+
+	reader := bufio.NewReader(resp.Body)
+	connected, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("failed to read connection confirmation: %v", err)
+	}
+	if !strings.HasPrefix(connected, ": connected") {
+		t.Fatalf("expected connection comment, got %q", connected)
+	}
+
+	// The registered client now receives watcher broadcasts; a file write
+	// must arrive as a framed JSON envelope naming the changed path.
+	testutil.CreateTestFile(t, dir, "changed.md", "# Changed\n")
+
+	// Scan frames until the change envelope arrives; the index-ready
+	// broadcast may legitimately precede it. The request context deadline
+	// bounds the read loop.
+	var eventLine string
+	for {
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			t.Fatalf("SSE stream ended before change envelope arrived: %v", readErr)
+		}
+		if strings.HasPrefix(line, "event: ") {
+			eventLine = strings.TrimSpace(line)
+			continue
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data: "))
+		var envelope struct {
+			Type string `json:"type"`
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal([]byte(payload), &envelope); err != nil {
+			t.Fatalf("SSE data is not valid JSON: %v (payload %q)", err, payload)
+		}
+		if envelope.Type != "reload" || envelope.Path != "changed.md" {
+			continue
+		}
+		if eventLine != "event: message" {
+			t.Errorf("expected 'event: message' framing, got %q", eventLine)
+		}
+		return
+	}
+}
+
+func TestSidebarPartialRendersTree(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "test.md", "# Hello World\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/partial/sidebar", port)
+	deadline := time.Now().Add(5 * time.Second)
+	var body string
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+		if err != nil {
+			t.Fatalf("failed to build request: %v", err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("failed to get sidebar partial: %v", err)
+		}
+		b, readErr := io.ReadAll(resp.Body)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Fatalf("failed to close response body: %v", closeErr)
+		}
+		if readErr != nil {
+			t.Fatalf("failed to read response body: %v", readErr)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", resp.StatusCode)
+		}
+		body = string(b)
+		if strings.Contains(body, "test.md") {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if !strings.Contains(body, "test.md") {
+		t.Errorf("expected sidebar partial to contain tree entry, got: %s", body)
+	}
+	if !strings.Contains(body, `hx-target="#content"`) {
+		t.Error("expected sidebar links to target #content")
+	}
+	if strings.Contains(body, "<html") {
+		t.Error("sidebar partial must not be a full page")
+	}
+}
+
+func TestHTMXFileRequestReturnsContentPartial(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "test.md", "# Hello World\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/file/test.md", port)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	req.Header.Set("HX-Request", "true")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to get file partial: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+
+	html := string(b)
+	if !strings.Contains(html, "<h1") {
+		t.Errorf("expected rendered markdown in partial, got: %s", html[:min(200, len(html))])
+	}
+	if strings.Contains(html, `id="sidebar"`) {
+		t.Error("content partial must not carry sidebar markup")
+	}
+	if strings.Contains(html, "<html") {
+		t.Error("content partial must not be a full page")
 	}
 }
 

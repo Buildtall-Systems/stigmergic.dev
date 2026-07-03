@@ -12,12 +12,23 @@ import (
 	"github.com/nbd-wtf/go-nostr"
 
 	"github.com/Buildtall-Systems/btk/auth/session"
+
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 )
 
 const (
 	testPrivateKey = "9a9787e3e31a4b0e7e483ed97b1ab0a45534675b07003a51c0840d6a681ad53a"
 	kindHTTPAuth   = 27235
 )
+
+func testThemes(t *testing.T) (*theme.Theme, []*theme.Theme) {
+	t.Helper()
+	themes, err := theme.LoadEmbedded()
+	if err != nil {
+		t.Fatalf("failed to load embedded themes: %v", err)
+	}
+	return themes[0], themes
+}
 
 func testSessionManager(t *testing.T) *session.Manager {
 	t.Helper()
@@ -31,7 +42,8 @@ func testSessionManager(t *testing.T) *session.Manager {
 func TestLoginHandler_GET(t *testing.T) {
 	t.Parallel()
 
-	handler := LoginHandler("http://localhost:8080")
+	thm, themes := testThemes(t)
+	handler := LoginHandler("http://localhost:8080", thm, themes)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, session.LoginPath, nil)
 	rec := httptest.NewRecorder()
 
@@ -50,7 +62,8 @@ func TestLoginHandler_GET(t *testing.T) {
 func TestLoginHandler_POST_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
-	handler := LoginHandler("http://localhost:8080")
+	thm, themes := testThemes(t)
+	handler := LoginHandler("http://localhost:8080", thm, themes)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, session.LoginPath, nil)
 	rec := httptest.NewRecorder()
 

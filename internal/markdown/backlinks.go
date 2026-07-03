@@ -1,7 +1,6 @@
 package markdown
 
 import (
-	"io/fs"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -17,8 +16,9 @@ import (
 )
 
 // BuildBacklinkIndex scans all files for wikilinks and builds an inverse
-// index mapping each target route to the files that link to it.
-func BuildBacklinkIndex(contentFS fs.FS, files []models.SearchableFile) models.BacklinkIndex {
+// index mapping each target route to the files that link to it. Contents is
+// the pre-read corpus from ReadCorpus, keyed by route.
+func BuildBacklinkIndex(contents map[string][]byte, files []models.SearchableFile) models.BacklinkIndex {
 	resolver := NewTreeResolver(files)
 
 	md := goldmark.New(
@@ -32,8 +32,8 @@ func BuildBacklinkIndex(contentFS fs.FS, files []models.SearchableFile) models.B
 	for _, f := range files {
 		route := strings.TrimPrefix(f.Path, "/")
 
-		source, err := fs.ReadFile(contentFS, route)
-		if err != nil {
+		source, ok := contents[route]
+		if !ok {
 			continue
 		}
 

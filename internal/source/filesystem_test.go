@@ -91,8 +91,8 @@ func TestFilesystemEmitsMarkdownEvents(t *testing.T) {
 		if !ok {
 			t.Fatal("events channel closed unexpectedly")
 		}
-		if filepath.Base(ev.Path) != "note.md" {
-			t.Errorf("expected event for note.md, got %s", ev.Path)
+		if ev.Path != "note.md" {
+			t.Errorf("expected corpus-relative event path note.md, got %s", ev.Path)
 		}
 	case <-time.After(eventTimeout):
 		t.Fatal("timed out waiting for markdown event")

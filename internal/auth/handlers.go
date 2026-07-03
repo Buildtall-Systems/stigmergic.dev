@@ -11,6 +11,7 @@ import (
 	"github.com/Buildtall-Systems/btk/auth/nip98"
 	"github.com/Buildtall-Systems/btk/auth/session"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
 )
 
@@ -26,14 +27,14 @@ type verifyResponse struct {
 	OK       bool   `json:"ok"`
 }
 
-func LoginHandler(serverURL string) http.HandlerFunc {
+func LoginHandler(serverURL string, thm *theme.Theme, themes []*theme.Theme) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		if err := templates.Login(serverURL).Render(r.Context(), w); err != nil {
+		if err := templates.Login(serverURL, thm, themes).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render login page", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}

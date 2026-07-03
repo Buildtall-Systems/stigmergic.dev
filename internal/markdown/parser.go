@@ -25,8 +25,8 @@ func Parse(source []byte, resolver wikilink.Resolver) ([]byte, map[string]any, e
 		extension.GFM,
 		NewWiremdExtension(),
 		highlighting.NewHighlighting(
-			highlighting.WithStyle("nord"),
 			highlighting.WithFormatOptions(
+				html.WithClasses(true),
 				html.WithLineNumbers(true),
 			),
 		),
