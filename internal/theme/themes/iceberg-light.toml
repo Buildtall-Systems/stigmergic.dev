@@ -1,3 +1,6 @@
+ChromaStyle = "github"
+MermaidTheme = "default"
+
 Background = "#e8e9ec"
 Foreground = "#33374c"
 BackgroundAlt = "#dcdfe7"

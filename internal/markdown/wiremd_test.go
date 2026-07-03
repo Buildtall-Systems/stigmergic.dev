@@ -54,7 +54,7 @@ func TestWiremdDoesNotAffectOtherCodeBlocks(t *testing.T) {
 	}
 
 	output := string(result)
-	if !strings.Contains(output, "<pre style=") {
+	if !strings.Contains(output, `class="chroma"`) {
 		t.Error("Expected syntax-highlighted Go code block")
 	}
 	if !strings.Contains(output, "<pre class=\"wiremd\">") {

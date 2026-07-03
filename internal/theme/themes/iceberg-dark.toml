@@ -1,3 +1,6 @@
+ChromaStyle = "nord"
+MermaidTheme = "dark"
+
 Background = "#161821"
 Foreground = "#c6c8d1"
 BackgroundAlt = "#1e2132"

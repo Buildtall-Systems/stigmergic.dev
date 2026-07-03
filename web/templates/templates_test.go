@@ -43,11 +43,23 @@ func testTheme() *theme.Theme {
 	}
 }
 
+func testThemes() []*theme.Theme {
+	dark := testTheme()
+	dark.MermaidTheme = "dark"
+	dark.ChromaCSS = `[data-theme="test"] .chroma { color: var(--code-fg-color); }` + "\n"
+	light := testTheme()
+	light.Name = "test-light"
+	light.Colors.Background = "#e8e9ec"
+	light.MermaidTheme = "default"
+	light.ChromaCSS = `[data-theme="test-light"] .chroma { color: var(--code-fg-color); }` + "\n"
+	return []*theme.Theme{dark, light}
+}
+
 func TestHomeRendersWithoutTree(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(nil, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -66,7 +78,7 @@ func TestHomeRendersWithEmptyTree(t *testing.T) {
 
 	tree := &models.Tree{}
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -96,7 +108,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -136,7 +148,7 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -154,7 +166,7 @@ func TestLayoutRendersThreePaneLandmarks(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(nil, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -192,7 +204,7 @@ func TestTreeLinksCarryDataPathAndContentTarget(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(tree, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -214,7 +226,7 @@ func TestLayoutFollowToggleGatedOnCapability(t *testing.T) {
 
 	renderHome := func(caps models.UICapabilities) string {
 		var sb strings.Builder
-		err := Home(nil, testTreeRoot, testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, caps).Render(context.Background(), &sb)
+		err := Home(nil, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, caps).Render(context.Background(), &sb)
 		if err != nil {
 			t.Fatalf("failed to render: %v", err)
 		}
@@ -238,7 +250,7 @@ func TestMarkdownFullPageRendersOutlineRail(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), []models.SearchableFile{}, nil, []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline).Render(context.Background(), &sb)
+	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), testThemes(), []models.SearchableFile{}, nil, []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -259,7 +271,7 @@ func TestLayoutOutlineRailEmptyWithoutEntries(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, testTreeRoot, testTheme(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(nil, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -292,5 +304,61 @@ func TestMarkdownBreadcrumbsUseHTMXSwaps(t *testing.T) {
 	}
 	if !strings.Contains(html, `hx-push-url="true"`) {
 		t.Error("expected breadcrumb link to push URL")
+	}
+}
+
+func TestLayoutEmitsThemeSwitchingScaffolding(t *testing.T) {
+	t.Parallel()
+
+	var sb strings.Builder
+	err := Home(nil, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render: %v", err)
+	}
+
+	html := sb.String()
+	for _, want := range []string{
+		":root {",
+		`[data-theme="test"] {`,
+		`[data-theme="test-light"] {`,
+		`[data-theme="test"] .chroma`,
+		`[data-theme="test-light"] .chroma`,
+		"localStorage.getItem('stigmergic-theme')",
+		`id="theme-config"`,
+		`"boot":"test"`,
+		"Cycle theme (T)",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected layout to contain %q", want)
+		}
+	}
+	if strings.Contains(html, "startOnLoad: true") {
+		t.Error("mermaid must not auto-render; theme-aware render owns it")
+	}
+}
+
+func TestLoginPageUsesThemeVariables(t *testing.T) {
+	t.Parallel()
+
+	var sb strings.Builder
+	err := Login("http://localhost:8080", testTheme(), testThemes()).Render(context.Background(), &sb)
+	if err != nil {
+		t.Fatalf("failed to render: %v", err)
+	}
+
+	html := sb.String()
+	for _, want := range []string{
+		":root {",
+		`[data-theme="test-light"] {`,
+		"localStorage.getItem('stigmergic-theme')",
+		"border: 1px solid var(--cyan-color)",
+		"color: var(--red-color)",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected login page to contain %q", want)
+		}
+	}
+	if strings.Contains(html, "background: #161821") {
+		t.Error("login page must not hardcode palette colors")
 	}
 }

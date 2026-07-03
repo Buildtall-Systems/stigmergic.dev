@@ -36,7 +36,7 @@ func (s *Server) setupRoutes() {
 	s.mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	if s.config.Auth.Enabled {
-		s.mux.HandleFunc(session.LoginPath, auth.LoginHandler(s.serverURL))
+		s.mux.HandleFunc(session.LoginPath, auth.LoginHandler(s.serverURL, s.theme, s.themes))
 		s.mux.HandleFunc("/auth/verify", auth.VerifyHandler(s.sessionManager, s.allowedPubkeys, s.serverURL))
 		s.mux.HandleFunc("/auth/logout", auth.LogoutHandler(s.sessionManager))
 		logger.Log.Info("auth routes registered")
@@ -115,7 +115,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		s.renderOutlineOOB(w, r, nil)
 	} else {
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(tree, s.source.Name(), s.theme, files, recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+		if err := templates.Home(tree, s.source.Name(), s.theme, s.themes, files, recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
 	}
@@ -206,7 +206,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			s.renderOutlineOOB(w, r, nil)
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, files, tree, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
+			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, s.themes, files, tree, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory template", "error", renderErr)
 			}
 		}
@@ -263,7 +263,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		s.renderOutlineOOB(w, r, outline)
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, files, tree, recentFiles, indexReady, fileBacklinks, meta, s.uiCaps, outline).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, s.themes, files, tree, recentFiles, indexReady, fileBacklinks, meta, s.uiCaps, outline).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}

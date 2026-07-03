@@ -33,6 +33,7 @@ type Server struct {
 	source          source.ContentSource
 	watchable       source.Watchable
 	theme           *theme.Theme
+	themes          []*theme.Theme
 	clients         map[chan string]bool
 	ctx             context.Context
 	cancel          context.CancelFunc
@@ -98,6 +99,22 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 	}
 	logger.Log.Info("theme loaded successfully", "theme", cfg.Theme)
 
+	themes, err := theme.LoadEmbedded()
+	if err != nil {
+		logger.Log.Error("failed to load embedded themes", "error", err)
+		panic(fmt.Sprintf("failed to load embedded themes: %v", err))
+	}
+	bootEmbedded := false
+	for _, t := range themes {
+		if t.Name == thm.Name {
+			bootEmbedded = true
+			break
+		}
+	}
+	if !bootEmbedded {
+		themes = append([]*theme.Theme{thm}, themes...)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var watchable source.Watchable
@@ -122,6 +139,7 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 			FollowMode:      watchable != nil,
 		},
 		theme:          thm,
+		themes:         themes,
 		clients:        make(map[chan string]bool),
 		ctx:            ctx,
 		cancel:         cancel,

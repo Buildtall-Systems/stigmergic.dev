@@ -7,8 +7,9 @@ import (
 
 const (
 	boldHTML          = "<strong>bold</strong>"
-	preStyleFragment  = "<pre style="
-	spanStyleFragment = "<span style="
+	preClassFragment  = `class="chroma"`
+	spanClassFragment = `<span class="`
+	spanStyleFragment = `<span style=`
 )
 
 func TestParseBasicMarkdown(t *testing.T) {
@@ -123,7 +124,7 @@ Link to [example](https://example.com).
 		"<a href=\"https://example.com\" target=\"_blank\" rel=\"noopener noreferrer\">example</a>",
 		"<ul>",
 		"<li>Item 1</li>",
-		preStyleFragment,
+		preClassFragment,
 	}
 
 	for _, expected := range expectations {
@@ -233,8 +234,8 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			name:  "go code block",
 			input: "```go\nfunc main() {\n}\n```",
 			expected: []string{
-				preStyleFragment,
-				spanStyleFragment,
+				preClassFragment,
+				spanClassFragment,
 				">func</span>",
 				">main</span>",
 			},
@@ -243,8 +244,8 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			name:  "python code block",
 			input: "```python\ndef hello():\n    pass\n```",
 			expected: []string{
-				preStyleFragment,
-				spanStyleFragment,
+				preClassFragment,
+				spanClassFragment,
 				">def</span>",
 				">hello</span>",
 			},
@@ -253,8 +254,8 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			name:  "javascript code block",
 			input: "```javascript\nconst x = 42;\n```",
 			expected: []string{
-				preStyleFragment,
-				spanStyleFragment,
+				preClassFragment,
+				spanClassFragment,
 				">const</span>",
 			},
 		},
@@ -270,6 +271,9 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 			}
 
 			output := string(result)
+			if strings.Contains(output, spanStyleFragment) {
+				t.Errorf("Expected class-based highlight output, found inline style %q", spanStyleFragment)
+			}
 			for _, expected := range tt.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("Expected output to contain %q\nGot:\n%s", expected, output)
@@ -289,8 +293,8 @@ func TestParseLineNumbers(t *testing.T) {
 	}
 
 	output := string(result)
-	if !strings.Contains(output, "white-space:pre") {
-		t.Error("Expected line number styling in output")
+	if !strings.Contains(output, `<span class="ln">`) {
+		t.Error("Expected line number spans in output")
 	}
 }
 

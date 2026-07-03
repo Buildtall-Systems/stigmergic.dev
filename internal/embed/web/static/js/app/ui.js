@@ -69,6 +69,50 @@ function rawToggle() {
 	}
 }
 
+function themeConfig() {
+	var el = document.getElementById('theme-config')
+	if (!el) return null
+	try {
+		return JSON.parse(el.textContent)
+	} catch (e) {
+		console.error('unparseable theme-config', e)
+		return null
+	}
+}
+
+// applyTheme swaps the palette by attribute (the scoped variable and chroma
+// blocks are already on the page), persists the choice, and re-themes
+// mermaid by re-rendering every diagram from its stashed source.
+function applyTheme(name) {
+	document.documentElement.setAttribute('data-theme', name)
+	try {
+		localStorage.setItem('stigmergic-theme', name)
+	} catch (e) {
+		console.warn('theme preference not persisted', e)
+	}
+	var cfg = themeConfig()
+	if (cfg && window.mermaid) {
+		mermaid.initialize({ startOnLoad: false, theme: cfg.mermaid[name] || 'dark' })
+		renderMermaidIn(document.body)
+	}
+}
+
+function cycleTheme() {
+	var cfg = themeConfig()
+	if (!cfg || !cfg.order.length) return
+	var active = document.documentElement.getAttribute('data-theme') || cfg.boot
+	var idx = cfg.order.indexOf(active)
+	applyTheme(cfg.order[(idx + 1) % cfg.order.length])
+}
+
+function handleThemeKeydown(evt) {
+	if (evt.key !== 't' && evt.key !== 'T') return
+	if (evt.ctrlKey || evt.metaKey || evt.altKey) return
+	var t = evt.target
+	if (t && (t.matches('input, textarea, select') || t.isContentEditable)) return
+	cycleTheme()
+}
+
 function helpOverlay() {
 	return {
 		open: false,

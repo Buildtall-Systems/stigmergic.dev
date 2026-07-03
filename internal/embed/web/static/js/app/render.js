@@ -61,10 +61,15 @@ function initCodeCopyButtons() {
 	})
 }
 
+// renderMermaidIn renders every mermaid block under target. The diagram
+// source is stashed in a data attribute on first render so a theme toggle
+// can re-render from source after mermaid has replaced the content with SVG.
 function renderMermaidIn(target) {
 	target.querySelectorAll('pre.mermaid').forEach(function(node, i) {
+		var src = node.dataset.mermaidSrc || node.textContent
+		node.dataset.mermaidSrc = src
 		var id = 'mermaid-swap-' + Date.now() + '-' + i;
-		mermaid.render(id, node.textContent).then(function(result) {
+		mermaid.render(id, src).then(function(result) {
 			node.innerHTML = result.svg;
 			node.setAttribute('data-processed', 'true');
 		});

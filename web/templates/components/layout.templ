@@ -2,34 +2,93 @@ package components
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 )
 
-func themeCSS(thm *theme.Theme) string {
-	return `<style type="text/css">:root {
-		--bg-color: ` + thm.Colors.Background + `;
-		--fg-color: ` + thm.Colors.Foreground + `;
-		--bg-alt-color: ` + thm.Colors.BackgroundAlt + `;
-		--comment-color: ` + thm.Colors.Comment + `;
-		--current-line-color: ` + thm.Colors.CurrentLine + `;
-		--selection-color: ` + thm.Colors.Selection + `;
-		--line-number-color: ` + thm.Colors.LineNumber + `;
-		--line-number-active-color: ` + thm.Colors.LineNumberActive + `;
-		--red-color: ` + thm.Colors.Red + `;
-		--orange-color: ` + thm.Colors.Orange + `;
-		--yellow-color: ` + thm.Colors.Yellow + `;
-		--green-color: ` + thm.Colors.Green + `;
-		--cyan-color: ` + thm.Colors.Cyan + `;
-		--blue-color: ` + thm.Colors.Blue + `;
-		--purple-color: ` + thm.Colors.Purple + `;
-		--link-color: ` + thm.Colors.Link + `;
-		--link-hover-color: ` + thm.Colors.LinkHover + `;
-		--code-bg-color: ` + thm.Colors.CodeBg + `;
-		--code-fg-color: ` + thm.Colors.CodeFg + `;
-		--border-color: ` + thm.Colors.BorderColor + `;
+func themeVars(c theme.Colors) string {
+	return `
+		--bg-color: ` + c.Background + `;
+		--fg-color: ` + c.Foreground + `;
+		--bg-alt-color: ` + c.BackgroundAlt + `;
+		--comment-color: ` + c.Comment + `;
+		--current-line-color: ` + c.CurrentLine + `;
+		--selection-color: ` + c.Selection + `;
+		--line-number-color: ` + c.LineNumber + `;
+		--line-number-active-color: ` + c.LineNumberActive + `;
+		--red-color: ` + c.Red + `;
+		--orange-color: ` + c.Orange + `;
+		--yellow-color: ` + c.Yellow + `;
+		--green-color: ` + c.Green + `;
+		--cyan-color: ` + c.Cyan + `;
+		--blue-color: ` + c.Blue + `;
+		--purple-color: ` + c.Purple + `;
+		--link-color: ` + c.Link + `;
+		--link-hover-color: ` + c.LinkHover + `;
+		--code-bg-color: ` + c.CodeBg + `;
+		--code-fg-color: ` + c.CodeFg + `;
+		--border-color: ` + c.BorderColor + `;
+	`
+}
+
+// ThemeCSS emits the boot theme's variables on :root, a [data-theme]-scoped
+// variable block per embedded theme so the pre-paint attribute switches
+// palettes without a round trip, each theme's scoped chroma stylesheet, and
+// the shared component rules. Shared by the main layout and the login page.
+func ThemeCSS(thm *theme.Theme, themes []*theme.Theme) string {
+	var b strings.Builder
+	b.WriteString(`<style type="text/css">:root {`)
+	b.WriteString(themeVars(thm.Colors))
+	b.WriteString("}\n")
+	for _, t := range themes {
+		b.WriteString(`[data-theme="` + t.Name + `"] {`)
+		b.WriteString(themeVars(t.Colors))
+		b.WriteString("}\n")
 	}
+	for _, t := range themes {
+		b.WriteString(t.ChromaCSS)
+	}
+	b.WriteString(sharedThemeRules)
+	b.WriteString(`</style>`)
+	return b.String()
+}
+
+// PrePaintScript applies the persisted theme attribute before first paint —
+// the one script that must stay inline to avoid a flash of the boot theme.
+func PrePaintScript(bootTheme string) string {
+	return `<script>(function(){var t=null;try{t=localStorage.getItem('stigmergic-theme')}catch(e){}document.documentElement.setAttribute('data-theme',t||` + strconv.Quote(bootTheme) + `)})()</script>`
+}
+
+// ThemeConfig is the client-side theme registry emitted as JSON: the boot
+// theme, the cycle order, and each theme's paired mermaid theme.
+type ThemeConfig struct {
+	Boot    string            `json:"boot"`
+	Order   []string          `json:"order"`
+	Mermaid map[string]string `json:"mermaid"`
+}
+
+func buildThemeConfig(thm *theme.Theme, themes []*theme.Theme) ThemeConfig {
+	cfg := ThemeConfig{Boot: thm.Name, Mermaid: map[string]string{thm.Name: thm.MermaidTheme}}
+	for _, t := range themes {
+		cfg.Order = append(cfg.Order, t.Name)
+		cfg.Mermaid[t.Name] = t.MermaidTheme
+	}
+	bootListed := false
+	for _, name := range cfg.Order {
+		if name == thm.Name {
+			bootListed = true
+			break
+		}
+	}
+	if !bootListed {
+		cfg.Order = append([]string{thm.Name}, cfg.Order...)
+	}
+	return cfg
+}
+
+const sharedThemeRules = `
 	body {
 		background-color: var(--bg-color);
 		color: var(--fg-color);
@@ -112,8 +171,8 @@ func themeCSS(thm *theme.Theme) string {
 	}
 	.outline-link-active {
 		color: var(--green-color);
-	}</style>`
-}
+	}
+`
 
 templ BuildtallLogo() {
 	<svg class="h-8 w-8" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" style="fill: var(--fg-color);">
@@ -213,26 +272,32 @@ templ BuildtallLogo() {
 	</svg>
 }
 
-templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities, outline []models.OutlineEntry) {
+templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities, outline []models.OutlineEntry) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
+			@templ.Raw(PrePaintScript(thm.Name))
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<meta name="description" content="Markdown file watcher and renderer"/>
 			<title>{ title } - stigmergic</title>
 			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
 			<link rel="stylesheet" href="/static/styles/output.css"/>
-			@templ.Raw(themeCSS(thm))
+			@templ.Raw(ThemeCSS(thm, themes))
 			<link rel="stylesheet" href="/static/css/katex.min.css"/>
 			<script defer src="/static/js/katex.min.js"></script>
 			<script defer src="/static/js/katex-auto-render.min.js"></script>
 			<script src="/static/js/mermaid.min.js"></script>
+			@templ.JSONScript("theme-config", buildThemeConfig(thm, themes))
 			<script>
-				mermaid.initialize({
-					startOnLoad: true,
-					theme: 'dark'
-				});
+				(function(){
+					var cfg = JSON.parse(document.getElementById('theme-config').textContent);
+					var active = document.documentElement.getAttribute('data-theme') || cfg.boot;
+					mermaid.initialize({
+						startOnLoad: false,
+						theme: cfg.mermaid[active] || 'dark'
+					});
+				})();
 			</script>
 			<script src="/static/js/wiremd.min.js"></script>
 			<script src="/static/js/htmx.min.js"></script>
@@ -303,6 +368,7 @@ templ Layout(title string, thm *theme.Theme, files []models.SearchableFile, tree
 								</div>
 							</div>
 						}
+						<button @click="cycleTheme()" title="Cycle theme (T)" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">Theme</button>
 						<button @click="$dispatch('toggle-help')" title="Keyboard shortcuts" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">?</button>
 					</div>
 				</div>

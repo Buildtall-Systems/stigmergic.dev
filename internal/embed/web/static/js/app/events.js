@@ -47,6 +47,7 @@ function handleSourceKeydown(evt) {
 document.addEventListener('DOMContentLoaded', function() {
 	renderMath(document.body);
 	renderWiremd(document.body);
+	renderMermaidIn(document.body);
 	initCodeCopyButtons();
 	syncCurrentFile();
 	initScrollspy();
@@ -55,6 +56,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	}
 	document.addEventListener('keydown', handleNavKeydown);
 	document.addEventListener('keydown', handleSourceKeydown);
+	document.addEventListener('keydown', handleThemeKeydown);
 	document.addEventListener('click', handleOutlineClick);
 
 	document.body.addEventListener('htmx:afterSwap', function(evt) {
