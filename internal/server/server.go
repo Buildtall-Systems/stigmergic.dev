@@ -29,6 +29,7 @@ type Server struct {
 	tree            *models.Tree
 	cachedFiles     atomic.Value
 	cachedBacklinks atomic.Value
+	cachedContent   atomic.Value
 	source          source.ContentSource
 	watchable       source.Watchable
 	theme           *theme.Theme
@@ -131,6 +132,7 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 
 	s.cachedFiles.Store([]models.SearchableFile{})
 	s.cachedBacklinks.Store(models.BacklinkIndex{})
+	s.cachedContent.Store(searchIndex{})
 
 	s.wg.Add(1)
 	go s.initialScan()
@@ -321,10 +323,19 @@ func (s *Server) updateTree() {
 	s.tree = newTree
 	s.treeMux.Unlock()
 
+	s.rebuildIndexes(newTree)
+	logger.Log.Info("content tree updated successfully")
+}
+
+// rebuildIndexes refreshes every content-derived cache from a single read
+// of the corpus: the searchable file list, the backlink index, and the
+// full-text search index.
+func (s *Server) rebuildIndexes(newTree *models.Tree) {
 	files := newTree.FlattenMarkdownFiles()
 	s.cachedFiles.Store(files)
-	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.source.FS(), files))
-	logger.Log.Info("content tree updated successfully")
+	contents := markdown.ReadCorpus(s.source.FS(), files)
+	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(contents, files))
+	s.cachedContent.Store(buildSearchIndex(contents, files))
 }
 
 func (s *Server) initialScan() {
@@ -342,9 +353,7 @@ func (s *Server) initialScan() {
 	s.tree = newTree
 	s.treeMux.Unlock()
 
-	files := newTree.FlattenMarkdownFiles()
-	s.cachedFiles.Store(files)
-	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(s.source.FS(), files))
+	s.rebuildIndexes(newTree)
 	s.indexReady.Store(true)
 	logger.Log.Info("background scan complete, index ready")
 

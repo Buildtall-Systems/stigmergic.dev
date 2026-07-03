@@ -4,6 +4,18 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-02
 
+### UI Redesign — Phase 4 Complete (full-text search), awaiting operator verification
+
+Phase 3 committed as `0c752a6` after operator verification. Phase 4 on `feature/ui-redesign`:
+
+- **Single-pass corpus read**: new `markdown.ReadCorpus` reads every file once per rescan; `BuildBacklinkIndex` now takes the pre-read map instead of an `fs.FS` (5 test call sites updated); new `rebuildIndexes` helper on Server feeds file list, backlink index, and the new search index from that one read (`initialScan` + `updateTree` both use it).
+- **Search index** (`internal/server/search.go`, new): `searchIndex` holds original + lowercased content per doc in mod-time order; `search()` returns first case-insensitive occurrence per doc, capped at 20 with a truncation flag; snippets window ±40 bytes widened to rune boundaries, line breaks flattened byte-preserving so match offsets stay valid; non-ASCII-width case pairs fall back to the lowered copy for offset correctness.
+- **`GET /api/search`**: registered unconditionally (serve + site modes); JSON `{query, results:[{path,title,snippet,matchStart,matchEnd}], truncated}`.
+- **Palette Content group**: sequenced debounced fetch merged into a new `displayGroups` rendering (template's two static sections replaced by one dynamic group loop); ranking per mockup 5 — Content above Files when the query is prose-like (>2 words or no `[./_-]` characters); snippets render with `<strong>` match emphasis via offsets (HTML-escaped around); selection navigates via the established htmx path; stale responses discarded by sequence + query check; empty-state and placeholder copy updated.
+- **Tests**: unit — match+snippet offsets, case-insensitivity, boundary windowing (whole-doc snippet), 25-doc cap+truncation, empty/whitespace/no-match queries; integration — `/api/search` over both `FilesystemSource` and `EmbeddedSource`, and rebuild-on-change (new file's content searchable after watcher rescan).
+
+Verification: generate/lint/test/build all green via run_silent (lint 0 findings after goconst/prealloc fixes, tests race-clean). Halted for operator manual verification before commit.
+
 ### UI Redesign — Phase 3 Complete (document outline + scrollspy), awaiting operator verification
 
 Phase 2 committed as `a41e4c7` after operator verification. Phase 3 on `feature/ui-redesign`:

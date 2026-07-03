@@ -46,6 +46,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/file/", s.handleMarkdown)
 	s.mux.HandleFunc("/events", s.handleSSE)
 	s.mux.HandleFunc("/api/files", s.handleFilesAPI)
+	s.mux.HandleFunc("/api/search", s.handleSearchAPI)
 	s.mux.HandleFunc("/partial/sidebar", s.handleSidebarPartial)
 
 	if s.uiCaps.GitignoreToggle {
@@ -345,6 +346,20 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 			logger.Log.Debug("SSE message flushed")
 		}
+	}
+}
+
+func (s *Server) handleSearchAPI(w http.ResponseWriter, r *http.Request) {
+	var idx searchIndex
+	if v, ok := s.cachedContent.Load().(searchIndex); ok {
+		idx = v
+	}
+
+	resp := idx.search(r.URL.Query().Get("q"), searchResultLimit)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		logger.Log.Error("failed to encode search results", "error", err)
 	}
 }
 

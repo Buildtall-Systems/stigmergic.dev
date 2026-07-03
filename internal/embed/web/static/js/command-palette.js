@@ -6,6 +6,9 @@ function commandPalette() {
 		respectGitignore: true,
 		commands: [],
 		results: [],
+		displayGroups: [],
+		contentResults: [],
+		contentTruncated: false,
 		selectedIndex: 0,
 		indexReady: document.body.dataset.indexReady === 'true',
 		gitignoreEnabled: document.body.dataset.gitignoreEnabled === 'true',
@@ -50,10 +53,6 @@ function commandPalette() {
 			}
 		},
 
-		get groupedResults() {
-			return this._groupedResults || { commands: [], files: [] };
-		},
-
 		getIcon(type) {
 			return this._iconCache[type];
 		},
@@ -66,8 +65,10 @@ function commandPalette() {
 			this._iconCache = {
 				command: document.getElementById('icon-command').innerHTML,
 				file: document.getElementById('icon-file').innerHTML,
+				content: document.getElementById('icon-content').innerHTML,
 				return: document.getElementById('icon-return').innerHTML
 			};
+			this._searchSeq = 0;
 			this.commands = this.buildCommands();
 			if (this.gitignoreEnabled) {
 				this.loadGitignoreStatus();
@@ -92,11 +93,74 @@ function commandPalette() {
 				}));
 			}
 			this.rebuildIndex();
-			this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
-			this._groupedResults = {
-				commands: [],
-				files: this.results
-			};
+			this.showDefaultResults();
+		},
+
+		showDefaultResults() {
+			const files = this.allFiles.slice(0, 50).map(f => ({ ...f, matches: null }));
+			this.contentResults = [];
+			this.contentTruncated = false;
+			this.applyResults([], files);
+		},
+
+		// applyResults assembles the display groups and the flat keyboard-nav
+		// list. Content ranks above Files for prose-like queries (more than
+		// two words, or no filename-ish characters), Files first otherwise.
+		applyResults(commands, files) {
+			this._commands = commands;
+			this._files = files;
+
+			const groups = [];
+			if (commands.length > 0) {
+				groups.push({ key: 'commands', label: 'Commands', items: commands });
+			}
+			const fileGroup = files.length > 0 ? { key: 'files', label: 'Files', items: files } : null;
+			const contentLabel = this.contentTruncated ? 'Content (first 20)' : 'Content';
+			const contentGroup = this.contentResults.length > 0 ? { key: 'content', label: contentLabel, items: this.contentResults } : null;
+
+			const q = this.query.trim();
+			const prose = q.split(/\s+/).length > 2 || !/[./_-]/.test(q);
+			const ordered = prose ? [contentGroup, fileGroup] : [fileGroup, contentGroup];
+			ordered.forEach(g => { if (g) groups.push(g); });
+
+			this.results = groups.flatMap(g => g.items);
+			this.results.forEach((item, i) => { item.resultIndex = i; });
+			this.displayGroups = groups;
+			this.selectedIndex = 0;
+		},
+
+		fetchContent(q) {
+			if (!q || q.length < 2) {
+				this.contentResults = [];
+				this.contentTruncated = false;
+				this.applyResults(this._commands || [], this._files || []);
+				return;
+			}
+			const seq = ++this._searchSeq;
+			fetch('/api/search?q=' + encodeURIComponent(q))
+				.then(res => res.json())
+				.then(data => {
+					if (seq !== this._searchSeq || this.query.trim() !== q) return;
+					this.contentResults = data.results.map(m => ({
+						id: 'content:' + m.path,
+						type: 'content',
+						name: m.title,
+						path: m.path,
+						snippet: m.snippet,
+						matchStart: m.matchStart,
+						matchEnd: m.matchEnd
+					}));
+					this.contentTruncated = data.truncated;
+					this.applyResults(this._commands || [], this._files || []);
+				})
+				.catch(err => console.error('Content search failed:', err));
+		},
+
+		snippetHtml(item) {
+			const s = item.snippet;
+			return '…' + this.escapeHtml(s.slice(0, item.matchStart)) +
+				'<strong>' + this.escapeHtml(s.slice(item.matchStart, item.matchEnd)) + '</strong>' +
+				this.escapeHtml(s.slice(item.matchEnd)) + '…';
 		},
 
 		rebuildIndex() {
@@ -125,8 +189,7 @@ function commandPalette() {
 					if (this.query.trim()) {
 						this.filter();
 					} else {
-						this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
-						this._groupedResults = { commands: [], files: this.results };
+						this.showDefaultResults();
 					}
 				})
 				.catch(err => console.error('Failed to refresh files:', err));
@@ -144,9 +207,7 @@ function commandPalette() {
 		close() {
 			this.open = false;
 			this.query = '';
-			this.selectedIndex = 0;
-			this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
-			this._groupedResults = { commands: [], files: this.results };
+			this.showDefaultResults();
 		},
 
 		debouncedFilter() {
@@ -158,34 +219,23 @@ function commandPalette() {
 			const q = this.query.trim();
 
 			if (!q) {
-				this.results = this.allFiles.slice(0, 50).map((f, i) => ({ ...f, matches: null, resultIndex: i }));
-				this._groupedResults = { commands: [], files: this.results };
-				this.selectedIndex = 0;
+				this.showDefaultResults();
 				return;
 			}
 
+			let commands, files;
 			if (q.length === 1) {
 				const lower = q.toLowerCase();
-				const commands = this.commands.filter(c => c.name.toLowerCase().startsWith(lower));
-				const files = this.allFiles.filter(f => f.name.toLowerCase().startsWith(lower));
-				this.results = [...commands, ...files].slice(0, 50).map((item, i) => ({ ...item, matches: null, resultIndex: i }));
-				this._groupedResults = {
-					commands: this.results.filter(r => r.type === 'command'),
-					files: this.results.filter(r => r.type === 'file')
-				};
-				this.selectedIndex = 0;
-				return;
+				commands = this.commands.filter(c => c.name.toLowerCase().startsWith(lower)).map(c => ({ ...c, matches: null }));
+				files = this.allFiles.filter(f => f.name.toLowerCase().startsWith(lower)).slice(0, 50).map(f => ({ ...f, matches: null }));
+			} else {
+				const searchResults = this.fuse.search(q, { limit: 50 });
+				commands = searchResults.filter(r => r.item.type === 'command').map(r => ({ ...r.item, matches: r.matches }));
+				files = searchResults.filter(r => r.item.type === 'file').map(r => ({ ...r.item, matches: r.matches }));
 			}
 
-			const searchResults = this.fuse.search(q, { limit: 50 });
-			const commands = searchResults.filter(r => r.item.type === 'command').map(r => ({ ...r.item, matches: r.matches }));
-			const files = searchResults.filter(r => r.item.type === 'file').map(r => ({ ...r.item, matches: r.matches }));
-			this.results = [...commands, ...files].map((item, i) => ({ ...item, resultIndex: i }));
-			this._groupedResults = {
-				commands: this.results.filter(r => r.type === 'command'),
-				files: this.results.filter(r => r.type === 'file')
-			};
-			this.selectedIndex = 0;
+			this.applyResults(commands, files);
+			this.fetchContent(q);
 		},
 
 		highlightMatch(item) {
@@ -258,6 +308,7 @@ function commandPalette() {
 				if (item.type === 'command') {
 					item.action();
 				} else {
+					// Files and content matches both navigate to the document.
 					htmx.ajax('GET', '/file' + item.path, { source: this.$root, target: '#content', swap: 'innerHTML' });
 				}
 			}

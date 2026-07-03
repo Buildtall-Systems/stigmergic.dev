@@ -11,7 +11,7 @@ templ CommandPalette() {
 					<input
 						x-ref="searchInput"
 						type="text"
-						placeholder="Search files and commands..."
+						placeholder="Search files, commands, and content..."
 						x-model="query"
 						@input="debouncedFilter()"
 						@keydown.down="nextResult()"
@@ -32,6 +32,9 @@ templ CommandPalette() {
 				<template id="icon-command">
 					@IconTerminal("w-5 h-5 flex-shrink-0", "")
 				</template>
+				<template id="icon-content">
+					@IconSearch("w-5 h-5 flex-shrink-0", "")
+				</template>
 				<template id="icon-return">
 					@IconReturn("w-4 h-4", "")
 				</template>
@@ -41,16 +44,14 @@ templ CommandPalette() {
 						<div class="p-4 text-center" style="color: var(--comment-color);">
 							<span x-show="!indexReady">Indexing...</span>
 							<span x-show="indexReady && query">No matches found</span>
-							<span x-show="indexReady && !query">Type to search files and commands</span>
+							<span x-show="indexReady && !query">Type to search files, commands, and content</span>
 						</div>
 					</template>
 
-					<template x-if="groupedResults.commands.length > 0">
+					<template x-for="group in displayGroups" :key="group.key">
 						<div>
-							<div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--cyan-color); background-color: var(--bg-alt-color);">
-								Commands
-							</div>
-							<template x-for="item in groupedResults.commands" :key="item.id">
+							<div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--cyan-color); background-color: var(--bg-alt-color);" x-text="group.label"></div>
+							<template x-for="item in group.items" :key="item.id">
 								<div
 									@click="selectIndex(item.resultIndex)"
 									@mouseover="selectedIndex = item.resultIndex"
@@ -58,34 +59,11 @@ templ CommandPalette() {
 									:style="selectedIndex === item.resultIndex ? 'background-color: var(--selection-color);' : ''"
 									class="px-4 py-3 cursor-pointer transition-colors flex items-center gap-3"
 								>
-									<span x-html="getIcon('command')" style="color: var(--purple-color);"></span>
+									<span x-html="getIcon(item.type)" :style="item.type === 'command' ? 'color: var(--purple-color);' : 'color: var(--comment-color);'"></span>
 									<div class="flex-1 min-w-0">
 										<div style="color: var(--fg-color);" x-html="highlightMatch(item)"></div>
-										<div x-show="item.description" style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-text="item.description"></div>
-									</div>
-									<span x-show="selectedIndex === item.resultIndex" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
-								</div>
-							</template>
-						</div>
-					</template>
-
-					<template x-if="groupedResults.files.length > 0">
-						<div>
-							<div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--cyan-color); background-color: var(--bg-alt-color);">
-								Files
-							</div>
-							<template x-for="item in groupedResults.files" :key="item.id">
-								<div
-									@click="selectIndex(item.resultIndex)"
-									@mouseover="selectedIndex = item.resultIndex"
-									:data-selected="selectedIndex === item.resultIndex"
-									:style="selectedIndex === item.resultIndex ? 'background-color: var(--selection-color);' : ''"
-									class="px-4 py-3 cursor-pointer transition-colors flex items-center gap-3"
-								>
-									<span x-html="getIcon('file')" style="color: var(--comment-color);"></span>
-									<div class="flex-1 min-w-0">
-										<div style="color: var(--fg-color);" x-html="highlightMatch(item)"></div>
-										<div style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-text="item.description"></div>
+										<div x-show="item.type === 'content'" style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-html="item.snippet ? snippetHtml(item) : ''"></div>
+										<div x-show="item.type !== 'content' && item.description" style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-text="item.description"></div>
 									</div>
 									<span x-show="selectedIndex === item.resultIndex" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
 								</div>
