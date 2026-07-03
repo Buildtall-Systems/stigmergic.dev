@@ -36,6 +36,16 @@ function refreshPane(url, target) {
 	}
 }
 
+// focusContent gives the reading pane keyboard focus so native key scrolling
+// (arrows, PageUp/Down, Home/End, Space) targets it. The body is a fixed
+// viewport, so an unfocused pane receives no key scrolling at all. Home is
+// excluded: initKeyboardNav owns focus there for sidebar tree navigation.
+function focusContent() {
+	if (window.location.pathname === '/') return
+	var content = document.getElementById('content')
+	if (content) content.focus({preventScroll: true})
+}
+
 function handleSourceKeydown(evt) {
 	if (evt.key !== 's' && evt.key !== 'S') return
 	if (evt.ctrlKey || evt.metaKey || evt.altKey) return
@@ -54,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	if (window.location.pathname === '/') {
 		initKeyboardNav();
 	}
+	focusContent();
 	document.addEventListener('keydown', handleNavKeydown);
 	document.addEventListener('keydown', handleSourceKeydown);
 	document.addEventListener('keydown', handleThemeKeydown);
@@ -71,6 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			if (window.location.pathname === '/') {
 				initKeyboardNav();
 			}
+			focusContent();
 		}
 		if (evt.detail.target.id === 'sidebar') {
 			syncCurrentFile();
@@ -106,6 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			if (window.location.pathname === '/') {
 				initKeyboardNav();
 			}
+			focusContent();
 		}
 	});
 
@@ -114,5 +127,6 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (window.location.pathname === '/') {
 			initKeyboardNav();
 		}
+		focusContent();
 	});
 });
