@@ -4,6 +4,15 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-07-03
 
+### Possible improvement: palette search ranking (filename precedence + quality/recency)
+
+Investigation of the Phase 4 search surfaced two ranking gaps, noted here as a candidate future unit (not scheduled):
+
+- **Group order is a query-shape heuristic, not match-driven** (`command-palette.js` `applyResults`): >2 words or no `[./_-]` chars puts Content above Files regardless of how strong the filename hit is. Improvement: order Files first whenever Fuse returns a strong filename match (scores already captured via `includeScore`), Content first only when filename hits are absent/weak; dedupe Content rows whose path already appears in Files.
+- **No composite quality × recency ranking**: Files rank by Fuse score only (recency unused); Content ranks by mod-time only (`search.go` scans the mod-time-descending index, first occurrence per doc, no occurrence count / title boost / whole-word bonus). Improvement: expose `SearchableFile.ModTime` through `/api/files` + `markdown-files` JSON and sort files by score+recency composite; extend the server scan to score candidate docs (occurrences, title hit, whole-word) with recency decay before the cap of 20.
+
+Contained scope: `command-palette.js` + `internal/server/search.go`; no new libraries.
+
 ### UI Redesign — Phase 5 Complete (theme toggle, typography, login theming), committed `a6735ec`
 
 Phase 4 committed as `eb23587` after operator verification. Phase 5 on `feature/ui-redesign` — all five plan phases now committed and operator-verified:
