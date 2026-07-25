@@ -25,6 +25,15 @@ type SearchableFile struct {
 	Path         string
 	RelativeTime string
 	ModTime      int64
+
+	// ModTimeNano and Size together decide whether a rebuild must re-read a
+	// file. ModTime is not usable for this: at second granularity, an edit
+	// that changes one character within the same second looks unchanged,
+	// which would leave the search and backlink indexes silently stale.
+	// Both are excluded from the JSON payload because no client needs them
+	// and /api/files already ships megabytes.
+	ModTimeNano int64 `json:"-"`
+	Size        int64 `json:"-"`
 }
 
 type Node struct {
@@ -33,6 +42,7 @@ type Node struct {
 	ModTime  time.Time
 	Children []*Node
 	Type     NodeType
+	Size     int64
 }
 
 type Tree struct {
@@ -150,9 +160,11 @@ func (t *Tree) FlattenMarkdownFiles() []SearchableFile {
 func (t *Tree) flattenMarkdownFilesRecursive(node *Node, files *[]SearchableFile) {
 	if node.IsFile() && filepath.Ext(node.Name) == MarkdownExt {
 		*files = append(*files, SearchableFile{
-			Name:    node.Name,
-			Path:    "/" + node.Path,
-			ModTime: node.ModTime.Unix(),
+			Name:        node.Name,
+			Path:        "/" + node.Path,
+			ModTime:     node.ModTime.Unix(),
+			ModTimeNano: node.ModTime.UnixNano(),
+			Size:        node.Size,
 		})
 		return
 	}

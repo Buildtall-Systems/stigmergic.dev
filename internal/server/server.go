@@ -38,11 +38,13 @@ type Server struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	sessionManager  *session.Manager
+	index           contentIndex
 	serverURL       string
 	treeSignature   string
 	allowedPubkeys  []string
 	treeMux         sync.RWMutex
 	clientsMux      sync.RWMutex
+	indexMux        sync.Mutex
 	wg              sync.WaitGroup
 	uiCaps          models.UICapabilities
 	indexReady      atomic.Bool
@@ -436,15 +438,46 @@ func (s *Server) updateTree() bool {
 	return structural
 }
 
-// rebuildIndexes refreshes every content-derived cache from a single read
-// of the corpus: the searchable file list, the backlink index, and the
-// full-text search index.
+// contentIndex is the state a rebuild carries forward so the next one can
+// skip the work whose inputs did not change: the corpus itself, the
+// wikilinks parsed out of each document, and the lowercased search
+// documents. Guarded by indexMux.
+type contentIndex struct {
+	corpus markdown.Corpus
+	links  markdown.LinkRefs
+	docs   searchDocs
+}
+
+// rebuildIndexes refreshes every content-derived cache. Files whose mod time
+// and size are unchanged are neither re-read nor re-parsed, so the cost of a
+// rebuild tracks what actually changed rather than the size of the corpus.
+//
+// Resolution and inversion still run in full every time, because a wikilink
+// names a page rather than a path: adding or removing any file can change
+// what every other file's links resolve to. Those passes are map lookups
+// over cached refs, not parsing, so running them unconditionally is cheap
+// and removes a whole class of staleness.
+//
+// Rebuilds are serialized: broadcastEvents and a gitignore toggle can both
+// reach here, and the carried-forward state is not safe for concurrent
+// mutation.
 func (s *Server) rebuildIndexes(newTree *models.Tree) {
 	files := newTree.FlattenMarkdownFiles()
 	s.cachedFiles.Store(files)
-	contents := markdown.ReadCorpus(s.source.FS(), files)
-	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(contents, files))
-	s.cachedContent.Store(buildSearchIndex(contents, files))
+
+	s.indexMux.Lock()
+	defer s.indexMux.Unlock()
+
+	corpus, changed := markdown.ReadCorpus(s.source.FS(), s.index.corpus, files)
+	links := markdown.ExtractLinkRefs(s.index.links, corpus, changed)
+	docs := updateSearchDocs(s.index.docs, corpus, changed)
+
+	s.index = contentIndex{corpus: corpus, links: links, docs: docs}
+
+	logger.Log.Debug("rebuilt content indexes", "files", len(files), "reread", len(changed))
+
+	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(links, files))
+	s.cachedContent.Store(orderSearchIndex(docs, files))
 }
 
 func (s *Server) initialScan() {

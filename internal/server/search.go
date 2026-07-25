@@ -1,9 +1,11 @@
 package server
 
 import (
+	"path"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 )
 
@@ -38,21 +40,45 @@ type searchResponse struct {
 	Truncated bool          `json:"truncated"`
 }
 
-func buildSearchIndex(contents map[string][]byte, files []models.SearchableFile) searchIndex {
+// searchDocs holds every document keyed by route, so a rebuild can replace
+// the entries whose contents changed and leave the rest alone. Lowercasing
+// the whole corpus is the expensive part and is what this avoids repeating.
+type searchDocs map[string]searchDoc
+
+// updateSearchDocs returns the document set for corpus, recomputing only the
+// routes named in changed and carrying the rest over from prev. Routes
+// absent from corpus are dropped.
+func updateSearchDocs(prev searchDocs, corpus markdown.Corpus, changed markdown.ChangedRoutes) searchDocs {
+	docs := make(searchDocs, len(corpus))
+
+	for route, entry := range corpus {
+		if _, dirty := changed[route]; !dirty {
+			if cached, ok := prev[route]; ok {
+				docs[route] = cached
+				continue
+			}
+		}
+
+		body := string(entry.Data)
+		docs[route] = searchDoc{
+			Path:  "/" + route,
+			Title: path.Base(route),
+			Text:  body,
+			Lower: strings.ToLower(body),
+		}
+	}
+
+	return docs
+}
+
+// orderSearchIndex materializes docs in files order, which is most recently
+// modified first and therefore also result order.
+func orderSearchIndex(docs searchDocs, files []models.SearchableFile) searchIndex {
 	idx := make(searchIndex, 0, len(files))
 	for _, f := range files {
-		route := strings.TrimPrefix(f.Path, "/")
-		data, ok := contents[route]
-		if !ok {
-			continue
+		if doc, ok := docs[strings.TrimPrefix(f.Path, "/")]; ok {
+			idx = append(idx, doc)
 		}
-		text := string(data)
-		idx = append(idx, searchDoc{
-			Path:  f.Path,
-			Title: f.Name,
-			Text:  text,
-			Lower: strings.ToLower(text),
-		})
 	}
 	return idx
 }

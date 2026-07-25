@@ -1,10 +1,11 @@
-.PHONY: help generate build test clean css lint vendor-js wiremd-js release
+.PHONY: help generate build test bench clean css lint vendor-js wiremd-js release
 
 help:
 	@echo "stigmergic.dev - Makefile commands"
 	@echo ""
 	@printf "  make build     (L%s) - Build the binary\n" "$$(grep -n '^build:' Makefile | cut -d: -f1)"
 	@printf "  make test      (L%s) - Run tests\n" "$$(grep -n '^test:' Makefile | cut -d: -f1)"
+	@printf "  make bench     (L%s) - Run benchmarks\n" "$$(grep -n '^bench:' Makefile | cut -d: -f1)"
 	@printf "  make lint      (L%s) - Run linter\n" "$$(grep -n '^lint:' Makefile | cut -d: -f1)"
 	@printf "  make generate  (L%s) - Generate templ templates\n" "$$(grep -n '^generate:' Makefile | cut -d: -f1)"
 	@printf "  make css       (L%s) - Build Tailwind CSS\n" "$$(grep -n '^css:' Makefile | cut -d: -f1)"
@@ -27,6 +28,9 @@ build: css generate
 
 test: generate
 	go test -v -race -failfast ./...
+
+bench: generate
+	go test -run '^$$' -bench . -benchmem ./...
 
 clean:
 	rm -f stigmergic

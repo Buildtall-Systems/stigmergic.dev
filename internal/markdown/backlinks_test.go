@@ -1,8 +1,11 @@
 package markdown
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
@@ -24,6 +27,194 @@ func writeTestFile(t *testing.T, dir, route, content string) {
 	}
 }
 
+// coldBacklinkIndex builds the index from nothing, the way a first rebuild
+// does: read everything, parse everything, resolve and invert.
+func coldBacklinkIndex(dir string, files []models.SearchableFile) models.BacklinkIndex {
+	corpus, changed := ReadCorpus(os.DirFS(dir), nil, files)
+	return BuildBacklinkIndex(ExtractLinkRefs(nil, corpus, changed), files)
+}
+
+// scanFiles lists the markdown files under dir the way the real scanner
+// does, carrying the stamps that decide whether a rebuild re-reads a file.
+func scanFiles(tb testing.TB, dir string) []models.SearchableFile {
+	tb.Helper()
+
+	var files []models.SearchableFile
+	walkErr := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || filepath.Ext(d.Name()) != models.MarkdownExt {
+			return nil
+		}
+		info, infoErr := d.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		rel, relErr := filepath.Rel(dir, p)
+		if relErr != nil {
+			return relErr
+		}
+		files = append(files, models.SearchableFile{
+			Name:        d.Name(),
+			Path:        "/" + filepath.ToSlash(rel),
+			ModTime:     info.ModTime().Unix(),
+			ModTimeNano: info.ModTime().UnixNano(),
+			Size:        info.Size(),
+		})
+		return nil
+	})
+	if walkErr != nil {
+		tb.Fatalf("failed to scan test corpus: %v", walkErr)
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].ModTime != files[j].ModTime {
+			return files[i].ModTime > files[j].ModTime
+		}
+		return files[i].Path < files[j].Path
+	})
+
+	return files
+}
+
+// TestIncrementalIndexMatchesFullRebuild is the correctness contract for
+// incremental rebuilds: state carried forward must produce exactly the index
+// a cold build produces, after any sequence of edits, additions, renames and
+// deletions. A weak version of this test would be worse than none, because
+// the defect it guards against is a stale backlink appearing intermittently.
+//
+// Every edit below changes the file's length. The stamp is mod time plus
+// size, so an edit preserving both within one mod time tick is by design
+// invisible; making the lengths differ keeps the test measuring the
+// incremental logic rather than the clock.
+func TestIncrementalIndexMatchesFullRebuild(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	writeTestFile(t, dir, "a.md", "Link to [[b]] and [[docs/deep]].")
+	writeTestFile(t, dir, "b.md", "Back to [[a]].")
+	writeTestFile(t, dir, "docs/deep.md", "Deep note linking [[b]].")
+
+	steps := []struct {
+		mutate func()
+		name   string
+	}{
+		{name: "initial build", mutate: func() {}},
+		{name: "edit contents, links unchanged", mutate: func() {
+			writeTestFile(t, dir, "b.md", "Back to [[a]], with more words than before.")
+		}},
+		{name: "edit contents, links changed", mutate: func() {
+			writeTestFile(t, dir, "b.md", "Now points at [[docs/deep]] instead, plus padding.")
+		}},
+		{name: "add file", mutate: func() {
+			writeTestFile(t, dir, "c.md", "New note pointing at [[a]].")
+		}},
+		{name: "add same-named file in another directory", mutate: func() {
+			writeTestFile(t, dir, "docs/c.md", "Another c, also pointing at [[a]].")
+		}},
+		// A rename changes no other file's bytes, but every unresolved
+		// wikilink naming the old page must stop resolving and every one
+		// naming the new page must start. Nothing here would be caught if
+		// resolution were cached alongside parsing.
+		{name: "rename a link target", mutate: func() {
+			if err := os.Rename(filepath.Join(dir, "docs/deep.md"), filepath.Join(dir, "docs/deeper.md")); err != nil {
+				t.Fatalf("failed to rename: %v", err)
+			}
+		}},
+		{name: "delete a link source", mutate: func() {
+			if err := os.Remove(filepath.Join(dir, "c.md")); err != nil {
+				t.Fatalf("failed to remove: %v", err)
+			}
+		}},
+		{name: "restore the deleted name with different contents", mutate: func() {
+			writeTestFile(t, dir, "c.md", "Restored c, now linking [[b]] rather than a.")
+		}},
+		{name: "edit away every link", mutate: func() {
+			writeTestFile(t, dir, "a.md", "No links at all in this document any more.")
+		}},
+	}
+
+	var (
+		corpus Corpus
+		links  LinkRefs
+	)
+
+	for _, step := range steps {
+		step.mutate()
+
+		files := scanFiles(t, dir)
+
+		var changed ChangedRoutes
+		corpus, changed = ReadCorpus(os.DirFS(dir), corpus, files)
+		links = ExtractLinkRefs(links, corpus, changed)
+
+		got := BuildBacklinkIndex(links, files)
+		want := coldBacklinkIndex(dir, files)
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("after %q: incremental index differs from full rebuild\ngot:  %v\nwant: %v", step.name, got, want)
+		}
+	}
+}
+
+// TestIncrementalCorpusRereadsOnlyChangedFiles pins the saving itself. If
+// this regresses, correctness survives but the phase has no point.
+func TestIncrementalCorpusRereadsOnlyChangedFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	writeTestFile(t, dir, "a.md", "first")
+	writeTestFile(t, dir, "b.md", "second")
+	writeTestFile(t, dir, "c.md", "third")
+
+	files := scanFiles(t, dir)
+	corpus, changed := ReadCorpus(os.DirFS(dir), nil, files)
+	if len(changed) != 3 {
+		t.Fatalf("expected a cold build to read all 3 files, read %d", len(changed))
+	}
+
+	corpus, changed = ReadCorpus(os.DirFS(dir), corpus, scanFiles(t, dir))
+	if len(changed) != 0 {
+		t.Errorf("expected an unchanged corpus to read nothing, read %d", len(changed))
+	}
+
+	writeTestFile(t, dir, "b.md", "second, edited to a different length")
+
+	_, changed = ReadCorpus(os.DirFS(dir), corpus, scanFiles(t, dir))
+	if len(changed) != 1 {
+		t.Fatalf("expected exactly 1 re-read, got %d", len(changed))
+	}
+	if _, ok := changed["b.md"]; !ok {
+		t.Errorf("expected b.md to be the re-read file, got %v", changed)
+	}
+}
+
+// TestIncrementalCorpusDropsRemovedFiles guards the other direction: state
+// carried forward must not resurrect a file that no longer exists.
+func TestIncrementalCorpusDropsRemovedFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	writeTestFile(t, dir, "a.md", "first")
+	writeTestFile(t, dir, "b.md", "second")
+
+	corpus, _ := ReadCorpus(os.DirFS(dir), nil, scanFiles(t, dir))
+
+	if err := os.Remove(filepath.Join(dir, "b.md")); err != nil {
+		t.Fatalf("failed to remove: %v", err)
+	}
+
+	corpus, _ = ReadCorpus(os.DirFS(dir), corpus, scanFiles(t, dir))
+
+	if _, ok := corpus["b.md"]; ok {
+		t.Error("expected the removed file to be dropped from the corpus")
+	}
+	if _, ok := corpus["a.md"]; !ok {
+		t.Error("expected the surviving file to remain in the corpus")
+	}
+}
+
 func TestBuildBacklinkIndex(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -38,7 +229,7 @@ func TestBuildBacklinkIndex(t *testing.T) {
 		{Name: "c.md", Path: "/c.md"},
 	}
 
-	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
+	index := coldBacklinkIndex(dir, files)
 
 	entries := index["b.md"]
 	if len(entries) != 2 {
@@ -67,7 +258,7 @@ func TestBuildBacklinkIndexNoLinks(t *testing.T) {
 		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
+	index := coldBacklinkIndex(dir, files)
 
 	if len(index) != 0 {
 		t.Errorf("expected empty index, got %d entries", len(index))
@@ -84,7 +275,7 @@ func TestBuildBacklinkIndexSelfLink(t *testing.T) {
 		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
+	index := coldBacklinkIndex(dir, files)
 
 	if entries := index["a.md"]; len(entries) != 0 {
 		t.Errorf("expected self-links to be excluded, got %d entries", len(entries))
@@ -103,7 +294,7 @@ func TestBuildBacklinkIndexDuplicateLinks(t *testing.T) {
 		{Name: "b.md", Path: "/b.md"},
 	}
 
-	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
+	index := coldBacklinkIndex(dir, files)
 
 	entries := index["b.md"]
 	if len(entries) != 1 {
@@ -121,7 +312,7 @@ func TestBuildBacklinkIndexUnresolved(t *testing.T) {
 		{Name: nameA, Path: routeA},
 	}
 
-	index := BuildBacklinkIndex(ReadCorpus(os.DirFS(dir), files), files)
+	index := coldBacklinkIndex(dir, files)
 
 	if len(index) != 0 {
 		t.Errorf("expected empty index for unresolved links, got %d entries", len(index))

@@ -7,15 +7,36 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/testutil"
 )
 
-const searchNotesFile = "notes.md"
+const (
+	searchNotesFile = "notes.md"
+
+	docRouteA = "a.md"
+	docRouteB = "b.md"
+	docRouteC = "docs/c.md"
+	docRouteD = "d.md"
+)
+
+// coldSearchIndex builds an index from nothing, the way a first rebuild
+// does, so tests can state their corpus as plain bytes.
+func coldSearchIndex(contents map[string][]byte, files []models.SearchableFile) searchIndex {
+	corpus := make(markdown.Corpus, len(contents))
+	changed := make(markdown.ChangedRoutes, len(contents))
+	for route, data := range contents {
+		corpus[route] = markdown.CorpusEntry{Data: data}
+		changed[route] = struct{}{}
+	}
+	return orderSearchIndex(updateSearchDocs(nil, corpus, changed), files)
+}
 
 func testSearchIndex() searchIndex {
 	contents := map[string][]byte{
@@ -28,7 +49,49 @@ func testSearchIndex() searchIndex {
 		{Path: "/docs/upper.md", Name: "upper.md"},
 		{Path: "/plain.md", Name: "plain.md"},
 	}
-	return buildSearchIndex(contents, files)
+	return coldSearchIndex(contents, files)
+}
+
+// TestUpdateSearchDocsMatchesColdBuild is the search half of the incremental
+// contract: replacing only the changed routes must produce exactly the
+// document set a cold build produces, including dropping what is gone.
+func TestUpdateSearchDocsMatchesColdBuild(t *testing.T) {
+	t.Parallel()
+
+	first := markdown.Corpus{
+		docRouteA: {Data: []byte("alpha"), ModTime: 1, Size: 5},
+		docRouteB: {Data: []byte("bravo"), ModTime: 1, Size: 5},
+		docRouteC: {Data: []byte("CHARLIE"), ModTime: 1, Size: 7},
+	}
+	firstChanged := markdown.ChangedRoutes{
+		docRouteA: {}, docRouteB: {}, docRouteC: {},
+	}
+
+	warm := updateSearchDocs(nil, first, firstChanged)
+
+	// b edited, c untouched, a gone, d new.
+	second := markdown.Corpus{
+		docRouteB: {Data: []byte("BRAVO, rewritten"), ModTime: 2, Size: 16},
+		docRouteC: {Data: []byte("CHARLIE"), ModTime: 1, Size: 7},
+		docRouteD: {Data: []byte("Delta"), ModTime: 2, Size: 5},
+	}
+	secondChanged := markdown.ChangedRoutes{docRouteB: {}, docRouteD: {}}
+
+	got := updateSearchDocs(warm, second, secondChanged)
+	want := updateSearchDocs(nil, second, markdown.ChangedRoutes{
+		docRouteB: {}, docRouteC: {}, docRouteD: {},
+	})
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("incremental document set differs from cold build\ngot:  %v\nwant: %v", got, want)
+	}
+
+	if _, ok := got[docRouteA]; ok {
+		t.Error("expected the removed route to be dropped")
+	}
+	if doc := got[docRouteB]; doc.Lower != "bravo, rewritten" {
+		t.Errorf("expected the edited route to be recomputed, got lower %q", doc.Lower)
+	}
 }
 
 func TestSearchMatchesAndSnippets(t *testing.T) {
@@ -73,7 +136,7 @@ func TestSearchSnippetAtDocumentBoundaries(t *testing.T) {
 	}
 	files := []models.SearchableFile{{Path: "/tiny.md", Name: "tiny.md"}}
 
-	resp := buildSearchIndex(contents, files).search("edge", 20)
+	resp := coldSearchIndex(contents, files).search("edge", 20)
 
 	if len(resp.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(resp.Results))
@@ -98,7 +161,7 @@ func TestSearchResultCapAndTruncation(t *testing.T) {
 		files = append(files, models.SearchableFile{Path: "/" + route, Name: route})
 	}
 
-	resp := buildSearchIndex(contents, files).search("target", 20)
+	resp := coldSearchIndex(contents, files).search("target", 20)
 
 	if len(resp.Results) != 20 {
 		t.Errorf("expected results capped at 20, got %d", len(resp.Results))

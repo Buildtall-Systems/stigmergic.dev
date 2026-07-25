@@ -15,44 +15,95 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 )
 
-// BuildBacklinkIndex scans all files for wikilinks and builds an inverse
-// index mapping each target route to the files that link to it. Contents is
-// the pre-read corpus from ReadCorpus, keyed by route.
-func BuildBacklinkIndex(contents map[string][]byte, files []models.SearchableFile) models.BacklinkIndex {
-	resolver := NewTreeResolver(files)
+// LinkRef is one wikilink as written, before resolution.
+//
+// Splitting extraction from resolution is what makes rebuilds incremental.
+// Parsing a document depends only on its own bytes, so it can be cached per
+// file. Resolution depends on the whole file set, since a wikilink names a
+// page rather than a path, so it has to be redone on every rebuild no matter
+// what changed. Caching refs rather than resolved routes keeps the expensive
+// half cacheable without ever serving a stale resolution.
+type LinkRef struct {
+	Target   string
+	Fragment string
+}
 
+// LinkRefs maps a source route to the wikilinks it contains, in document
+// order.
+type LinkRefs map[string][]LinkRef
+
+// ExtractLinkRefs returns the wikilinks in every route of corpus, parsing
+// only the routes named in changed and carrying the rest over from prev.
+// Routes absent from corpus are dropped.
+func ExtractLinkRefs(prev LinkRefs, corpus Corpus, changed ChangedRoutes) LinkRefs {
 	md := goldmark.New(
 		goldmark.WithParserOptions(
 			parser.WithInlineParsers(util.Prioritized(&wikilink.Parser{}, 199)),
 		),
 	)
 
+	refs := make(LinkRefs, len(corpus))
+
+	for route, entry := range corpus {
+		if _, dirty := changed[route]; !dirty {
+			if cached, ok := prev[route]; ok {
+				refs[route] = cached
+				continue
+			}
+		}
+		refs[route] = parseLinkRefs(md, entry.Data)
+	}
+
+	return refs
+}
+
+// parseLinkRefs walks one document and collects its wikilinks in order. A
+// walk error discards the document's links, matching the behavior of the
+// single-pass builder this replaced.
+func parseLinkRefs(md goldmark.Markdown, source []byte) []LinkRef {
+	doc := md.Parser().Parse(text.NewReader(source))
+
+	var refs []LinkRef
+	if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		wn, ok := n.(*wikilink.Node)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		refs = append(refs, LinkRef{Target: string(wn.Target), Fragment: string(wn.Fragment)})
+		return ast.WalkContinue, nil
+	}); err != nil {
+		return nil
+	}
+
+	return refs
+}
+
+// BuildBacklinkIndex resolves every extracted wikilink against the current
+// file set and inverts the result, mapping each target route to the files
+// that link to it. Self-links and repeats within one source are skipped.
+func BuildBacklinkIndex(refs LinkRefs, files []models.SearchableFile) models.BacklinkIndex {
+	resolver := NewTreeResolver(files)
+
 	index := make(models.BacklinkIndex)
 
 	for _, f := range files {
 		route := strings.TrimPrefix(f.Path, "/")
 
-		source, ok := contents[route]
+		fileRefs, ok := refs[route]
 		if !ok {
 			continue
 		}
 
-		reader := text.NewReader(source)
-		doc := md.Parser().Parse(reader)
-
 		seen := make(map[string]bool)
-		if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-			if !entering {
-				return ast.WalkContinue, nil
-			}
-			wn, ok := n.(*wikilink.Node)
-			if !ok {
-				return ast.WalkContinue, nil
-			}
+		for _, ref := range fileRefs {
+			node := &wikilink.Node{Target: []byte(ref.Target), Fragment: []byte(ref.Fragment)}
 
-			dest, err := resolver.ResolveWikilink(wn)
+			dest, err := resolver.ResolveWikilink(node)
 			if err != nil || len(dest) == 0 {
-				return ast.WalkContinue, nil
+				continue
 			}
 
 			targetRoute := strings.TrimPrefix(string(dest), "/file/")
@@ -61,9 +112,8 @@ func BuildBacklinkIndex(contents map[string][]byte, files []models.SearchableFil
 				targetRoute = targetRoute[:idx]
 			}
 
-			// Skip self-links and duplicates within the same source.
 			if targetRoute == route || seen[targetRoute] {
-				return ast.WalkContinue, nil
+				continue
 			}
 			seen[targetRoute] = true
 
@@ -71,16 +121,18 @@ func BuildBacklinkIndex(contents map[string][]byte, files []models.SearchableFil
 				SourcePath:  route,
 				SourceTitle: titleFromFilename(route),
 			})
-
-			return ast.WalkContinue, nil
-		}); err != nil {
-			continue
 		}
 	}
 
+	// Ordering by title alone leaves same-named sources in different
+	// directories unordered, which would make an incremental index differ
+	// from a full one for no reason. Path breaks the tie.
 	for target, entries := range index {
 		sort.Slice(entries, func(i, j int) bool {
-			return entries[i].SourceTitle < entries[j].SourceTitle
+			if entries[i].SourceTitle != entries[j].SourceTitle {
+				return entries[i].SourceTitle < entries[j].SourceTitle
+			}
+			return entries[i].SourcePath < entries[j].SourcePath
 		})
 		index[target] = entries
 	}

@@ -68,6 +68,7 @@ func Scan(fsys fs.FS, respectGitignore bool, ignorePatterns []string) (*models.T
 			Path:     p,
 			Type:     nodeType,
 			ModTime:  info.ModTime(),
+			Size:     info.Size(),
 			Children: make([]*models.Node, 0),
 		}
 
