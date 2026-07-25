@@ -2,6 +2,7 @@ package templates
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -59,7 +60,7 @@ func TestHomeRendersWithoutTree(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(models.TreeView{}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestHomeRendersWithEmptyTree(t *testing.T) {
 
 	tree := &models.Tree{}
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(models.TreeView{Tree: tree}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -108,7 +109,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(models.TreeView{Tree: tree}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -122,10 +123,8 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 }
 
-func TestHomeRendersNestedDirectories(t *testing.T) {
-	t.Parallel()
-
-	tree := &models.Tree{
+func nestedTestTree() *models.Tree {
+	return &models.Tree{
 		Root: &models.Node{
 			Path: testTreeRoot,
 			Name: themeTestName,
@@ -146,27 +145,99 @@ func TestHomeRendersNestedDirectories(t *testing.T) {
 			},
 		},
 	}
+}
+
+func renderHomeTree(t *testing.T, view models.TreeView) string {
+	t.Helper()
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(view, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
+	return sb.String()
+}
 
-	html := sb.String()
-	if !strings.Contains(html, "dir") {
-		t.Error("expected directory name in output")
+// A directory ships its children only when the render expands it. Everything
+// else is a placeholder the client fetches on demand, which is what keeps the
+// cold payload proportional to what is visible rather than to the corpus.
+func TestHomeRendersNestedDirectoriesOnlyWhenExpanded(t *testing.T) {
+	t.Parallel()
+
+	tree := nestedTestTree()
+
+	collapsed := renderHomeTree(t, models.TreeView{Tree: tree})
+	if !strings.Contains(collapsed, ">dir</span>") {
+		t.Error("expected the directory row to render")
 	}
-	if !strings.Contains(html, "nested.md") {
-		t.Error("expected nested file in output")
+	if strings.Contains(collapsed, "nested.md") {
+		t.Error("a collapsed directory must not ship its children")
 	}
+	if !strings.Contains(collapsed, `data-children-path="/test/dir" data-loaded="false"`) {
+		t.Error("expected an unloaded placeholder carrying the directory path")
+	}
+	if !strings.Contains(collapsed, `data-expanded="false"`) {
+		t.Error("expected the collapsed directory row to report its state")
+	}
+
+	expanded := renderHomeTree(t, models.TreeView{Tree: tree, Expanded: models.AncestorDirs("/test/dir/nested.md")})
+	if !strings.Contains(expanded, "nested.md") {
+		t.Error("expected an expanded directory to ship its children")
+	}
+	if !strings.Contains(expanded, `data-children-path="/test/dir" data-loaded="true"`) {
+		t.Error("expected the expanded container to be marked loaded")
+	}
+	if !strings.Contains(expanded, `data-expanded="true"`) {
+		t.Error("expected the expanded directory row to report its state")
+	}
+}
+
+// The payload a cold page carries is bounded by the top level's width, not by
+// the corpus behind it. Growing the hidden depth must not grow the page.
+func TestHomeTreePayloadIsProportionalToVisibleRows(t *testing.T) {
+	t.Parallel()
+
+	shallow := renderHomeTree(t, models.TreeView{Tree: wideTestTree(t, 20, 1)})
+	deep := renderHomeTree(t, models.TreeView{Tree: wideTestTree(t, 20, 6)})
+
+	if len(shallow) != len(deep) {
+		t.Errorf("hidden depth must not reach the payload: %d bytes at depth 1, %d at depth 6", len(shallow), len(deep))
+	}
+	if strings.Count(shallow, `<use href="#tree-icon-folder"></use>`) != 20 {
+		t.Error("expected every directory row to reference the sprite rather than inline its glyph")
+	}
+	if n := strings.Count(shallow, `d="M3 7v10a2 2 0 002 2h14`); n != 1 {
+		t.Errorf("the folder glyph's path data belongs in the sprite alone, found it %d times", n)
+	}
+}
+
+// wideTestTree builds a root of width directories, each a chain depth levels
+// deep ending in a markdown file.
+func wideTestTree(t *testing.T, width int, depth int) *models.Tree {
+	t.Helper()
+
+	root := &models.Node{Path: ".", Name: themeTestName, Type: models.NodeTypeDirectory}
+	for i := range width {
+		dirPath := fmt.Sprintf("dir%d", i)
+		top := &models.Node{Path: dirPath, Name: dirPath, Type: models.NodeTypeDirectory}
+		node := top
+		for d := range depth {
+			childPath := fmt.Sprintf("%s/level%d", node.Path, d)
+			child := &models.Node{Path: childPath, Name: fmt.Sprintf("level%d", d), Type: models.NodeTypeDirectory}
+			node.Children = []*models.Node{child}
+			node = child
+		}
+		node.Children = []*models.Node{{Path: node.Path + "/leaf.md", Name: "leaf.md", Type: models.NodeTypeFile}}
+		root.Children = append(root.Children, top)
+	}
+	return &models.Tree{Root: root}
 }
 
 func TestLayoutRendersThreePaneLandmarks(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(models.TreeView{}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -204,7 +275,7 @@ func TestTreeLinksCarryDataPathAndContentTarget(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(tree, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 1, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(models.TreeView{Tree: tree}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -226,7 +297,7 @@ func TestLayoutFollowToggleGatedOnCapability(t *testing.T) {
 
 	renderHome := func(caps models.UICapabilities) string {
 		var sb strings.Builder
-		err := Home(nil, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, caps).Render(context.Background(), &sb)
+		err := Home(models.TreeView{}, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, caps).Render(context.Background(), &sb)
 		if err != nil {
 			t.Fatalf("failed to render: %v", err)
 		}
@@ -250,7 +321,7 @@ func TestMarkdownFullPageRendersOutlineRail(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), testThemes(), []models.SearchableFile{}, nil, []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline).Render(context.Background(), &sb)
+	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), testThemes(), models.TreeView{}, []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -271,7 +342,7 @@ func TestLayoutOutlineRailEmptyWithoutEntries(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(models.TreeView{}, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -311,7 +382,7 @@ func TestLayoutEmitsThemeSwitchingScaffolding(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(nil, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(models.TreeView{}, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -360,5 +431,37 @@ func TestLoginPageUsesThemeVariables(t *testing.T) {
 	}
 	if strings.Contains(html, "background: #161821") {
 		t.Error("login page must not hardcode palette colors")
+	}
+}
+
+// The command palette reads its own icon markup out of <template> elements by
+// id. The tree sprite is emitted earlier in the body, so a shared id would
+// hand the palette a <symbol> instead. The two sets must stay disjoint.
+func TestTreeSpriteIDsDoNotCollideWithPaletteIcons(t *testing.T) {
+	t.Parallel()
+
+	html := renderHomeTree(t, models.TreeView{Tree: nestedTestTree()})
+
+	for _, id := range []string{"icon-file", "icon-command", "icon-content", "icon-return"} {
+		if strings.Contains(html, `<symbol id="`+id+`"`) {
+			t.Errorf("sprite symbol %q collides with a palette template id", id)
+		}
+	}
+	for _, id := range []string{"tree-icon-chevron", "tree-icon-folder", "tree-icon-file"} {
+		if !strings.Contains(html, `<symbol id="`+id+`"`) {
+			t.Errorf("expected the sprite to define %q", id)
+		}
+	}
+}
+
+// The file list is fetched, never inlined. Shipping it in the page cost more
+// than the entire tree does.
+func TestHomeDoesNotInlineTheFileList(t *testing.T) {
+	t.Parallel()
+
+	html := renderHomeTree(t, models.TreeView{Tree: nestedTestTree()})
+
+	if strings.Contains(html, `id="markdown-files"`) {
+		t.Error("the file list must be fetched from /api/files, not inlined in the page")
 	}
 }

@@ -1,3 +1,47 @@
+// treeChildrenURL is where an unmaterialized directory's rows come from. Each
+// segment is encoded separately so the separators survive.
+function treeChildrenURL(path) {
+	return '/partial/tree/' + path.split('/').map(encodeURIComponent).join('/')
+}
+
+// loadDirectoryChildren fills a placeholder container, once. Resolves
+// immediately when the rows are already present and returns the in-flight
+// request when one is, so callers can await it unconditionally and a double
+// click cannot issue two requests. htmx.ajax rather than fetch: the rows carry
+// hx-get and must be processed, or clicking one would reload the whole page
+// instead of swapping #content.
+function loadDirectoryChildren(container) {
+	if (container.dataset.loaded === 'true') return Promise.resolve()
+	if (container.stigmergicPending) return container.stigmergicPending
+	var path = container.dataset.childrenPath
+	if (!path) return Promise.resolve()
+
+	var pending = htmx.ajax('GET', treeChildrenURL(path), {target: container, swap: 'innerHTML'})
+		.then(function() {
+			container.dataset.loaded = 'true'
+		})
+		.catch(function(err) {
+			console.error('failed to load tree children', path, err)
+		})
+		.finally(function() {
+			container.stigmergicPending = null
+		})
+	container.stigmergicPending = pending
+	return pending
+}
+
+// expandContainer opens one directory's container and syncs the row above it.
+function expandContainer(container) {
+	container.style.display = 'block'
+	var wrapper = container.parentElement
+	if (!wrapper) return
+	var toggle = wrapper.querySelector('[data-expanded]')
+	if (!toggle) return
+	toggle.setAttribute('data-expanded', 'true')
+	var chevron = toggle.querySelector('.chevron-btn svg')
+	if (chevron) chevron.classList.add('rotate-90')
+}
+
 function toggleDirectory(element) {
 	const isExpanded = element.getAttribute('data-expanded') === 'true';
 	const parent = element.parentElement;
@@ -8,11 +52,12 @@ function toggleDirectory(element) {
 		childrenDiv.style.display = 'none';
 		chevron.classList.remove('rotate-90');
 		element.setAttribute('data-expanded', 'false');
-	} else {
-		childrenDiv.style.display = 'block';
-		chevron.classList.add('rotate-90');
-		element.setAttribute('data-expanded', 'true');
+		return;
 	}
+	childrenDiv.style.display = 'block';
+	chevron.classList.add('rotate-90');
+	element.setAttribute('data-expanded', 'true');
+	loadDirectoryChildren(childrenDiv);
 }
 
 function initKeyboardNav() {
@@ -44,15 +89,67 @@ function handleNavKeydown(evt) {
 	items[nextIdx].focus()
 }
 
-function syncCurrentFile() {
+// currentFilePath is the route-relative path of the document on screen, or ''
+// on any page that is not a file view.
+function currentFilePath() {
 	var pathname = decodeURIComponent(window.location.pathname)
+	if (pathname.indexOf('/file/') !== 0) return ''
+	return pathname.slice('/file/'.length)
+}
+
+// markCurrentFile highlights the row for the document on screen and reports
+// whether it found one. A miss means the row lives in a subtree that has not
+// been fetched.
+function markCurrentFile() {
+	var pathname = decodeURIComponent(window.location.pathname)
+	var found = false
 	document.querySelectorAll('#sidebar [data-path]').forEach(function(item) {
 		var isCurrent = '/file/' + item.getAttribute('data-path') === pathname
 		item.classList.toggle('tree-item-current', isCurrent)
 		if (isCurrent) {
+			found = true
 			expandAncestors(item)
 		}
 	})
+	return found
+}
+
+// attrValue escapes a path for use inside a double-quoted attribute selector.
+// Tree paths are arbitrary filenames, so quotes and backslashes are possible.
+function attrValue(s) {
+	return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+// revealPath materializes the rows leading to a file and opens them. The
+// directories load in sequence because a nested placeholder does not exist in
+// the DOM until its parent's rows have arrived.
+function revealPath(filePath) {
+	var parts = filePath.split('/')
+	var chain = []
+	var acc = ''
+	for (var i = 0; i < parts.length - 1; i++) {
+		acc = acc ? acc + '/' + parts[i] : parts[i]
+		chain.push(acc)
+	}
+	return chain.reduce(function(prev, dir) {
+		return prev.then(function() {
+			var container = document.querySelector('#sidebar .directory-children[data-children-path="' + attrValue(dir) + '"]')
+			if (!container) return
+			expandContainer(container)
+			return loadDirectoryChildren(container)
+		})
+	}, Promise.resolve())
+}
+
+// syncCurrentFile highlights the current document's row, fetching the
+// directories on the way to it when the tree has not materialized that far.
+// The server expands the ancestor chain on a full page load, so this only
+// fetches after a swap that changed #content alone.
+function syncCurrentFile() {
+	if (markCurrentFile()) return
+	var filePath = currentFilePath()
+	if (!filePath) return
+	revealPath(filePath).then(markCurrentFile)
 }
 
 var outlineObserver = null
@@ -181,19 +278,15 @@ function handleOutlineClick(evt) {
 	setActiveOutlineLink(heading.id)
 }
 
+// expandAncestors opens every container above a row already in the DOM. The
+// path-driven counterpart is revealPath, which is what runs when the row is
+// not there yet.
 function expandAncestors(item) {
 	var children = item.closest('.directory-children')
 	while (children) {
-		children.style.display = 'block'
+		expandContainer(children)
 		var wrapper = children.parentElement
-		var toggle = wrapper.querySelector('[data-expanded]')
-		if (toggle) {
-			toggle.setAttribute('data-expanded', 'true')
-			var chevron = toggle.querySelector('.chevron-btn svg')
-			if (chevron) {
-				chevron.classList.add('rotate-90')
-			}
-		}
+		if (!wrapper) return
 		children = wrapper.closest('.directory-children')
 	}
 }

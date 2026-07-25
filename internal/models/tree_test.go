@@ -470,3 +470,48 @@ func TestTreeSignatureNilRoot(t *testing.T) {
 		t.Errorf("expected empty signature for a tree with no root, got %q", tree.Signature())
 	}
 }
+
+// AncestorDirs feeds the sidebar's expansion, so it must name every directory
+// between the root and a file and nothing else. A missing entry leaves the
+// file's row unrendered; a spurious one materializes a subtree for nothing.
+func TestAncestorDirs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		path string
+		want []string
+	}{
+		{name: "nested file", path: "docs/operations/doctrine/01-purpose.md", want: []string{"docs", "docs/operations", "docs/operations/doctrine"}},
+		{name: "top-level file", path: readmeName, want: nil},
+		{name: "single directory", path: "docs/api.md", want: []string{docsName}},
+		{name: "empty path", path: "", want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := AncestorDirs(tt.path)
+			if len(got) != len(tt.want) {
+				t.Fatalf("expected %d ancestors for %q, got %d: %v", len(tt.want), tt.path, len(got), got)
+			}
+			for _, dir := range tt.want {
+				if !got.Has(dir) {
+					t.Errorf("expected %q among the ancestors of %q", dir, tt.path)
+				}
+			}
+		})
+	}
+}
+
+// A nil set is a fully collapsed render, which is what the per-directory
+// partial and the directory listing both pass.
+func TestExpandedDirsNilIsCollapsed(t *testing.T) {
+	t.Parallel()
+
+	var expanded ExpandedDirs
+	if expanded.Has(docsName) {
+		t.Error("a nil expansion must report every directory as collapsed")
+	}
+}

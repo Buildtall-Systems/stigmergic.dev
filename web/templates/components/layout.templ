@@ -276,7 +276,7 @@ templ BuildtallLogo() {
 	</svg>
 }
 
-templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities, outline []models.OutlineEntry) {
+templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, treeView models.TreeView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities, outline []models.OutlineEntry) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -309,7 +309,6 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, files []mode
 			<script src="/static/js/fuse.min.js"></script>
 			<script src="/static/js/alpine-focus.min.js" defer></script>
 			<script src="/static/js/alpine.min.js" defer></script>
-			@templ.JSONScript("markdown-files", files)
 			<script src="/static/js/app/render.js"></script>
 			<script src="/static/js/app/nav.js"></script>
 			<script src="/static/js/app/events.js"></script>
@@ -317,6 +316,7 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, files []mode
 			<script src="/static/js/app/ui.js"></script>
 		</head>
 		<body class="h-screen overflow-hidden flex flex-col" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) } x-data="{ sidebarOpen: true }">
+			@IconSprite()
 			<div x-data="scrollProgress()" class="fixed top-0 left-0 w-full h-1 z-50" style="background-color: var(--bg-alt-color);">
 				<div class="h-full transition-all duration-75" :style="{ backgroundColor: 'var(--green-color)', width: progress + '%' }"></div>
 			</div>
@@ -395,7 +395,7 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, files []mode
 			</header>
 			<div class="flex flex-1 min-h-0">
 				<aside id="sidebar" x-show="sidebarOpen" class="hidden md:block w-64 shrink-0 overflow-y-auto p-3" style="background-color: var(--bg-alt-color); border-right: 1px solid var(--border-color);">
-					@Sidebar(tree, recentFiles, indexReady, caps)
+					@Sidebar(treeView, recentFiles, indexReady, caps)
 				</aside>
 				<main id="content" tabindex="0" class="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
 					{ children... }

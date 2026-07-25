@@ -1,5 +1,25 @@
 package components
 
+// IconSprite defines the file tree's glyphs once per document. Tree rows
+// reference them with <use> rather than repeating path data, so a materialized
+// subtree costs its row count instead of its glyph count. Sidebar and tree
+// partials swap into a page that already carries the sprite, so their
+// references resolve. The container is positioned out of flow rather than
+// hidden with display:none, which suppresses <use> in some renderers.
+templ IconSprite() {
+	<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+		<symbol id="tree-icon-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+		</symbol>
+		<symbol id="tree-icon-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+		</symbol>
+		<symbol id="tree-icon-file" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+		</symbol>
+	</svg>
+}
+
 templ IconFile(class string, style string) {
 	<svg class={ class } style={ style } fill="none" stroke="currentColor" viewBox="0 0 24 24">
 		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>

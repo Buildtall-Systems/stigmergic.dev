@@ -49,6 +49,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/api/search", s.handleSearchAPI)
 	s.mux.HandleFunc("/partial/sidebar", s.handleSidebarPartial)
 	s.mux.HandleFunc("/partial/recent", s.handleRecentPartial)
+	s.mux.HandleFunc("/partial/tree/", s.handleTreePartial)
 
 	if s.uiCaps.GitignoreToggle {
 		s.mux.HandleFunc("/api/gitignore", s.handleGitignoreStatus)
@@ -75,6 +76,26 @@ func (s *Server) uiData() (*models.Tree, []models.SearchableFile, []models.Searc
 	}
 
 	return tree, files, recentFiles, s.IsIndexReady()
+}
+
+// canonicalPath accepts only already-canonical fs paths: anything path.Clean
+// would rewrite (empty, trailing slash, ".." or "." elements) is rejected, and
+// fs.ValidPath rules out the rest. Shared by every handler that turns a
+// request path into a lookup key.
+func canonicalPath(p string) (string, bool) {
+	cleaned := path.Clean(p)
+	if cleaned != p || !fs.ValidPath(cleaned) {
+		return "", false
+	}
+	return cleaned, true
+}
+
+// treeViewFor pairs the tree with the directories that render expanded, which
+// are those containing filePath. Every other directory ships as a placeholder,
+// so the cold sidebar is proportional to what is visible rather than to the
+// corpus. An empty filePath collapses everything below the root.
+func treeViewFor(tree *models.Tree, filePath string) models.TreeView {
+	return models.TreeView{Tree: tree, Expanded: models.AncestorDirs(filePath)}
 }
 
 func countDirs(node *models.Node) int {
@@ -116,7 +137,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		s.renderOutlineOOB(w, r, nil)
 	} else {
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(tree, s.source.Name(), s.theme, s.themes, files, recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+		if err := templates.Home(treeViewFor(tree, ""), s.source.Name(), s.theme, s.themes, recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
 	}
@@ -141,10 +162,60 @@ func (s *Server) handleRecentPartial(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleSidebarPartial re-renders the whole sidebar after a structural change.
+// The client passes the file it is displaying so the tree comes back with that
+// row already visible; the path only seeds the expansion and touches no
+// filesystem, so a non-canonical one is dropped and the tree renders collapsed
+// rather than the request failing.
 func (s *Server) handleSidebarPartial(w http.ResponseWriter, r *http.Request) {
 	tree, _, recentFiles, indexReady := s.uiData()
-	if err := components.Sidebar(tree, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+
+	var current string
+	if raw := r.URL.Query().Get("path"); raw != "" {
+		cleaned, ok := canonicalPath(raw)
+		if !ok {
+			logger.Log.Warn("ignoring non-canonical sidebar path", "path", raw)
+		} else {
+			current = cleaned
+		}
+	}
+
+	if err := components.Sidebar(treeViewFor(tree, current), recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
 		logger.Log.Error("failed to render sidebar partial", "error", err)
+	}
+}
+
+// handleTreePartial renders one directory's rows. The sidebar ships collapsed
+// below the current file's ancestor chain, so this is where the rest of the
+// tree arrives: one directory at a time, on first expand, rather than all of
+// it on every page load.
+func (s *Server) handleTreePartial(w http.ResponseWriter, r *http.Request) {
+	dirPath := strings.TrimPrefix(r.URL.Path, "/partial/tree/")
+
+	cleaned, ok := canonicalPath(dirPath)
+	if !ok {
+		logger.Log.Warn("invalid tree path", "path", dirPath)
+		http.NotFound(w, r)
+		return
+	}
+
+	s.treeMux.RLock()
+	var node *models.Node
+	if s.tree != nil {
+		node = s.tree.Find(cleaned)
+	}
+	s.treeMux.RUnlock()
+
+	if node == nil || !node.IsDir() {
+		logger.Log.Warn("tree directory not found", "path", cleaned)
+		http.NotFound(w, r)
+		return
+	}
+
+	// Nil expansion: the requested level renders collapsed, and each nested
+	// directory becomes a placeholder resolved by its own request.
+	if err := components.Tree(node, nil).Render(r.Context(), w); err != nil {
+		logger.Log.Error("failed to render tree partial", "error", err)
 	}
 }
 
@@ -175,7 +246,9 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	// rewrite (empty, trailing slash, ".." or "." elements) is rejected, and
 	// fs.ValidPath rules out the rest. The source FS enforces the same
 	// semantics on every operation, so traversal is impossible by
-	// construction.
+	// construction. Written out here rather than delegated to canonicalPath
+	// because gosec's taint analysis follows the sanitizer inline and cannot
+	// see one behind a call, and this path reaches http.ServeFileFS.
 	cleaned := path.Clean(filePath)
 	if cleaned != filePath || !fs.ValidPath(cleaned) {
 		logger.Log.Warn("invalid file path", "path", filePath)
@@ -218,7 +291,11 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			s.renderOutlineOOB(w, r, nil)
 		} else {
 			logger.Log.Debug("rendering full directory page")
-			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, s.themes, files, tree, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
+			// A directory page shows its own contents, so the directory
+			// itself joins its ancestors in the expansion.
+			view := treeViewFor(tree, filePath)
+			view.Expanded.Add(filePath)
+			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, s.themes, view, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory template", "error", renderErr)
 			}
 		}
@@ -275,7 +352,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		s.renderOutlineOOB(w, r, outline)
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, s.themes, files, tree, recentFiles, indexReady, fileBacklinks, meta, s.uiCaps, outline).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, s.themes, treeViewFor(tree, filePath), recentFiles, indexReady, fileBacklinks, meta, s.uiCaps, outline).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}

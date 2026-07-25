@@ -73,27 +73,26 @@ function commandPalette() {
 			if (this.gitignoreEnabled) {
 				this.loadGitignoreStatus();
 			}
-			this.loadFiles();
-			document.body.addEventListener('htmx:afterSwap', () => this.refreshFiles());
-			document.body.addEventListener('indexReady', () => {
-				this.indexReady = true;
-				this.refreshFiles();
-			});
-		},
-
-		loadFiles() {
-			const filesEl = document.getElementById('markdown-files');
-			if (filesEl) {
-				this.allFiles = JSON.parse(filesEl.textContent).map(f => ({
-					id: 'file:' + f.Path,
-					type: 'file',
-					name: f.Name,
-					description: f.Path,
-					path: f.Path
-				}));
-			}
+			// Commands are searchable at once against an empty file list; the
+			// files arrive from /api/files a moment later and rebuild the
+			// index in place.
 			this.rebuildIndex();
 			this.showDefaultResults();
+			this.loadFiles();
+			// Only the panes that can reflect a changed corpus trigger a
+			// refetch. Tree children arrive through this same event, and the
+			// file list must not ride along behind every directory expand.
+			document.body.addEventListener('htmx:afterSwap', (evt) => {
+				const target = evt.detail && evt.detail.target;
+				const id = target ? target.id : '';
+				if (id === 'content' || id === 'sidebar' || id === 'recent') {
+					this.loadFiles();
+				}
+			});
+			document.body.addEventListener('indexReady', () => {
+				this.indexReady = true;
+				this.loadFiles();
+			});
 		},
 
 		showDefaultResults() {
@@ -174,8 +173,11 @@ function commandPalette() {
 			});
 		},
 
-		refreshFiles() {
-			fetch('/api/files')
+		// loadFiles pulls the file list from /api/files. The page used to inline
+		// the whole list as a JSON script, which cost roughly 880 KB on every
+		// load for data this endpoint already served after the first swap.
+		loadFiles() {
+			return fetch('/api/files')
 				.then(res => res.json())
 				.then(files => {
 					this.allFiles = files.map(f => ({
@@ -192,7 +194,7 @@ function commandPalette() {
 						this.showDefaultResults();
 					}
 				})
-				.catch(err => console.error('Failed to refresh files:', err));
+				.catch(err => console.error('Failed to load files:', err));
 		},
 
 		togglePalette() {

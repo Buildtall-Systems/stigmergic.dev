@@ -36,6 +36,15 @@ function refreshPane(url, target) {
 	}
 }
 
+// sidebarURL carries the document on screen so the tree comes back opened to
+// it. Without the hint the sidebar would return collapsed and the client would
+// have to walk the ancestor chain back open one request at a time.
+function sidebarURL() {
+	var filePath = currentFilePath()
+	if (!filePath) return '/partial/sidebar'
+	return '/partial/sidebar?path=' + encodeURIComponent(filePath)
+}
+
 // focusContent gives the reading pane keyboard focus so native key scrolling
 // (arrows, PageUp/Down, Home/End, Space) targets it. The body is a fixed
 // viewport, so an unfocused pane receives no key scrolling at all. Home is
@@ -106,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			document.body.dispatchEvent(new CustomEvent('indexReady'));
 			// Pages served during the background scan hold an empty tree,
 			// so the tree has to arrive when the scan finishes.
-			refreshPane('/partial/sidebar', '#sidebar');
+			refreshPane(sidebarURL(), '#sidebar');
 			return;
 		}
 		// The file tree is by far the largest thing on the page, so it is
@@ -116,7 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		// field at all came from an older server: redraw everything rather
 		// than guess.
 		if (msg.structural !== false) {
-			refreshPane('/partial/sidebar', '#sidebar');
+			refreshPane(sidebarURL(), '#sidebar');
 		} else {
 			refreshPane('/partial/recent', '#recent');
 		}

@@ -4,8 +4,8 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, themes []*theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities, outline []models.OutlineEntry) {
-	@components.Layout(title, thm, themes, files, tree, recentFiles, indexReady, caps, outline) {
+templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, themes []*theme.Theme, treeView models.TreeView, recentFiles []models.SearchableFile, indexReady bool, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities, outline []models.OutlineEntry) {
+	@components.Layout(title, thm, themes, treeView, recentFiles, indexReady, caps, outline) {
 		@MarkdownContent(breadcrumbs, content, rawContent, rootPath, relativePath, backlinks, metadata, caps)
 	}
 }

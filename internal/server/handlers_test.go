@@ -733,3 +733,153 @@ func TestWatchDirAssetInSubdirectory(t *testing.T) {
 		t.Errorf("expected SVG content type, got %s", ct)
 	}
 }
+
+// treePartialServer builds a server over a corpus with a nested directory and
+// blocks until its index is ready, so tree lookups hit a populated tree.
+func treePartialServer(t *testing.T) *Server {
+	t.Helper()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "top.md", "# top\n")
+	if err := os.MkdirAll(filepath.Join(dir, "docs", "deep"), 0o750); err != nil {
+		t.Fatalf("failed to create nested directories: %v", err)
+	}
+	testutil.CreateTestFile(t, dir, filepath.Join("docs", "guide.md"), "# guide\n")
+	testutil.CreateTestFile(t, dir, filepath.Join("docs", "deep", "buried.md"), "# buried\n")
+
+	cfg := &config.Config{
+		Port:             8080,
+		Host:             testHost,
+		WatchPath:        dir,
+		Theme:            testThemeName,
+		RecentFilesCount: 5,
+	}
+	srv := newTestServer(t, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.WaitForIndexReady(ctx); err != nil {
+		t.Fatalf("timed out waiting for index: %v", err)
+	}
+	return srv
+}
+
+func TestTreePartialRendersOneDirectory(t *testing.T) {
+	t.Parallel()
+
+	srv := treePartialServer(t)
+
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/partial/tree/docs", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "guide.md") {
+		t.Errorf("expected the directory's own file, got: %s", body)
+	}
+	if !strings.Contains(body, `data-children-path="docs/deep" data-loaded="false"`) {
+		t.Errorf("expected a nested directory to render as an unloaded placeholder, got: %s", body)
+	}
+	if strings.Contains(body, "buried.md") {
+		t.Error("the partial must render one level; a nested file means it recursed")
+	}
+	if strings.Contains(body, "top.md") {
+		t.Error("the partial must render the requested directory, not the root")
+	}
+	if strings.Contains(body, `aria-label="File tree"`) {
+		t.Error("the partial must render tree rows only, without the sidebar frame")
+	}
+}
+
+func TestTreePartialRejectsNonCanonicalAndUnknownPaths(t *testing.T) {
+	t.Parallel()
+
+	srv := treePartialServer(t)
+
+	for _, path := range []string{
+		"/partial/tree/docs/",
+		"/partial/tree/",
+		"/partial/tree/nosuchdir",
+		"/partial/tree/top.md",
+	} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
+			rec := httptest.NewRecorder()
+			srv.mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
+
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("expected status 404 for %q, got %d", path, rec.Code)
+			}
+		})
+	}
+}
+
+// A ".." never reaches the handler: ServeMux cleans the request path and
+// redirects first, exactly as it does for /file/. The handler's own canonical
+// check still stands behind it, and neither layer serves content for a
+// traversal attempt.
+func TestTreePartialTraversalNeverServesContent(t *testing.T) {
+	t.Parallel()
+
+	srv := treePartialServer(t)
+
+	for _, path := range []string{
+		"/partial/tree/../../etc/passwd",
+		"/partial/tree/docs/../docs",
+		"/partial/tree/docs/deep/../../top.md",
+	} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
+			rec := httptest.NewRecorder()
+			srv.mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
+
+			if rec.Code != http.StatusMovedPermanently && rec.Code != http.StatusTemporaryRedirect {
+				t.Errorf("expected %q to be redirected by path cleaning, got %d", path, rec.Code)
+			}
+			if strings.Contains(rec.Body.String(), "data-nav-item") {
+				t.Errorf("expected no tree rows for %q, got: %s", path, rec.Body.String())
+			}
+		})
+	}
+}
+
+// The sidebar partial ships collapsed unless the client says what it is
+// displaying, which is what spares it a walk back down the ancestor chain.
+func TestSidebarPartialExpandsToCurrentPath(t *testing.T) {
+	t.Parallel()
+
+	srv := treePartialServer(t)
+
+	// data-path is the tree's own marker for a file row. The Recent list names
+	// the same files, so matching on the filename alone would not distinguish
+	// a materialized row from a recently-updated entry.
+	const buriedRow = `data-path="docs/deep/buried.md"`
+
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/partial/sidebar", nil))
+	if strings.Contains(rec.Body.String(), buriedRow) {
+		t.Error("a sidebar with no current path must ship every directory collapsed")
+	}
+
+	rec = httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/partial/sidebar?path=docs%2Fdeep%2Fburied.md", nil))
+	if !strings.Contains(rec.Body.String(), buriedRow) {
+		t.Errorf("expected the current file's row to ship with the sidebar, got: %s", rec.Body.String())
+	}
+
+	// A path the server would not serve only seeds the expansion, so it
+	// degrades to a collapsed tree rather than failing the request.
+	rec = httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/partial/sidebar?path=../escape/buried.md", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected a non-canonical path to render a collapsed sidebar, got %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), buriedRow) {
+		t.Error("a non-canonical path must not expand anything")
+	}
+}

@@ -6,8 +6,8 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Home(tree *models.Tree, rootPath string, thm *theme.Theme, themes []*theme.Theme, files []models.SearchableFile, recentFiles []models.SearchableFile, fileCount int, dirCount int, indexReady bool, caps models.UICapabilities) {
-	@components.Layout("Home", thm, themes, files, tree, recentFiles, indexReady, caps, nil) {
+templ Home(treeView models.TreeView, rootPath string, thm *theme.Theme, themes []*theme.Theme, recentFiles []models.SearchableFile, fileCount int, dirCount int, indexReady bool, caps models.UICapabilities) {
+	@components.Layout("Home", thm, themes, treeView, recentFiles, indexReady, caps, nil) {
 		@HomeContent(rootPath, recentFiles, fileCount, dirCount, indexReady, caps)
 	}
 }

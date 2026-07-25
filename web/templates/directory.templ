@@ -4,8 +4,8 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, thm *theme.Theme, themes []*theme.Theme, files []models.SearchableFile, tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
-	@components.Layout(title, thm, themes, files, tree, recentFiles, indexReady, caps, nil) {
+templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, thm *theme.Theme, themes []*theme.Theme, treeView models.TreeView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+	@components.Layout(title, thm, themes, treeView, recentFiles, indexReady, caps, nil) {
 		@DirectoryContent(breadcrumbs, node, rootPath)
 	}
 }
@@ -38,7 +38,11 @@ templ DirectoryContent(breadcrumbs []models.Breadcrumb, node *models.Node, rootP
 		<div class="space-y-4">
 			<h2 class="text-xl font-semibold">{ node.Name }</h2>
 			if node != nil && len(node.Children) > 0 {
-				@components.Tree(node)
+				// Nil expansion: the listing shows this directory's own
+				// entries, with subdirectories expandable on demand. A
+				// directory page used to dump its entire subtree, which for a
+				// deep directory cost as much as the old sidebar did.
+				@components.Tree(node, nil)
 			} else {
 				<p style="color: var(--comment-color);">Empty directory</p>
 			}

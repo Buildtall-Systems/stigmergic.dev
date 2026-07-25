@@ -49,6 +49,47 @@ type Tree struct {
 	Root *Node
 }
 
+// ExpandedDirs is the set of directory paths a tree render materializes.
+// Directories outside it emit an empty container tagged with their path, which
+// the client fills on first expand. Rendering every directory eagerly is what
+// made the cold sidebar proportional to the corpus rather than to what is
+// visible.
+type ExpandedDirs map[string]struct{}
+
+// Has reports whether a directory renders with its children. Valid on a nil
+// set, which describes a fully collapsed render.
+func (e ExpandedDirs) Has(path string) bool {
+	_, ok := e[path]
+	return ok
+}
+
+// Add marks a directory as materialized.
+func (e ExpandedDirs) Add(path string) {
+	e[path] = struct{}{}
+}
+
+// TreeView is one render of the content tree: the tree itself and the
+// directories that render expanded. Passing the pair keeps the expansion
+// travelling with the tree through the layout rather than as a separate
+// argument at every layer.
+type TreeView struct {
+	Tree     *Tree
+	Expanded ExpandedDirs
+}
+
+// AncestorDirs is the set of directories containing path, so a render can show
+// that path's row without a round trip. path is route-relative with no leading
+// slash, matching Node.Path; the root is implicit and never listed.
+func AncestorDirs(path string) ExpandedDirs {
+	dirs := make(ExpandedDirs)
+	for i := range len(path) {
+		if path[i] == '/' {
+			dirs.Add(path[:i])
+		}
+	}
+	return dirs
+}
+
 func NewTree(name string) *Tree {
 	return &Tree{
 		Root: &Node{

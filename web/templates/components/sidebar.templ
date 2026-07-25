@@ -2,14 +2,14 @@ package components
 
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Sidebar(tree *models.Tree, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+templ Sidebar(view models.TreeView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
 	<nav aria-label="File tree">
 		if !indexReady {
 			<p class="px-3 py-2 text-sm" style="color: var(--comment-color);">Indexing...</p>
-		} else if tree == nil || tree.Root == nil {
+		} else if view.Tree == nil || view.Tree.Root == nil {
 			<p class="px-3 py-2 text-sm" style="color: var(--comment-color);">No markdown files found.</p>
 		} else {
-			@Tree(tree.Root)
+			@Tree(view.Tree.Root, view.Expanded)
 		}
 	</nav>
 	<div id="recent">
