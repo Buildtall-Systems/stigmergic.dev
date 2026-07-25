@@ -3,10 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
@@ -28,6 +32,87 @@ const (
 // newTestServer builds a server over a FilesystemSource. Tests without an
 // explicit WatchPath get a dedicated temp dir; the old empty-path behavior
 // (resolving to the working directory) was accidental, never specified.
+// fakeWatchableSource feeds the broadcast loop directly, so coalescing is
+// measured without a real filesystem watcher and its own per-path debounce
+// in the path. It implements only the interfaces the server asserts on.
+type fakeWatchableSource struct {
+	fsys      fs.FS
+	events    chan source.Event
+	errs      chan error
+	closeOnce sync.Once
+}
+
+var (
+	_ source.ContentSource = (*fakeWatchableSource)(nil)
+	_ source.Watchable     = (*fakeWatchableSource)(nil)
+)
+
+func newFakeWatchableSource() *fakeWatchableSource {
+	return &fakeWatchableSource{
+		fsys: fstest.MapFS{
+			"initial.md":  &fstest.MapFile{Data: []byte("# initial\n")},
+			"docs/api.md": &fstest.MapFile{Data: []byte("# api\n")},
+		},
+		events: make(chan source.Event, 256),
+		errs:   make(chan error, 1),
+	}
+}
+
+func (f *fakeWatchableSource) FS() fs.FS                   { return f.fsys }
+func (f *fakeWatchableSource) Name() string                { return "fake" }
+func (f *fakeWatchableSource) Events() <-chan source.Event { return f.events }
+func (f *fakeWatchableSource) Errors() <-chan error        { return f.errs }
+
+func (f *fakeWatchableSource) Close() error {
+	f.closeOnce.Do(func() {
+		close(f.events)
+		close(f.errs)
+	})
+	return nil
+}
+
+// emit queues a change event. The buffer is sized well above any burst these
+// tests produce, so a full channel means the test is wrong rather than the
+// server being slow.
+func (f *fakeWatchableSource) emit(t *testing.T, path string) {
+	t.Helper()
+	select {
+	case f.events <- source.Event{Path: path}:
+	default:
+		t.Fatal("fake source event buffer full")
+	}
+}
+
+// newServerWithSource builds a server over an arbitrary source and blocks
+// until its background scan has finished, so tests start from a known index.
+func newServerWithSource(t *testing.T, src source.ContentSource) *Server {
+	t.Helper()
+
+	cfg := &config.Config{
+		Port:             8080,
+		Host:             testHost,
+		Theme:            testThemeName,
+		RecentFilesCount: 5,
+	}
+	srv := NewServer(cfg, src)
+
+	t.Cleanup(func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			t.Errorf("failed to shut down server: %v", err)
+		}
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.WaitForIndexReady(ctx); err != nil {
+		t.Fatalf("timed out waiting for index: %v", err)
+	}
+
+	return srv
+}
+
 func newTestServer(t *testing.T, cfg *config.Config) *Server {
 	t.Helper()
 	if cfg.WatchPath == "" {
@@ -477,9 +562,16 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 		t.Fatal("expected new-file.md to not be in tree initially")
 	}
 
+	// Block on the broadcast rather than a fixed wait: it is sent only after
+	// the rebuild completes, so the tree is settled when it arrives. The
+	// budget covers the watcher debounce plus a full coalescing ceiling.
+	client := make(chan string, 10)
+	srv.addClient(client)
+	defer srv.removeClient(client)
+
 	testutil.CreateTestFile(t, tmpDir, "new-file.md", "new content")
 
-	time.Sleep(500 * time.Millisecond)
+	readBroadcastWithin(t, client, coalesceMaxDelay+5*time.Second)
 
 	srv.treeMux.RLock()
 	newNode := srv.tree.Find("new-file.md")
@@ -494,7 +586,16 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 // index-ready envelope arrives; the background scan may race one in.
 func readBroadcast(t *testing.T, client chan string) string {
 	t.Helper()
-	deadline := time.After(time.Second)
+	return readBroadcastWithin(t, client, time.Second)
+}
+
+// readBroadcastWithin returns the next content broadcast, skipping the
+// index-ready envelope the background scan may race in. Waits that span a
+// rebuild need a budget derived from the coalescing constants, since the
+// rebuild is deliberately deferred.
+func readBroadcastWithin(t *testing.T, client chan string, within time.Duration) string {
+	t.Helper()
+	deadline := time.After(within)
 	for {
 		select {
 		case payload := <-client:
@@ -503,7 +604,22 @@ func readBroadcast(t *testing.T, client chan string) string {
 			}
 		case <-deadline:
 			t.Fatal("timed out waiting for broadcast payload")
+			return ""
 		}
+	}
+}
+
+// assertNoFurtherBroadcast asserts the burst produced nothing more. The
+// absence of a signal cannot be blocked on, so this is necessarily a bounded
+// wait; it is sized well beyond the coalescing window.
+func assertNoFurtherBroadcast(t *testing.T, client chan string) {
+	t.Helper()
+	select {
+	case extra := <-client:
+		if extra != indexReadyPayload {
+			t.Errorf("expected the burst to produce exactly one broadcast, also got %s", extra)
+		}
+	case <-time.After(3 * coalesceWindow):
 	}
 }
 
@@ -600,6 +716,113 @@ func TestBroadcastIndexReadyPayloadShape(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for index-ready payload")
+	}
+}
+
+// TestBroadcastCoalescesBurst is the contract this coalescing exists for: a
+// burst of writes costs one rescan and one notification, not one per file.
+// The reported path is the newest in the burst, which is what follow mode
+// navigates to.
+func TestBroadcastCoalescesBurst(t *testing.T) {
+	t.Parallel()
+
+	src := newFakeWatchableSource()
+	srv := newServerWithSource(t, src)
+
+	client := make(chan string, 64)
+	srv.addClient(client)
+	defer srv.removeClient(client)
+
+	const burst = 20
+	for i := range burst {
+		src.emit(t, fmt.Sprintf("burst%d.md", i))
+	}
+
+	want := fmt.Sprintf(`{"type":"reload","path":"burst%d.md","structural":false}`, burst-1)
+	if got := readBroadcastWithin(t, client, coalesceMaxDelay+time.Second); got != want {
+		t.Errorf("expected a single coalesced broadcast %s, got %s", want, got)
+	}
+
+	assertNoFurtherBroadcast(t, client)
+}
+
+// TestBroadcastSeparatedBurstsRebuildEach confirms coalescing defers work
+// rather than discarding it: once a burst has flushed, the next change gets
+// its own rebuild.
+func TestBroadcastSeparatedBurstsRebuildEach(t *testing.T) {
+	t.Parallel()
+
+	src := newFakeWatchableSource()
+	srv := newServerWithSource(t, src)
+
+	client := make(chan string, 64)
+	srv.addClient(client)
+	defer srv.removeClient(client)
+
+	src.emit(t, "first.md")
+	first := readBroadcastWithin(t, client, coalesceMaxDelay+time.Second)
+	if want := `{"type":"reload","path":"first.md","structural":false}`; first != want {
+		t.Errorf("expected first broadcast %s, got %s", want, first)
+	}
+
+	// The read above returned only after the first flush, so this event
+	// begins a genuinely separate burst without any timing assumption.
+	src.emit(t, "second.md")
+	second := readBroadcastWithin(t, client, coalesceMaxDelay+time.Second)
+	if want := `{"type":"reload","path":"second.md","structural":false}`; second != want {
+		t.Errorf("expected second broadcast %s, got %s", want, second)
+	}
+}
+
+// TestBroadcastFlushesUnderSustainedWrites exercises the ceiling. Events
+// arrive faster than the quiet window can ever elapse, so the only thing
+// that can produce a broadcast is coalesceMaxDelay.
+func TestBroadcastFlushesUnderSustainedWrites(t *testing.T) {
+	t.Parallel()
+
+	src := newFakeWatchableSource()
+	srv := newServerWithSource(t, src)
+
+	client := make(chan string, 256)
+	srv.addClient(client)
+	defer srv.removeClient(client)
+
+	var emitted atomic.Int64
+	stop := make(chan struct{})
+	stopped := make(chan struct{})
+
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(coalesceWindow / 3)
+		defer ticker.Stop()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				select {
+				case src.events <- source.Event{Path: fmt.Sprintf("sustained%d.md", i)}:
+					emitted.Add(1)
+				case <-stop:
+					return
+				}
+			}
+		}
+	}()
+
+	// Stop the writer and let it drain before the cleanup closes the source,
+	// so no send can race the channel close.
+	defer func() {
+		close(stop)
+		<-stopped
+	}()
+
+	readBroadcastWithin(t, client, coalesceMaxDelay+3*time.Second)
+
+	// A quiet-window flush is impossible at this arrival rate, so more than
+	// a couple of events in flight proves the ceiling did the work.
+	if n := emitted.Load(); n < 4 {
+		t.Errorf("expected the ceiling to flush while writes continued, only %d events emitted", n)
 	}
 }
 

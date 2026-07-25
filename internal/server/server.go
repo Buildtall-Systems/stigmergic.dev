@@ -275,12 +275,70 @@ func (s *Server) broadcastChange(path string, structural bool) {
 	s.broadcast(payload)
 }
 
+const (
+	// coalesceWindow is how long the broadcaster waits for the corpus to
+	// fall quiet before rebuilding. Filesystem activity arrives in bursts:
+	// an editor writes then renames, an agent writes a handful of
+	// documents, a branch checkout rewrites hundreds. Rebuilding once per
+	// event repeats a full corpus pass for every file in the burst, so the
+	// broadcaster accumulates instead and rebuilds once the writing stops.
+	coalesceWindow = 300 * time.Millisecond
+
+	// coalesceMaxDelay bounds how long a sustained writer can defer a
+	// rebuild. Without a ceiling, a process touching files faster than the
+	// quiet window would postpone the UI update for as long as it ran.
+	coalesceMaxDelay = 2 * time.Second
+)
+
+// broadcastEvents owns the rebuild loop. It collapses each burst of source
+// events into a single rescan and a single client notification: the quiet
+// window restarts on every arrival, and the ceiling forces a flush when
+// arrivals never stop. Rebuild cost therefore tracks the number of bursts,
+// not the number of files touched.
 func (s *Server) broadcastEvents() {
 	logger.Log.Info("broadcast events goroutine started")
 	defer func() {
 		s.wg.Done()
 		logger.Log.Info("broadcast events goroutine stopped")
 	}()
+
+	// pending holds the most recently changed path, which is what follow
+	// mode navigates to; count is how many events it stands for. A nil
+	// timer channel parks that arm of the select while nothing is pending.
+	var (
+		pending    string
+		count      int
+		quietTimer *time.Timer
+		maxTimer   *time.Timer
+		quietC     <-chan time.Time
+		maxC       <-chan time.Time
+	)
+
+	disarm := func() {
+		if quietTimer != nil {
+			quietTimer.Stop()
+			quietTimer = nil
+			quietC = nil
+		}
+		if maxTimer != nil {
+			maxTimer.Stop()
+			maxTimer = nil
+			maxC = nil
+		}
+	}
+	defer disarm()
+
+	flush := func() {
+		path, events := pending, count
+		pending, count = "", 0
+		disarm()
+
+		logger.Log.Info("rebuilding after coalesced burst", "events", events, "path", path)
+
+		structural := s.updateTree()
+
+		s.broadcastChange(path, structural)
+	}
 
 	for {
 		select {
@@ -293,11 +351,26 @@ func (s *Server) broadcastEvents() {
 				return
 			}
 
-			logger.Log.Info("broadcasting event to clients", "path", event.Path)
+			logger.Log.Debug("coalescing source event", "path", event.Path, "pending", count+1)
 
-			structural := s.updateTree()
+			pending = event.Path
+			count++
 
-			s.broadcastChange(event.Path, structural)
+			if quietTimer != nil {
+				quietTimer.Stop()
+			}
+			quietTimer = time.NewTimer(coalesceWindow)
+			quietC = quietTimer.C
+
+			if maxTimer == nil {
+				maxTimer = time.NewTimer(coalesceMaxDelay)
+				maxC = maxTimer.C
+			}
+		case <-quietC:
+			flush()
+		case <-maxC:
+			logger.Log.Info("coalesce ceiling reached, rebuilding under sustained writes")
+			flush()
 		case err, ok := <-s.watchable.Errors():
 			if !ok {
 				logger.Log.Info("source errors channel closed")
