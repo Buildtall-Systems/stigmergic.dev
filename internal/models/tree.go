@@ -109,6 +109,35 @@ func (t *Tree) findNode(node *Node, path string) *Node {
 	return nil
 }
 
+// Signature describes the tree's shape: every node's path and type, in
+// traversal order. Mod times are deliberately excluded, so the signature
+// changes when a file or directory is created, removed, or renamed, and
+// never when a file's contents change.
+//
+// The signature is the shape material itself rather than a hash of it, so
+// comparing two signatures is an exact equality test. A hash would trade a
+// few hundred kilobytes for the possibility of a collision silently
+// suppressing a sidebar refresh, which is the wrong trade for a value held
+// once per tree.
+func (t *Tree) Signature() string {
+	if t.Root == nil {
+		return ""
+	}
+	return string(appendSignature(nil, t.Root))
+}
+
+func appendSignature(buf []byte, node *Node) []byte {
+	buf = append(buf, node.Path...)
+	if node.IsDir() {
+		buf = append(buf, '/')
+	}
+	buf = append(buf, '\n')
+	for _, child := range node.Children {
+		buf = appendSignature(buf, child)
+	}
+	return buf
+}
+
 func (t *Tree) FlattenMarkdownFiles() []SearchableFile {
 	var files []SearchableFile
 	t.flattenMarkdownFilesRecursive(t.Root, &files)

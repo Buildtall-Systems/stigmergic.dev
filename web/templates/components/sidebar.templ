@@ -12,6 +12,17 @@ templ Sidebar(tree *models.Tree, recentFiles []models.SearchableFile, indexReady
 			@Tree(tree.Root)
 		}
 	</nav>
+	<div id="recent">
+		@SidebarRecent(recentFiles, caps)
+	</div>
+}
+
+// SidebarRecent is the body of the sidebar's recently-updated list, without
+// its container, so the same markup serves both the full sidebar render and
+// an innerHTML swap into the standing #recent element. Keeping it separable
+// is what lets a content-only change refresh five entries instead of
+// redrawing the entire file tree.
+templ SidebarRecent(recentFiles []models.SearchableFile, caps models.UICapabilities) {
 	if caps.RecentlyUpdated && len(recentFiles) > 0 {
 		<div class="mt-6 pt-4" style="border-top: 1px solid var(--border-color);">
 			<h3 class="px-3 mb-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--comment-color);">Recent</h3>

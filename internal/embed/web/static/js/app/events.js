@@ -104,9 +104,22 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (msg.type === 'index-ready') {
 			document.body.dataset.indexReady = 'true';
 			document.body.dispatchEvent(new CustomEvent('indexReady'));
+			// Pages served during the background scan hold an empty tree,
+			// so the tree has to arrive when the scan finishes.
+			refreshPane('/partial/sidebar', '#sidebar');
 			return;
 		}
-		refreshPane('/partial/sidebar', '#sidebar');
+		// The file tree is by far the largest thing on the page, so it is
+		// redrawn only when the corpus gained, lost, or renamed an entry.
+		// An edit to an existing file refetches the Recent list alone, whose
+		// order is driven by mod time. A payload carrying no structural
+		// field at all came from an older server: redraw everything rather
+		// than guess.
+		if (msg.structural !== false) {
+			refreshPane('/partial/sidebar', '#sidebar');
+		} else {
+			refreshPane('/partial/recent', '#recent');
+		}
 		var follow = window.Alpine ? Alpine.store('follow') : null;
 		if (follow && follow.handleChange(msg.path)) return;
 		if (contentShowsPath(msg.path)) {

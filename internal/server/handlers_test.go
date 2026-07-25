@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -593,6 +594,63 @@ func TestSidebarPartialRendersTree(t *testing.T) {
 	}
 	if strings.Contains(body, "<html") {
 		t.Error("sidebar partial must not be a full page")
+	}
+}
+
+// TestRecentPartialMatchesSidebarRecentBlock keeps the cheap refresh target
+// honest. The recent partial must render exactly the block the full sidebar
+// renders, and nothing else: not the tree, and not the standing container,
+// which stays in the page so it remains a valid innerHTML swap target.
+func TestRecentPartialMatchesSidebarRecentBlock(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "test.md", "# Hello World\n")
+
+	cfg := &config.Config{
+		Port:             8080,
+		Host:             testHost,
+		WatchPath:        dir,
+		Theme:            testThemeName,
+		RespectGitignore: false,
+		IgnorePatterns:   []string{},
+		RecentFilesCount: 5,
+	}
+	srv := newTestServer(t, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.WaitForIndexReady(ctx); err != nil {
+		t.Fatalf("timed out waiting for index: %v", err)
+	}
+
+	recentRec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(recentRec, httptest.NewRequestWithContext(ctx, http.MethodGet, "/partial/recent", nil))
+
+	if recentRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 from recent partial, got %d", recentRec.Code)
+	}
+
+	recentBody := recentRec.Body.String()
+	if !strings.Contains(recentBody, "test.md") {
+		t.Errorf("expected recent partial to list the file, got: %s", recentBody)
+	}
+	if strings.Contains(recentBody, `id="recent"`) {
+		t.Error("recent partial must render the block body only; the container stays in the sidebar")
+	}
+	if strings.Contains(recentBody, `aria-label="File tree"`) {
+		t.Error("recent partial must not carry the file tree")
+	}
+
+	sidebarRec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(sidebarRec, httptest.NewRequestWithContext(ctx, http.MethodGet, "/partial/sidebar", nil))
+
+	sidebarBody := sidebarRec.Body.String()
+	if !strings.Contains(sidebarBody, `id="recent"`) {
+		t.Error("expected the sidebar to carry the standing #recent container")
+	}
+	if !strings.Contains(sidebarBody, recentBody) {
+		t.Errorf("expected the sidebar's recent block to match the recent partial exactly, got sidebar: %s", sidebarBody)
 	}
 }
 

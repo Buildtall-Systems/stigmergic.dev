@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,6 +18,11 @@ const (
 	testHost      = "localhost"
 	testThemeName = "iceberg-dark"
 	testIndexFile = "index.md"
+
+	// indexReadyPayload is the exact envelope the background scan broadcasts
+	// when it completes. Tests that wait for a content broadcast filter it
+	// out, since the scan may race one in.
+	indexReadyPayload = `{"type":"index-ready","structural":true}`
 )
 
 // newTestServer builds a server over a FilesystemSource. Tests without an
@@ -369,6 +375,64 @@ func TestServerUpdateTreeOnScanFailure(t *testing.T) {
 	if newTree != oldTree {
 		t.Error("expected tree to remain unchanged when updateTree fails")
 	}
+
+	if srv.updateTree() {
+		t.Error("expected a failed rescan to report no structural change")
+	}
+}
+
+// TestUpdateTreeStructuralVerdict pins the contract the sidebar gate rests
+// on. If the verdict inverts, either the file tree stops updating when files
+// appear, or it resumes redrawing on every save, which is the defect this
+// work exists to remove.
+func TestUpdateTreeStructuralVerdict(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, tmpDir, "initial.md", "initial content")
+
+	cfg := &config.Config{
+		Port:             8080,
+		Host:             testHost,
+		WatchPath:        tmpDir,
+		Theme:            testThemeName,
+		RespectGitignore: false,
+		IgnorePatterns:   []string{},
+	}
+
+	srv := newTestServer(t, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.WaitForIndexReady(ctx); err != nil {
+		t.Fatalf("timed out waiting for index: %v", err)
+	}
+
+	testutil.CreateTestFile(t, tmpDir, "initial.md", "rewritten content")
+	if srv.updateTree() {
+		t.Error("expected rewriting an existing file to be non-structural")
+	}
+
+	if srv.updateTree() {
+		t.Error("expected a rescan with no change at all to be non-structural")
+	}
+
+	testutil.CreateTestFile(t, tmpDir, "added.md", "added content")
+	if !srv.updateTree() {
+		t.Error("expected file creation to be structural")
+	}
+
+	if err := os.Remove(filepath.Join(tmpDir, "added.md")); err != nil {
+		t.Fatalf("failed to remove file: %v", err)
+	}
+	if !srv.updateTree() {
+		t.Error("expected file removal to be structural")
+	}
+
+	testutil.CreateTestFile(t, tmpDir, "nested/deep.md", "nested content")
+	if !srv.updateTree() {
+		t.Error("expected directory creation to be structural")
+	}
 }
 
 func TestServerTreeUpdateOnFileEvent(t *testing.T) {
@@ -434,7 +498,7 @@ func readBroadcast(t *testing.T, client chan string) string {
 	for {
 		select {
 		case payload := <-client:
-			if payload != `{"type":"index-ready"}` {
+			if payload != indexReadyPayload {
 				return payload
 			}
 		case <-deadline:
@@ -457,9 +521,34 @@ func TestBroadcastChangePayloadShape(t *testing.T) {
 	srv.addClient(client)
 	defer srv.removeClient(client)
 
-	srv.broadcastChange("docs/example.md")
+	srv.broadcastChange("docs/example.md", false)
 
-	want := `{"type":"reload","path":"docs/example.md"}`
+	want := `{"type":"reload","path":"docs/example.md","structural":false}`
+	if got := readBroadcast(t, client); got != want {
+		t.Errorf("expected payload %s, got %s", want, got)
+	}
+}
+
+// TestBroadcastChangeCarriesStructuralFlag pins the field the SSE client
+// switches on. It is always present, never omitted, so a client can tell a
+// structural false apart from an older server that sends no flag at all.
+func TestBroadcastChangeCarriesStructuralFlag(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Port:  8080,
+		Host:  testHost,
+		Theme: testThemeName,
+	}
+	srv := newTestServer(t, cfg)
+
+	client := make(chan string, 10)
+	srv.addClient(client)
+	defer srv.removeClient(client)
+
+	srv.broadcastChange("docs/example.md", true)
+
+	want := `{"type":"reload","path":"docs/example.md","structural":true}`
 	if got := readBroadcast(t, client); got != want {
 		t.Errorf("expected payload %s, got %s", want, got)
 	}
@@ -479,9 +568,9 @@ func TestBroadcastReloadOmitsPath(t *testing.T) {
 	srv.addClient(client)
 	defer srv.removeClient(client)
 
-	srv.broadcastReload()
+	srv.broadcastReload(true)
 
-	want := `{"type":"reload"}`
+	want := `{"type":"reload","structural":true}`
 	if got := readBroadcast(t, client); got != want {
 		t.Errorf("expected payload %s, got %s", want, got)
 	}
@@ -503,7 +592,7 @@ func TestBroadcastIndexReadyPayloadShape(t *testing.T) {
 
 	srv.broadcastIndexReady()
 
-	want := `{"type":"index-ready"}`
+	want := indexReadyPayload
 	select {
 	case got := <-client:
 		if got != want {

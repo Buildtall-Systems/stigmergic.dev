@@ -39,6 +39,7 @@ type Server struct {
 	cancel          context.CancelFunc
 	sessionManager  *session.Manager
 	serverURL       string
+	treeSignature   string
 	allowedPubkeys  []string
 	treeMux         sync.RWMutex
 	clientsMux      sync.RWMutex
@@ -227,9 +228,16 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // sseEvent is the JSON envelope pushed to SSE clients. Type is "reload"
 // (Path names the changed file when known; empty means refresh regardless)
 // or "index-ready".
+//
+// Structural reports whether the content tree's shape changed, which is what
+// lets a client refresh the file tree only when there is something new to
+// show. It carries no omitempty, so it is present on every envelope: a
+// client that finds the field missing entirely is talking to an older server
+// and falls back to refreshing everything.
 type sseEvent struct {
-	Type string `json:"type"`
-	Path string `json:"path,omitempty"`
+	Type       string `json:"type"`
+	Path       string `json:"path,omitempty"`
+	Structural bool   `json:"structural"`
 }
 
 const (
@@ -237,8 +245,8 @@ const (
 	sseTypeIndexReady = "index-ready"
 )
 
-func encodeSSEEvent(eventType, path string) (string, bool) {
-	payload, err := json.Marshal(sseEvent{Type: eventType, Path: path})
+func encodeSSEEvent(eventType, path string, structural bool) (string, bool) {
+	payload, err := json.Marshal(sseEvent{Type: eventType, Path: path, Structural: structural})
 	if err != nil {
 		logger.Log.Error("failed to marshal SSE event", "error", err, "event_type", eventType, "path", path)
 		return "", false
@@ -259,8 +267,8 @@ func (s *Server) broadcast(payload string) {
 	}
 }
 
-func (s *Server) broadcastChange(path string) {
-	payload, ok := encodeSSEEvent(sseTypeReload, path)
+func (s *Server) broadcastChange(path string, structural bool) {
+	payload, ok := encodeSSEEvent(sseTypeReload, path, structural)
 	if !ok {
 		return
 	}
@@ -287,9 +295,9 @@ func (s *Server) broadcastEvents() {
 
 			logger.Log.Info("broadcasting event to clients", "path", event.Path)
 
-			s.updateTree()
+			structural := s.updateTree()
 
-			s.broadcastChange(event.Path)
+			s.broadcastChange(event.Path, structural)
 		case err, ok := <-s.watchable.Errors():
 			if !ok {
 				logger.Log.Info("source errors channel closed")
@@ -329,20 +337,30 @@ func (s *Server) scan() (*models.Tree, error) {
 	return source.Scan(s.source.FS(), respectGitignore, s.config.IgnorePatterns)
 }
 
-func (s *Server) updateTree() {
+// updateTree rescans the content tree and refreshes every derived index. It
+// reports whether the tree's shape changed, which is how clients tell the
+// two cases apart: a file whose contents changed, and a corpus that gained,
+// lost, or renamed an entry. A failed rescan leaves the previous tree in
+// place and is therefore never structural.
+func (s *Server) updateTree() bool {
 	logger.Log.Info("rescanning content tree", "source", s.source.Name())
 	newTree, err := s.scan()
 	if err != nil {
 		logger.Log.Error("failed to rescan content tree", "error", err)
-		return
+		return false
 	}
 
+	signature := newTree.Signature()
+
 	s.treeMux.Lock()
+	structural := signature != s.treeSignature
 	s.tree = newTree
+	s.treeSignature = signature
 	s.treeMux.Unlock()
 
 	s.rebuildIndexes(newTree)
-	logger.Log.Info("content tree updated successfully")
+	logger.Log.Info("content tree updated successfully", "structural", structural)
+	return structural
 }
 
 // rebuildIndexes refreshes every content-derived cache from a single read
@@ -369,6 +387,7 @@ func (s *Server) initialScan() {
 
 	s.treeMux.Lock()
 	s.tree = newTree
+	s.treeSignature = newTree.Signature()
 	s.treeMux.Unlock()
 
 	s.rebuildIndexes(newTree)
@@ -378,8 +397,11 @@ func (s *Server) initialScan() {
 	s.broadcastIndexReady()
 }
 
+// broadcastIndexReady tells connected clients the background scan finished.
+// It is structural by definition: pages served during indexing hold an empty
+// tree and need the real one.
 func (s *Server) broadcastIndexReady() {
-	payload, ok := encodeSSEEvent(sseTypeIndexReady, "")
+	payload, ok := encodeSSEEvent(sseTypeIndexReady, "", true)
 	if !ok {
 		return
 	}
@@ -404,13 +426,16 @@ func (s *Server) ToggleRespectGitignore() bool {
 		return false
 	}
 	newVal := ga.ToggleGitignore()
-	s.updateTree()
-	s.broadcastReload()
+	structural := s.updateTree()
+	s.broadcastReload(structural)
 	return newVal
 }
 
-func (s *Server) broadcastReload() {
-	s.broadcastChange("")
+// broadcastReload asks clients to refresh the reading pane regardless of
+// which path changed. Structural carries the same meaning as everywhere
+// else: whether the file tree itself needs redrawing.
+func (s *Server) broadcastReload(structural bool) {
+	s.broadcastChange("", structural)
 }
 
 // WaitForIndexReady blocks until the background index scan completes or ctx is cancelled.

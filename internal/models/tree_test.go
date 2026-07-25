@@ -385,3 +385,88 @@ func TestFlattenMarkdownFilesPaths(t *testing.T) {
 		t.Errorf("expected path %s, got %s", expectedPath, files[0].Path)
 	}
 }
+
+func signatureTestTree() *Tree {
+	tree := NewTree(rootNodeName)
+
+	docs := &Node{Name: docsName, Path: docsName, Type: NodeTypeDirectory}
+	docs.AddChild(&Node{Name: apiName, Path: filepath.Join(docsName, apiName), Type: NodeTypeFile})
+
+	tree.Root.AddChild(docs)
+	tree.Root.AddChild(&Node{Name: readmeName, Path: readmeName, Type: NodeTypeFile})
+
+	return tree
+}
+
+// TestTreeSignatureIgnoresModTimes is the half of the contract that makes the
+// sidebar gate worthwhile: editing a file must not look like a shape change.
+func TestTreeSignatureIgnoresModTimes(t *testing.T) {
+	t.Parallel()
+
+	first := signatureTestTree()
+
+	second := signatureTestTree()
+	second.Root.Children[0].Children[0].ModTime = time.Now()
+	second.Root.Children[1].ModTime = time.Now().Add(time.Hour)
+
+	if first.Signature() != second.Signature() {
+		t.Error("expected mod time changes to leave the signature unchanged")
+	}
+}
+
+// TestTreeSignatureChangesOnShapeChange is the other half: anything that
+// alters what the tree contains must be visible.
+func TestTreeSignatureChangesOnShapeChange(t *testing.T) {
+	t.Parallel()
+
+	base := signatureTestTree().Signature()
+
+	added := signatureTestTree()
+	added.Root.AddChild(&Node{Name: guideName, Path: guideName, Type: NodeTypeFile})
+	if added.Signature() == base {
+		t.Error("expected adding a file to change the signature")
+	}
+
+	removed := signatureTestTree()
+	removed.Root.Children = removed.Root.Children[:1]
+	if removed.Signature() == base {
+		t.Error("expected removing a file to change the signature")
+	}
+
+	renamed := signatureTestTree()
+	renamed.Root.Children[1].Path = guideName
+	if renamed.Signature() == base {
+		t.Error("expected renaming a file to change the signature")
+	}
+
+	reordered := signatureTestTree()
+	reordered.Root.Children[0], reordered.Root.Children[1] = reordered.Root.Children[1], reordered.Root.Children[0]
+	if reordered.Signature() == base {
+		t.Error("expected reordering children to change the signature")
+	}
+}
+
+// TestTreeSignatureDistinguishesTypes guards the case a bare path list would
+// miss: a directory replaced by a file of the same name.
+func TestTreeSignatureDistinguishesTypes(t *testing.T) {
+	t.Parallel()
+
+	asDir := NewTree(rootNodeName)
+	asDir.Root.AddChild(&Node{Name: docsName, Path: docsName, Type: NodeTypeDirectory})
+
+	asFile := NewTree(rootNodeName)
+	asFile.Root.AddChild(&Node{Name: docsName, Path: docsName, Type: NodeTypeFile})
+
+	if asDir.Signature() == asFile.Signature() {
+		t.Error("expected a directory and a file at the same path to have different signatures")
+	}
+}
+
+func TestTreeSignatureNilRoot(t *testing.T) {
+	t.Parallel()
+
+	tree := &Tree{}
+	if tree.Signature() != "" {
+		t.Errorf("expected empty signature for a tree with no root, got %q", tree.Signature())
+	}
+}

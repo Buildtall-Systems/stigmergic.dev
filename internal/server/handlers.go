@@ -48,6 +48,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/api/files", s.handleFilesAPI)
 	s.mux.HandleFunc("/api/search", s.handleSearchAPI)
 	s.mux.HandleFunc("/partial/sidebar", s.handleSidebarPartial)
+	s.mux.HandleFunc("/partial/recent", s.handleRecentPartial)
 
 	if s.uiCaps.GitignoreToggle {
 		s.mux.HandleFunc("/api/gitignore", s.handleGitignoreStatus)
@@ -126,6 +127,17 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 func (s *Server) renderOutlineOOB(w http.ResponseWriter, r *http.Request, outline []models.OutlineEntry) {
 	if err := components.OutlineOOB(outline).Render(r.Context(), w); err != nil {
 		logger.Log.Error("failed to render outline OOB fragment", "error", err)
+	}
+}
+
+// handleRecentPartial renders the sidebar's recently-updated list alone.
+// Clients target it when a file's contents changed but the tree's shape did
+// not, which is the overwhelmingly common case and costs a few hundred bytes
+// instead of the whole tree.
+func (s *Server) handleRecentPartial(w http.ResponseWriter, r *http.Request) {
+	_, _, recentFiles, _ := s.uiData()
+	if err := components.SidebarRecent(recentFiles, s.uiCaps).Render(r.Context(), w); err != nil {
+		logger.Log.Error("failed to render recent partial", "error", err)
 	}
 }
 
