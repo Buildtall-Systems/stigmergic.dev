@@ -2,6 +2,37 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-07-25
+
+### UI latency remediation, four phases on `feature/sidebar-structural-refresh`
+
+The local instance serves the whole buildtall home (6,030 markdown files, 76 MB) and had become unusable interactively. Two independent amplification loops compounded: the browser rebuilt a 5.7 MB, 51,500-node sidebar on every filesystem event, and the server re-indexed the entire corpus once per event with no coalescing. Baseline `GET /` was 6,668,404 bytes; the service had burned 6 h 19 m of CPU and 16.5 GB of egress.
+
+Four phases, ordered by relief per unit of risk, one commit each.
+
+**Phase 1, conditional sidebar refresh, committed `7e0d6b5`.** `Tree.Signature()` renders every node's path and type in traversal order, excluding mod times, so it changes when the corpus gains, loses, or renames an entry and never when a file's contents change. It is the shape material itself rather than a hash, so comparison is exact equality and no collision can silently suppress a refresh. `updateTree()` returns a structural verdict, `sseEvent` gains `Structural bool` with no `omitempty`, and `events.js` refetches the tree only when `msg.structural !== false`, otherwise swapping the new `/partial/recent` fragment into a standing `#recent` container. The `index-ready` branch refreshes the sidebar explicitly: it never did before, so a page loaded during the background scan sat on "Indexing..." until a blind reload, and Phase 1's gate would have made that permanent.
+
+**Phase 2, event coalescing, committed `155317d`.** `broadcastEvents` accumulates instead of rebuilding per event, with a 300 ms quiet window and a 2 s ceiling so sustained writes still flush. Tests drive a `fakeWatchableSource` over `fstest.MapFS` directly into the broadcast loop, measuring coalescing without a real watcher and its own per-path debounce in the path.
+
+**Phase 3, incremental index rebuilds, committed `94846bb`.** Rebuild cost now tracks what changed. Two findings shaped it. The plan's mod-time comparison was unusable: `SearchableFile.ModTime` is Unix seconds, so a one-character edit within the same second looks unchanged and would leave indexes silently stale; the working stamp is nanoseconds plus size. And the right split is parsing versus resolution, not changed versus unchanged: a wikilink names a page rather than a path, so adding or removing any file changes what every other file's links resolve to. Caching unresolved link refs makes the expensive half cacheable and removes the staleness class outright. Also fixed: `sort.Slice` is not stable, and backlinks sorted by title alone left same-named sources in different directories unordered, which made incremental and full builds differ for no reason.
+
+**Phase 4, lazy tree rendering, committed `85bd2d7`.** The tree shipped fully expanded because `pruneEmptyDirectories` guarantees every surviving directory has markdown descendants and the template keyed expansion on exactly that. Directories now ship collapsed except those containing the current file, with the rest arriving from `/partial/tree/` one directory at a time on first expand.
+
+- `models.ExpandedDirs` names the directories a render materializes; `models.AncestorDirs` derives that set from the current file, so a full page load shows the current row without a round trip. `models.TreeView` bundles tree and expansion, which kept `Layout`, `Home`, `Directory`, and `Markdown` at their existing arity.
+- `/partial/sidebar` accepts `?path=`, so a structural refresh returns the tree already opened to the displayed file. The path only seeds the expansion and touches no filesystem, so a non-canonical one is dropped and the tree renders collapsed rather than the request failing.
+- `nav.js` loads a placeholder once on first expand via `htmx.ajax`, which returns a real Promise in this 2.0.4 build. `fetch` would leave `hx-get` unprocessed and turn tree clicks into full page loads. `revealPath` walks the chain in sequence, because a nested placeholder does not exist until its parent's rows arrive; `syncCurrentFile` falls back to it when the row is absent, which is the `#content`-only navigation case.
+- Tree glyphs moved to a `<use>` sprite emitted once per document. The symbol ids are `tree-icon-*`: the command palette reads its own icon markup via `getElementById('icon-file')`, and the sprite is emitted earlier in the body, so a shared id would have handed the palette a `<symbol>`. A test pins the two sets disjoint.
+- Removing the tree left the inline `markdown-files` JSON as the bulk of the page at 882 KB. The palette already refetched the same list from `/api/files` after any swap, so it now fetches at init and the script is gone, taking `Layout`'s `files` parameter with it. The palette's `afterSwap` refetch is scoped to `#content`, `#sidebar`, and `#recent`, its prior trigger set, so directory expansion does not drag the list behind it.
+- A directory page listing renders one level now, expandable, where it used to dump its whole subtree into the reading pane. Same component, same reasoning.
+
+Result: `GET /` against the buildtall home falls from 6,668,404 bytes to 55,252, a 121× reduction. The sidebar span alone goes from 5,742,332 to 10,660. A page opened to a deep file costs 64,451.
+
+Two notes on how the work went. Extracting the canonical-path check out of `handleMarkdown` into a shared helper broke gosec's taint analysis, which follows an inline sanitizer but not one behind a call; the check was restored inline with a comment saying why, rather than suppressed. And a `..` in a tree path never reaches the handler at all, since `ServeMux` cleans and redirects first, so the test asserts what actually happens rather than an unreachable 404.
+
+Verification: lint, test, and build green via run_silent under `nix develop -c` at every phase; suites run three times under `-race` at Phases 2 and 3 with no flakes. All three modified JS files pass `node --check`. **Operator runtime verification in a browser is outstanding for all four phases**, covering: an edit issuing no `/partial/sidebar` request; a new file still updating the tree; a bulk checkout settling once; whether the 300 ms window reads as sluggish; the tree showing collapsed and expanding without a stall; a deep file reached by URL showing its ancestors; arrow-key navigation; the palette still finding files in unexpanded subtrees; sprite glyphs rendering; and the palette opened immediately on a cold load, where files now arrive asynchronously.
+
+Next: operator runtime verification, then push and PR to develop.
+
 ## 2026-07-03
 
 ### Follow mode persistence: auto-pause now opt-in, committed `410bed7`
