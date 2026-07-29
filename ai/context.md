@@ -37,3 +37,5 @@ empty fields should be left empty... no "NA" or "*Not Found*"... nothing, just a
 | alpine.js             | /alpinejs/alpine               |                                    |
 | go stdlib             | /golang/go                     |                                    |
 | wiremd                |                                | ai/context/wiremd/                 |
+| goldmark wikilink     |                                | vendor/go.abhg.dev/goldmark/wikilink/ |
+| goldmark frontmatter  |                                | vendor/go.abhg.dev/goldmark/frontmatter/ |
