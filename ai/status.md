@@ -2,6 +2,20 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-07-29
+
+### Wiki-link embed transclusion, `feature/wikilink-embed-transclusion`
+
+`![[note#section]]` is parsed today and then discarded: the vendored parser sets `Node.Embed` and splits the fragment, and `WikilinkRenderer.enter` never reads either. Five phases give the leading `!` its meaning. Plan at `thoughts/plans/2026-07-29_10-49-49_wikilink-embed-transclusion.md`, research at `thoughts/research/2026-07-29_09-18-46_wikilink-embed-transclusion.md`.
+
+**Phase 1, section location and content lookup.** Two pure files, no rendering change.
+
+- `ExtractSection` in `internal/markdown/section.go` returns the byte range of the section a fragment names. The range starts at the heading's own line, recovered by scanning back to the preceding newline so an ATX marker or a setext underline survives into the slice, and ends where the next heading of the same or a higher level begins, so descendant subsections are included by construction. Its parse-only goldmark instance mirrors `ExtractOutline` plus one addition that is load-bearing: the wikilink inline parser at priority 199. Without it, `## [[03-02-23]]` flattens to its literal brackets, and ten of the forty-seven section embeds in the operator's vault never match. Matching is exact and case-sensitive across the whole document first, case-insensitive only as a fallback, with no prefix or substring pass, because `principles of psychology` carries both `#### floodlights` and `#### on the floodlights` and the vault embeds the former.
+- `ClassifyEmbedTarget` sorts a target into note, image, or attachment by extension, with the image set copied from the wikilink package's own `resolveAsImage` list. A trailing dotted run containing a space is not treated as an extension: `filepath.Ext` reports `.2 release` for the note title `v1.2 release`, and classifying that as an attachment would send a resolvable note to the filesystem probe and render a marker instead of its content.
+- `FSEmbedSource` in `internal/markdown/embedsource.go` is the target-to-content seam a `wikilink.Resolver` does not provide. Notes are read with `fs.ReadFile` through the same filesystem the handler already holds rather than through `Server.index.corpus`, which sits behind `indexMux` and can lag the filesystem during a rebuild. Assets are found by probing the content root and then a configured attachment root, deliberately without an index, which is what keeps `source.Scan`, the tree, the sidebar, and the search corpus free of binary entries. Both methods reject paths failing `fs.ValidPath`, so a target cannot escape the content root.
+
+Verified: lint, test, and build green, 41 new subtests passing under `-race`.
+
 ## 2026-07-25
 
 ### UI latency remediation, four phases on `feature/sidebar-structural-refresh`
