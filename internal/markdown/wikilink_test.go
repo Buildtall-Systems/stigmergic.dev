@@ -150,7 +150,7 @@ func TestWikilinkIntegrationResolved(t *testing.T) {
 	t.Parallel()
 
 	r := NewTreeResolver(testFiles())
-	html, _, err := Parse([]byte("See [[Simple Note]] for details."), r)
+	html, _, err := Parse([]byte("See [[Simple Note]] for details."), r, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestWikilinkIntegrationUnresolved(t *testing.T) {
 	t.Parallel()
 
 	r := NewTreeResolver(testFiles())
-	html, _, err := Parse([]byte("See [[Missing Page]] for details."), r)
+	html, _, err := Parse([]byte("See [[Missing Page]] for details."), r, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestWikilinkIntegrationFragment(t *testing.T) {
 
 	t.Run("page with heading fragment", func(t *testing.T) {
 		t.Parallel()
-		html, _, err := Parse([]byte("See [[Simple Note#Overview]] for details."), r)
+		html, _, err := Parse([]byte("See [[Simple Note#Overview]] for details."), r, nil)
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -204,7 +204,7 @@ func TestWikilinkIntegrationFragment(t *testing.T) {
 
 	t.Run("self-link fragment", func(t *testing.T) {
 		t.Parallel()
-		html, _, err := Parse([]byte("Jump to [[#Section]] below."), r)
+		html, _, err := Parse([]byte("Jump to [[#Section]] below."), r, nil)
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -219,7 +219,7 @@ func TestWikilinkIntegrationAlias(t *testing.T) {
 	t.Parallel()
 
 	r := NewTreeResolver(testFiles())
-	html, _, err := Parse([]byte("See [[Simple Note|my note]] for details."), r)
+	html, _, err := Parse([]byte("See [[Simple Note|my note]] for details."), r, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -246,7 +246,7 @@ Some text with [[Simple Note]] and **bold**.
 
 > Blockquote with [[folder/note]]`
 
-	html, _, err := Parse([]byte(input), r)
+	html, _, err := Parse([]byte(input), r, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -272,7 +272,7 @@ Some text with [[Simple Note]] and **bold**.
 func TestWikilinkIntegrationNilResolver(t *testing.T) {
 	t.Parallel()
 
-	html, _, err := Parse([]byte("Text with [[brackets]] here."), nil)
+	html, _, err := Parse([]byte("Text with [[brackets]] here."), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}

@@ -397,6 +397,59 @@ func TestWatchDirAssetNotFound(t *testing.T) {
 	}
 }
 
+// TestMarkdownEmbedTranscludesSection drives transclusion through the handler
+// rather than the renderer, which is where the embed source and the resolver
+// are actually wired together. The poll is on the index: the resolver reads
+// the scanned file set, so the target is unresolvable until the background
+// scan has seen it.
+func TestMarkdownEmbedTranscludesSection(t *testing.T) {
+	t.Parallel()
+
+	const (
+		transcludedText = "alpha body"
+		omittedText     = "beta body"
+	)
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "target.md", "# Target\n\n## Alpha\n\nalpha body\n\n## Beta\n\nbeta body\n")
+	testutil.CreateTestFile(t, dir, "host.md", "Host text.\n\n![[target#Alpha]]\n")
+
+	port, cleanup := startServerWithWatchPath(t, dir)
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/file/host.md", port)
+
+	var html string
+	for range 50 {
+		resp, err := http.Get(url) //nolint:gosec,noctx
+		if err != nil {
+			t.Fatalf("failed to get host page: %v", err)
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Fatalf("failed to close response body: %v", closeErr)
+		}
+		if readErr != nil {
+			t.Fatalf("failed to read body: %v", readErr)
+		}
+		html = string(body)
+		if strings.Contains(html, transcludedText) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if !strings.Contains(html, transcludedText) {
+		t.Fatalf("expected the transcluded section in the response, got: %s", html)
+	}
+	if !strings.Contains(html, `class="transclusion"`) {
+		t.Errorf("expected a transclusion container, got: %s", html)
+	}
+	if strings.Contains(html, omittedText) {
+		t.Errorf("expected only the named section to be transcluded, got: %s", html)
+	}
+}
+
 func TestHTMXMarkdownIncludesOutlineOOB(t *testing.T) {
 	t.Parallel()
 

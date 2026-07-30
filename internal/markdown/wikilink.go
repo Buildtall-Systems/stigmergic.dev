@@ -133,6 +133,14 @@ func (r *WikilinkRenderer) Render(w util.BufWriter, src []byte, node ast.Node, e
 	return ast.WalkContinue, nil
 }
 
+// enter opens the element for one wikilink.
+//
+// An embed link (![[...]]) reaches here only when it did not stand alone in
+// its block, because embedTransformer promotes the standalone ones out of the
+// inline stream before rendering. What is left is a mid-sentence embed, and it
+// renders as an ordinary anchor on purpose: transcluded content is block
+// content, and emitting it inside a <p> would be repaired by the browser in a
+// way that corrupts the surrounding document.
 func (r *WikilinkRenderer) enter(w util.BufWriter, n *wikilink.Node) (ast.WalkStatus, error) {
 	dest, err := r.Resolver.ResolveWikilink(n)
 	if err != nil {

@@ -19,8 +19,11 @@ import (
 
 // Parse converts markdown source to HTML and extracts any YAML/TOML frontmatter.
 // When resolver is non-nil, wiki-style [[links]] are parsed and resolved.
+// When embeds is non-nil, an embed link (![[note#section]]) standing alone in a
+// block transcludes its target; a nil embeds reproduces the pre-transclusion
+// output byte for byte, mirroring the nil-resolver idiom.
 // Returns rendered HTML, parsed frontmatter metadata (nil if none), and any error.
-func Parse(source []byte, resolver wikilink.Resolver) ([]byte, map[string]any, error) {
+func Parse(source []byte, resolver wikilink.Resolver, embeds *EmbedContext) ([]byte, map[string]any, error) {
 	extensions := []goldmark.Extender{
 		extension.GFM,
 		NewWiremdExtension(),
@@ -38,8 +41,13 @@ func Parse(source []byte, resolver wikilink.Resolver) ([]byte, map[string]any, e
 		&frontmatter.Extender{},
 	}
 
-	parserOpts := []parser.Option{
-		parser.WithAutoHeadingID(),
+	var parserOpts []parser.Option
+
+	// Transcluded content omits AutoHeadingID. Its headings would otherwise
+	// collide with the host's ids and capture the outline rail's scrollspy
+	// anchors, and the rail lists the host's own headings only.
+	if !embeds.nested() {
+		parserOpts = append(parserOpts, parser.WithAutoHeadingID())
 	}
 
 	rendererOpts := []renderer.Option{
@@ -55,6 +63,18 @@ func Parse(source []byte, resolver wikilink.Resolver) ([]byte, map[string]any, e
 		rendererOpts = append(rendererOpts,
 			renderer.WithNodeRenderers(util.Prioritized(&WikilinkRenderer{Resolver: resolver}, 199)),
 		)
+
+		// Transclusion needs the wikilink parser to see an embed at all,
+		// so it is registered only alongside the resolver it also uses to
+		// turn a target into a route.
+		if embeds != nil {
+			parserOpts = append(parserOpts,
+				parser.WithASTTransformers(util.Prioritized(&embedTransformer{}, 100)),
+			)
+			rendererOpts = append(rendererOpts,
+				renderer.WithNodeRenderers(util.Prioritized(&embedRenderer{ctx: embeds, resolver: resolver}, 100)),
+			)
+		}
 	}
 
 	md := goldmark.New(

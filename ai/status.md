@@ -2,6 +2,21 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-07-30
+
+### Wiki-link embed transclusion, phase 2, `feature/wikilink-embed-transclusion`
+
+`![[note]]` and `![[note#section]]` now render their target inline.
+
+- `internal/markdown/embed.go` holds the extension. `embedTransformer` runs at priority 100 and replaces a block whose sole child is an embed with an `embedBlock`, accepting both `ast.Paragraph` and `ast.TextBlock` as the container, since a tight list item wraps its content in a `TextBlock` and an embed alone in a list item is an ordinary vault form. An embed with text beside it is left in the inline stream and still renders as an anchor, which `WikilinkRenderer.enter` now carries a comment about so it does not read as an oversight.
+- The renderer resolves the target through the same `wikilink.Resolver` ordinary links use, passing a node with no fragment so the resolver returns a bare route and no anchor has to be trimmed back off. It slices the section, then recurses through `Parse`, which allocates its own buffer and its own `parser.Context`. That is not incidental: `renderer.Render` calls `Flush` on the writer it is handed, and reusing the host's context would let the embedded note's frontmatter overwrite the host's.
+- The visited key is route plus fragment and is popped on the way out, so the guard tracks the path to the current node rather than the whole page. Two sibling embeds of the same section both render; a genuine cycle terminates at a marker. `MaxEmbedDepth` is a named constant and acts as a backstop for depth alone.
+- Every failure path writes a visible marker carrying `data-embed-error` set to `unresolved`, `no-section`, `cycle`, or `depth`, never an error. Roughly half the link targets in a real vault are dangling, so an unresolved embed is an ordinary outcome and not a reason to fail a page.
+- `Parse` gained a third parameter, a nil-disableable `*EmbedContext`, mirroring the nil-resolver idiom above it. A nil context reproduces the previous output exactly, which a test pins. Nested renders also omit `AutoHeadingID`, so transcluded headings carry no `id` and cannot collide with host ids or capture the outline rail's scrollspy anchors.
+- Styling went into `sharedThemeRules` in `layout.templ`, not into `input.css`. Two style trees exist and only one is live: `internal/embed/static.go` embeds `internal/embed/web/static`, which is what `make css` compiles and what `/static/styles/output.css` serves. The tree at the repository root, `web/static/`, is tracked but dead, and its `.wikilink-unresolved` rule has never reached a compiled bundle. That rule was added to `sharedThemeRules` alongside the transclusion rules, since the unresolved marker depends on it.
+
+Verified: lint, test, and build green, including a handler-level integration test that drives transclusion through the wired embed source and resolver.
+
 ## 2026-07-29
 
 ### Wiki-link embed transclusion, `feature/wikilink-embed-transclusion`

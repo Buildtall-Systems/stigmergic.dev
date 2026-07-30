@@ -318,8 +318,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	logger.Log.Debug("file read successfully", "path", filePath, "size", len(content))
 
+	// The embed source reads through the same filesystem this handler just
+	// read the host file from, rather than through the search corpus, which
+	// sits behind a mutex and can lag during a rebuild. A context is built
+	// per request because rendering mutates its depth and visited set.
 	resolver := markdown.NewTreeResolver(files)
-	html, meta, err := markdown.Parse(content, resolver)
+	embeds := markdown.NewEmbedContext(markdown.NewFSEmbedSource(contentFS, ""))
+	html, meta, err := markdown.Parse(content, resolver, embeds)
 	if err != nil {
 		logger.Log.Error("markdown parse failed", "error", err)
 		http.Error(w, "Failed to parse markdown", http.StatusInternalServerError)

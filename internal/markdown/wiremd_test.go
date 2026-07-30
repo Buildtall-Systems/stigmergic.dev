@@ -9,7 +9,7 @@ func TestWiremdFencedCodeBlock(t *testing.T) {
 	t.Parallel()
 
 	input := "```wiremd\n## Contact Form\n[Submit]{.primary}\n```"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestWiremdHTMLEscaping(t *testing.T) {
 	t.Parallel()
 
 	input := "```wiremd\n<script>alert('xss')</script>\n```"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestWiremdDoesNotAffectOtherCodeBlocks(t *testing.T) {
 	t.Parallel()
 
 	input := "```go\nfunc main() {}\n```\n\n```wiremd\n## Title\n```\n\n```mermaid\ngraph TD\nA-->B\n```"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestWiremdPreservesSourceContent(t *testing.T) {
 	t.Parallel()
 
 	input := "```wiremd\n## Login Page\n[_____] Username\n[_____] Password\n[Login]{.primary}\n```"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}

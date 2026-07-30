@@ -76,7 +76,7 @@ func TestParseBasicMarkdown(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result, _, err := Parse([]byte(tt.input), nil)
+			result, _, err := Parse([]byte(tt.input), nil, nil)
 			if err != nil {
 				t.Fatalf("Parse failed: %v", err)
 			}
@@ -108,7 +108,7 @@ Link to [example](https://example.com).
 
 ` + "```go\nfunc main() {\n}\n```"
 
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -137,7 +137,7 @@ Link to [example](https://example.com).
 func TestParseEmptyInput(t *testing.T) {
 	t.Parallel()
 
-	result, _, err := Parse([]byte(""), nil)
+	result, _, err := Parse([]byte(""), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed on empty input: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestParseHTMLPassthrough(t *testing.T) {
 	t.Parallel()
 
 	input := `<div class="test">HTML content</div>`
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestParseAutoHeadingIDs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result, _, err := Parse([]byte(tt.input), nil)
+			result, _, err := Parse([]byte(tt.input), nil, nil)
 			if err != nil {
 				t.Fatalf("Parse failed: %v", err)
 			}
@@ -208,7 +208,7 @@ func TestParseBlockquote(t *testing.T) {
 	t.Parallel()
 
 	input := "> This is a quote"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestParseSyntaxHighlighting(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result, _, err := Parse([]byte(tt.input), nil)
+			result, _, err := Parse([]byte(tt.input), nil, nil)
 			if err != nil {
 				t.Fatalf("Parse failed: %v", err)
 			}
@@ -287,7 +287,7 @@ func TestParseLineNumbers(t *testing.T) {
 	t.Parallel()
 
 	input := "```go\nline1\nline2\nline3\n```"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -305,7 +305,7 @@ func TestParseGFMTable(t *testing.T) {
 |----------|----------|
 | Cell 1   | Cell 2   |`
 
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestParseGFMStrikethrough(t *testing.T) {
 	t.Parallel()
 
 	input := "~~strikethrough~~"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestParseGFMTaskList(t *testing.T) {
 	input := `- [ ] Unchecked
 - [x] Checked`
 
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestParseGFMLinkify(t *testing.T) {
 	t.Parallel()
 
 	input := "Check out https://example.com for more info."
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -423,7 +423,7 @@ func TestParseExternalLinksNewTab(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result, _, err := Parse([]byte(tt.input), nil)
+			result, _, err := Parse([]byte(tt.input), nil, nil)
 			if err != nil {
 				t.Fatalf("Parse failed: %v", err)
 			}
@@ -440,7 +440,7 @@ func TestParseMermaidFlowchart(t *testing.T) {
 	t.Parallel()
 
 	input := "```mermaid\ngraph TD\nA-->B\n```"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -463,7 +463,7 @@ func TestParseMermaidSequenceDiagram(t *testing.T) {
 
 	input := "```mermaid\nsequenceDiagram\nAlice->>Bob: Hello\nBob->>Alice: Hi\n```"
 
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestParseNostrNpub(t *testing.T) {
 	t.Parallel()
 
 	input := "Follow me at nostr:npub1prtsd0e39unnacud7vzxwxec49xxau33xyq2lzuj3xpzfxg0z9wqjn0v8q for updates."
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -507,7 +507,7 @@ func TestParseNostrMultipleNpubs(t *testing.T) {
 	t.Parallel()
 
 	input := "Follow nostr:npub1r45pcpwtqsnp5t0pj8x7y95tse7k3t47pp4az889aqutwlh7dcsql04zht and nostr:npub139dkdt7rtcqn8wrxtemfjz8ah47l5c7fuxxqhfsepzcwvaqwqy9s34w8ju"
-	result, _, err := Parse([]byte(input), nil)
+	result, _, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -537,7 +537,7 @@ draft: false
 
 Content here.`
 
-	result, meta, err := Parse([]byte(input), nil)
+	result, meta, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -585,7 +585,7 @@ func TestParseFrontmatterEmpty(t *testing.T) {
 
 	input := "# No Frontmatter\n\nJust content."
 
-	result, meta, err := Parse([]byte(input), nil)
+	result, meta, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -611,7 +611,7 @@ tags:
 ---
 Content.`
 
-	_, meta, err := Parse([]byte(input), nil)
+	_, meta, err := Parse([]byte(input), nil, nil)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
