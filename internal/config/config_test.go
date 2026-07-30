@@ -24,6 +24,35 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestAttachmentRootDefaultsEmpty(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.AttachmentRoot != "" {
+		t.Errorf("expected an empty attachment root by default, got %q", cfg.AttachmentRoot)
+	}
+}
+
+func TestAttachmentRootFromFile(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, ".stigmergic.toml", "attachment_root = \"file\"\n")
+
+	cfg, err := Load(filepath.Join(dir, ".stigmergic.toml"))
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.AttachmentRoot != "file" {
+		t.Errorf("expected attachment root %q, got %q", "file", cfg.AttachmentRoot)
+	}
+}
+
 func TestLoadFromFile(t *testing.T) {
 	t.Parallel()
 

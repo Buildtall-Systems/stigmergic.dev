@@ -170,8 +170,12 @@ func (r *embedRenderer) render(w util.BufWriter, _ []byte, node ast.Node, enteri
 // vault are dangling, so an unresolved embed is an ordinary outcome and not a
 // reason to fail a page.
 func (r *embedRenderer) renderEmbed(w util.BufWriter, n *embedBlock) error {
-	if ClassifyEmbedTarget(n.target) != EmbedTargetNote {
-		return writeEmbedMarker(w, n, embedErrUnresolved)
+	switch ClassifyEmbedTarget(n.target) {
+	case EmbedTargetImage:
+		return r.renderAsset(w, n, true)
+	case EmbedTargetAttachment:
+		return r.renderAsset(w, n, false)
+	case EmbedTargetNote:
 	}
 
 	// An empty target names a section of the host document, as in
@@ -227,6 +231,40 @@ func (r *embedRenderer) renderEmbed(w util.BufWriter, n *embedBlock) error {
 	h.str(`">`)
 	h.escaped(embedDisplayLabel(n))
 	h.str(`</a></div>` + "\n")
+	return h.err
+}
+
+// renderAsset writes an embed whose target is not markdown. The asset is
+// found by probing the filesystem rather than by lookup, which is what keeps
+// the scanner, the tree, the sidebar, and the search corpus free of binary
+// entries. Its bytes are already served by the non-markdown branch of
+// handleMarkdown, so the route is all that is needed here.
+func (r *embedRenderer) renderAsset(w util.BufWriter, n *embedBlock, asImage bool) error {
+	route, ok := r.ctx.source.ProbeAsset(n.target)
+	if !ok {
+		return writeEmbedMarker(w, n, embedErrUnresolved)
+	}
+
+	h := &embedWriter{w: w}
+	if !asImage {
+		h.str(`<a class="attachment" href="/file/`)
+		h.bytes(util.URLEscape([]byte(route), true))
+		h.str(`">`)
+		h.escaped(embedDisplayLabel(n))
+		h.str(`</a>` + "\n")
+		return h.err
+	}
+
+	h.str(`<img src="/file/`)
+	h.bytes(util.URLEscape([]byte(route), true))
+	// The label becomes alt text only when the author wrote one, matching
+	// the rule the wikilink package's own image renderer follows: ![[x.png]]
+	// must not become alt="x.png", while ![[x.png|a diagram]] does.
+	if n.label != "" && n.label != n.target {
+		h.str(`" alt="`)
+		h.escaped(n.label)
+	}
+	h.str(`">` + "\n")
 	return h.err
 }
 

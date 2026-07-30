@@ -292,13 +292,17 @@ var minimalPNG = []byte{
 
 func startServerWithWatchPath(t *testing.T, watchPath string) (int, func()) {
 	t.Helper()
-	port := testutil.FindAvailablePort(t)
-	cfg := &config.Config{
-		Port:      port,
+	return startServerWithConfig(t, &config.Config{
+		Port:      testutil.FindAvailablePort(t),
 		Host:      testHost,
 		Theme:     testThemeName,
 		WatchPath: watchPath,
-	}
+	})
+}
+
+func startServerWithConfig(t *testing.T, cfg *config.Config) (int, func()) {
+	t.Helper()
+	port := cfg.Port
 	srv := newTestServer(t, cfg)
 	go func() { _ = srv.Start() }()
 	waitForServer(t, port)
@@ -447,6 +451,77 @@ func TestMarkdownEmbedTranscludesSection(t *testing.T) {
 	}
 	if strings.Contains(html, omittedText) {
 		t.Errorf("expected only the named section to be transcluded, got: %s", html)
+	}
+}
+
+// TestMarkdownEmbedImageResolvesThroughAttachmentRoot follows an image embed
+// all the way to its bytes: the probe finds the file under the attachment
+// root even though no index entry exists for it, and the route it emits is
+// served by the existing non-markdown branch of handleMarkdown.
+func TestMarkdownEmbedImageResolvesThroughAttachmentRoot(t *testing.T) {
+	t.Parallel()
+
+	const imageSrc = "/file/file/image.png"
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, "host.md", "Host text.\n\n![[image.png]]\n")
+	if err := os.MkdirAll(filepath.Join(dir, "file"), 0o750); err != nil {
+		t.Fatalf("failed to create attachment directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "file", "image.png"), minimalPNG, 0644); err != nil {
+		t.Fatalf("failed to write PNG: %v", err)
+	}
+
+	port, cleanup := startServerWithConfig(t, &config.Config{
+		Port:           testutil.FindAvailablePort(t),
+		Host:           testHost,
+		Theme:          testThemeName,
+		WatchPath:      dir,
+		AttachmentRoot: "file",
+	})
+	defer cleanup()
+
+	pageURL := fmt.Sprintf("http://localhost:%d/file/host.md", port)
+
+	var html string
+	for range 50 {
+		resp, err := http.Get(pageURL) //nolint:gosec,noctx
+		if err != nil {
+			t.Fatalf("failed to get host page: %v", err)
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Fatalf("failed to close response body: %v", closeErr)
+		}
+		if readErr != nil {
+			t.Fatalf("failed to read body: %v", readErr)
+		}
+		html = string(body)
+		if strings.Contains(html, imageSrc) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if !strings.Contains(html, `<img src="`+imageSrc+`">`) {
+		t.Fatalf("expected an image element sourced at %s, got: %s", imageSrc, html)
+	}
+
+	assetResp, err := http.Get(fmt.Sprintf("http://localhost:%d%s", port, imageSrc)) //nolint:gosec,noctx
+	if err != nil {
+		t.Fatalf("failed to get the embedded image: %v", err)
+	}
+	defer func() { _ = assetResp.Body.Close() }()
+
+	if assetResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 for the embedded image, got %d", assetResp.StatusCode)
+	}
+	assetBody, err := io.ReadAll(assetResp.Body)
+	if err != nil {
+		t.Fatalf("failed to read the image body: %v", err)
+	}
+	if !bytes.Equal(assetBody, minimalPNG) {
+		t.Errorf("embedded image bytes do not match the file on disk")
 	}
 }
 

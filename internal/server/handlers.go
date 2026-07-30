@@ -323,7 +323,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	// sits behind a mutex and can lag during a rebuild. A context is built
 	// per request because rendering mutates its depth and visited set.
 	resolver := markdown.NewTreeResolver(files)
-	embeds := markdown.NewEmbedContext(markdown.NewFSEmbedSource(contentFS, ""))
+	embeds := markdown.NewEmbedContext(markdown.NewFSEmbedSource(contentFS, s.config.AttachmentRoot))
 	html, meta, err := markdown.Parse(content, resolver, embeds)
 	if err != nil {
 		logger.Log.Error("markdown parse failed", "error", err)

@@ -17,6 +17,18 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 Verified: lint, test, and build green, including a handler-level integration test that drives transclusion through the wired embed source and resolver.
 
+### Wiki-link embed transclusion, phase 3
+
+`![[image.png]]` renders an image and other attachments render anchors, with no change to the scanner, the tree, the sidebar, or the search corpus.
+
+- `Config.AttachmentRoot` (`attachment_root`, default empty) and a matching `--attachment-root` persistent flag, bound through the existing `cmd.Flags().Changed` pattern. It names a second directory searched for an attachment given by bare filename, which is the dominant form in an Obsidian vault. Empty means only the watch path is searched.
+- The embed renderer branches on the Phase 1 extension classification before treating a target as a note. An image probes and emits an `img` whose source is the resolved `/file/` route; alt text is set only when the author wrote a label differing from the target, the rule the wikilink package's own image renderer follows. Any other non-markdown extension emits an anchor. A probe miss emits the unresolved marker.
+- Nothing else was needed to serve the bytes: the route lands on the existing non-markdown branch of `handleMarkdown`, which already calls `http.ServeFileFS`.
+- The unit fixture puts only markdown into its searchable file set, mirroring what `source.Scan` admits, so an attachment that renders proves the probe found it with no index entry to help. An end-to-end test follows an image embed from the host page through to its bytes and asserts they match the file on disk.
+- `startServerWithWatchPath` in the server tests now delegates to a config-taking `startServerWithConfig`, so a test can set the attachment root without duplicating the harness.
+
+Verified: lint, test, and build green.
+
 ## 2026-07-29
 
 ### Wiki-link embed transclusion, `feature/wikilink-embed-transclusion`

@@ -21,6 +21,7 @@ var (
 	logLevel         string
 	respectGitignore bool
 	defaultFile      string
+	attachmentRoot   string
 	loadedConfig     *config.Config
 )
 
@@ -53,6 +54,9 @@ beautifully through a local web server with real-time updates.`,
 		if cmd.Flags().Changed("default-file") {
 			loadedConfig.DefaultFile = defaultFile
 		}
+		if cmd.Flags().Changed("attachment-root") {
+			loadedConfig.AttachmentRoot = attachmentRoot
+		}
 
 		logger.Init(loadedConfig.LogLevel)
 
@@ -73,6 +77,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "ERROR", "log level (DEBUG, INFO, WARN, ERROR)")
 	rootCmd.PersistentFlags().BoolVar(&respectGitignore, "respect-gitignore", true, "respect .gitignore patterns")
 	rootCmd.PersistentFlags().StringVar(&defaultFile, "default-file", "", "file to display on homepage (relative to watch path)")
+	rootCmd.PersistentFlags().StringVar(&attachmentRoot, "attachment-root", "", "directory searched for embedded attachments named by filename (relative to watch path)")
 
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(siteCmd)

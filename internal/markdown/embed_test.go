@@ -9,11 +9,13 @@ import (
 )
 
 const (
-	embedContainer  = `class="transclusion"`
-	embedAlphaBody  = "alpha body"
-	embedBetaBody   = "beta body"
-	embedChildBody  = "alpha child body"
-	embedBetaSource = "![[target#Beta]]\n"
+	embedContainer   = `class="transclusion"`
+	embedAlphaBody   = "alpha body"
+	embedBetaBody    = "beta body"
+	embedChildBody   = "alpha child body"
+	embedBetaSource  = "![[target#Beta]]\n"
+	embedImageSource = "![[dependency.png]]\n"
+	embedImageTag    = "<img"
 )
 
 // embedTargetDoc carries a two-level heading structure so section slicing,
@@ -23,19 +25,31 @@ const embedTargetDoc = "# Target\n\n" +
 	"### Alpha Child\n\nalpha child body\n\n" +
 	"## Beta\n\nbeta body\n"
 
+// testEmbedVault returns a corpus and the searchable file set a scan would
+// produce from it. Only markdown enters the file set, because source.Scan
+// admits nothing else; an attachment that renders therefore proves the probe
+// found it without any index entry to help.
 func testEmbedVault() (fstest.MapFS, []models.SearchableFile) {
 	fsys := fstest.MapFS{
-		"target.md":  {Data: []byte(embedTargetDoc)},
-		"d1.md":      {Data: []byte("level one\n\n![[d2]]\n")},
-		"d2.md":      {Data: []byte("level two\n\n![[d3]]\n")},
-		"d3.md":      {Data: []byte("level three\n\n![[d4]]\n")},
-		"d4.md":      {Data: []byte("level four\n")},
-		"cycle-a.md": {Data: []byte("side a\n\n![[cycle-b]]\n")},
-		"cycle-b.md": {Data: []byte("side b\n\n![[cycle-a]]\n")},
+		"target.md":                {Data: []byte(embedTargetDoc)},
+		"d1.md":                    {Data: []byte("level one\n\n![[d2]]\n")},
+		"d2.md":                    {Data: []byte("level two\n\n![[d3]]\n")},
+		"d3.md":                    {Data: []byte("level three\n\n![[d4]]\n")},
+		"d4.md":                    {Data: []byte("level four\n")},
+		"cycle-a.md":               {Data: []byte("side a\n\n![[cycle-b]]\n")},
+		"cycle-b.md":               {Data: []byte("side b\n\n![[cycle-a]]\n")},
+		"file/dependency.png":      {Data: []byte("\x89PNG")},
+		"diagrams/flow.svg":        {Data: []byte("<svg/>")},
+		"file/The Kekule Left.pdf": {Data: []byte("%PDF")},
+		"file/episode.mp3":         {Data: []byte("ID3")},
+		"file/clip.mp4":            {Data: []byte("ftyp")},
 	}
 
 	files := make([]models.SearchableFile, 0, len(fsys))
 	for path := range fsys {
+		if !strings.HasSuffix(path, models.MarkdownExt) {
+			continue
+		}
 		files = append(files, models.SearchableFile{Name: path, Path: "/" + path})
 	}
 	return fsys, files
@@ -43,9 +57,14 @@ func testEmbedVault() (fstest.MapFS, []models.SearchableFile) {
 
 func renderEmbedded(t *testing.T, source string) string {
 	t.Helper()
+	return renderEmbeddedWithRoot(t, source, "")
+}
+
+func renderEmbeddedWithRoot(t *testing.T, source, attachmentRoot string) string {
+	t.Helper()
 
 	fsys, files := testEmbedVault()
-	html, _, err := Parse([]byte(source), NewTreeResolver(files), NewEmbedContext(NewFSEmbedSource(fsys, "")))
+	html, _, err := Parse([]byte(source), NewTreeResolver(files), NewEmbedContext(NewFSEmbedSource(fsys, attachmentRoot)))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
@@ -139,6 +158,96 @@ func TestEmbedTransclusion(t *testing.T) {
 			t.Parallel()
 
 			html := renderEmbedded(t, tt.source)
+			for _, want := range tt.contains {
+				if !strings.Contains(html, want) {
+					t.Errorf("expected output to contain %q, got %q", want, html)
+				}
+			}
+			for _, unwanted := range tt.excludes {
+				if strings.Contains(html, unwanted) {
+					t.Errorf("expected output to exclude %q, got %q", unwanted, html)
+				}
+			}
+		})
+	}
+}
+
+func TestEmbedAttachments(t *testing.T) {
+	t.Parallel()
+
+	const attachmentRoot = "file"
+
+	tests := []struct {
+		name           string
+		attachmentRoot string
+		source         string
+		contains       []string
+		excludes       []string
+	}{
+		{
+			name:           "bare image filename resolved through the attachment root",
+			attachmentRoot: attachmentRoot,
+			source:         embedImageSource,
+			contains:       []string{`<img src="/file/file/dependency.png">`},
+		},
+		{
+			name:     "image with an explicit path resolved at the content root",
+			source:   "![[diagrams/flow.svg]]\n",
+			contains: []string{`<img src="/file/diagrams/flow.svg">`},
+		},
+		{
+			name:           "image label becomes alt text",
+			attachmentRoot: attachmentRoot,
+			source:         "![[dependency.png|a dependency diagram]]\n",
+			contains:       []string{`alt="a dependency diagram"`},
+		},
+		{
+			name:           "image label equal to the target sets no alt text",
+			attachmentRoot: attachmentRoot,
+			source:         embedImageSource,
+			excludes:       []string{"alt="},
+		},
+		{
+			name:           "image with no matching file yields a marker",
+			attachmentRoot: attachmentRoot,
+			source:         "![[absent.png]]\n",
+			contains:       []string{embedErrorAttr(embedErrUnresolved)},
+			excludes:       []string{embedImageTag},
+		},
+		{
+			name:           "pdf renders an anchor",
+			attachmentRoot: attachmentRoot,
+			source:         "![[The Kekule Left.pdf]]\n",
+			contains:       []string{`href="/file/file/The%20Kekule%20Left.pdf"`, "The Kekule Left.pdf"},
+			excludes:       []string{embedImageTag},
+		},
+		{
+			name:           "audio renders an anchor",
+			attachmentRoot: attachmentRoot,
+			source:         "![[episode.mp3]]\n",
+			contains:       []string{`href="/file/file/episode.mp3"`},
+			excludes:       []string{embedImageTag},
+		},
+		{
+			name:           "video renders an anchor",
+			attachmentRoot: attachmentRoot,
+			source:         "![[clip.mp4]]\n",
+			contains:       []string{`href="/file/file/clip.mp4"`},
+			excludes:       []string{embedImageTag},
+		},
+		{
+			name:     "bare filename misses without an attachment root",
+			source:   embedImageSource,
+			contains: []string{embedErrorAttr(embedErrUnresolved)},
+			excludes: []string{embedImageTag},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			html := renderEmbeddedWithRoot(t, tt.source, tt.attachmentRoot)
 			for _, want := range tt.contains {
 				if !strings.Contains(html, want) {
 					t.Errorf("expected output to contain %q, got %q", want, html)

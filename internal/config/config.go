@@ -16,12 +16,17 @@ type AuthConfig struct {
 }
 
 type Config struct {
-	Host             string
-	BaseURL          string `mapstructure:"base_url"`
-	WatchPath        string
-	LogLevel         string
-	Theme            string
-	DefaultFile      string
+	Host        string
+	BaseURL     string `mapstructure:"base_url"`
+	WatchPath   string
+	LogLevel    string
+	Theme       string
+	DefaultFile string
+	// AttachmentRoot is a second directory searched for an embedded
+	// attachment named by bare filename, which is the dominant form in an
+	// Obsidian vault. It is relative to the watch path. Empty means only
+	// the watch path itself is searched.
+	AttachmentRoot   string `mapstructure:"attachment_root"`
 	IgnorePatterns   []string
 	Auth             AuthConfig
 	Port             int
@@ -40,6 +45,7 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("recentfilescount", 5)
 	v.SetDefault("base_url", "")
 	v.SetDefault("defaultfile", "")
+	v.SetDefault("attachment_root", "")
 	v.SetDefault("ignorepatterns", []string{
 		".git",
 		"node_modules",
