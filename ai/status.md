@@ -30,6 +30,10 @@ Closes the open item above: the version now lives in one place, a `VERSION` file
 
 Verified: lint, test, and build green; both release refusal paths exercised (`VERSION=` passed, tag already existing); `nix eval` reports `0.6.0` and a local `nix build` binary prints `stigmergic version 0.6.0`.
 
+### Release v0.6.1
+
+Maiden run of the argumentless release: `VERSION` bumped to `0.6.1` (commit `27e0cb2`), master fast-forwarded and pushed with develop, `make release` read the file, tagged, and published in 30 seconds with all five platform archives plus checksums. The tag dereferences to `27e0cb2`. The flake channel smoke run required `--refresh` to bypass nix's cached master resolution, then reported `stigmergic version 0.6.1`, closing the version-misreport defect end to end. GitHub notes 27 dependabot findings on the default branch (1 high), untriaged.
+
 ## 2026-07-30
 
 ### Wiki-link embed transclusion, phase 2, `feature/wikilink-embed-transclusion`
