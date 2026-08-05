@@ -1,0 +1,2 @@
+A non-image attachment. Embedding it from markdown renders a link to this
+file rather than its contents.

@@ -12,6 +12,7 @@ Stigmergic watches a directory tree for markdown files and serves them beautiful
 - **Math Rendering**: LaTeX equations rendered beautifully with KaTeX
 - **Diagram Support**: Mermaid diagrams for flowcharts, sequence diagrams, and more
 - **Nostr Protocol Links**: Native support for Nostr protocol link rendering
+- **Transclusion**: `![[note]]`, `![[note#section]]`, and `![[image.png]]` wiki-link embeds render notes, sections, images, and attachments inline
 - **Fast Navigation**: HTMX-powered partial page updates for smooth browsing
 - **Theme System**: Built-in themes (Iceberg Dark/Light) with custom theme support
 - **Smart Filtering**: Respects `.gitignore` patterns by default

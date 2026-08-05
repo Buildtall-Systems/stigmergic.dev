@@ -46,6 +46,8 @@ The markdown renderer must support:
 - **Math/LaTeX**: Mathematical equations using LaTeX syntax
 - **Tables & Task Lists**: GitHub Flavored Markdown tables and task lists
 - **Nostr URLs**: Parse and link nostr:// URLs (e.g., nostr:npub, nostr:note, nostr:nevent)
+- **Wiki Links**: `[[page]]` links resolved by name across the served tree, with backlinks collected on the target page
+- **Embeds**: `![[page]]` and `![[page#Section]]` transclude a note or a section inline; `![[image.png]]` renders images and other attachments render links; nesting is depth-capped, and unresolved targets, unmatched sections, and cycles render visible markers
 
 ### Configuration
 

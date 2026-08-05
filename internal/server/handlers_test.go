@@ -461,6 +461,52 @@ func TestMarkdownEmbedTranscludesSection(t *testing.T) {
 	}
 }
 
+// TestExampleTransclusionCorpusRenders serves the repository's demonstration
+// corpus at example/transclusion and confirms the host note renders every
+// form: transcluded section content arrives, and the unresolved, unmatched,
+// and cycle cases degrade to their markers rather than failing the page.
+func TestExampleTransclusionCorpusRenders(t *testing.T) {
+	t.Parallel()
+
+	port, cleanup := startServerWithWatchPath(t, filepath.Join("..", "..", "example", "transclusion"))
+	defer cleanup()
+
+	url := fmt.Sprintf("http://localhost:%d/file/host.md", port)
+
+	var html string
+	for range 50 {
+		resp, err := http.Get(url) //nolint:gosec,noctx
+		if err != nil {
+			t.Fatalf("failed to get the host note: %v", err)
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Fatalf("failed to close response body: %v", closeErr)
+		}
+		if readErr != nil {
+			t.Fatalf("failed to read body: %v", readErr)
+		}
+		html = string(body)
+		if strings.Contains(html, "Tide pools") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if !strings.Contains(html, "Tide pools") {
+		t.Fatalf("expected transcluded section content from the corpus, got: %s", html)
+	}
+	if !strings.Contains(html, `data-embed-error="unresolved"`) {
+		t.Errorf("expected the dangling embed's marker, got: %s", html)
+	}
+	if !strings.Contains(html, `data-embed-error="no-section"`) {
+		t.Errorf("expected the unmatched fragment's marker, got: %s", html)
+	}
+	if !strings.Contains(html, `data-embed-error="cycle"`) {
+		t.Errorf("expected the cycle pair to terminate at a marker, got: %s", html)
+	}
+}
+
 // TestMarkdownEmbedImageResolvesThroughAttachmentRoot follows an image embed
 // all the way to its bytes: the probe finds the file under the attachment
 // root even though no index entry exists for it, and the route it emits is

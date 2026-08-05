@@ -77,6 +77,8 @@ URLs using the `nostr:` protocol are automatically parsed and rendered as clicka
 
 `[[page]]` syntax links between documents by name, resolved against your whole tree — no relative paths to maintain. Every rendered page lists the documents that link *to* it, so connections stay visible from both ends. The navigation on this site's [[index]] uses them.
 
+`![[page]]` embeds instead of linking: the target note renders inline in the host page. `![[page#Section]]` embeds one section, from its heading to the next heading of the same or a higher level, subsections included. Headings match exactly first and case-insensitively as a fallback, and a heading may itself contain wikilinks. `![[image.png]]` renders the image; any other file type embeds as a download link. A bare filename is searched in the served tree first, then in the directory named by the `attachment_root` setting (`--attachment-root` on the command line), which is where an Obsidian vault keeps its attachments. Embeds nest up to three levels deep. An unresolved target, an unmatched section, or a cycle renders a visible marker in place of the embed, never an error, and editing a transcluded note live-reloads every open page that shows it. The `example/transclusion/` corpus in the repository demonstrates every form.
+
 ## UI Wireframes
 
 Fenced code blocks tagged `wiremd` render as sketch-style interface wireframes — mock up a settings page or a form directly in your markdown. See the [[demo]] for a live example.

@@ -2,6 +2,18 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-08-05
+
+### Wiki-link embed transclusion, phase 5
+
+Fixtures and documentation; the feature is now demonstrable from a clean checkout with no external vault.
+
+- `example/transclusion/` holds an eight-file corpus. `host.md` exercises every form: whole-note embed, section embed, a section whose heading contains a wikilink, an image with a label, a non-image attachment, an inline embed left beside text, the cycle pair, a dangling target, and an unmatched section. `sections.md` supplies the nested headings and the wikilink-bearing heading; `second-host.md` embeds the same section as `host.md`, so one edit refreshes two open pages; the `ouroboros-*` pair embed each other; `glyph.png` (the suite's one-pixel PNG) and `notes.txt` cover both attachment classes.
+- `TestExampleTransclusionCorpusRenders` in `internal/server/handlers_test.go` serves the corpus through the existing handler harness and pins the load-bearing outcomes: transcluded section content arrives, and the `unresolved`, `no-section`, and `cycle` markers render rather than failing the page.
+- Documentation: the features page's "Wikilinks & Backlinks" section now covers the embed forms, section matching, the attachment root, the depth cap, and the failure markers; the README features list gains a transclusion line; `ai/spec.md`'s "Markdown Rendering" section gains wiki links and embeds, both of which it predated.
+
+Verified: lint, test, and build green.
+
 ## 2026-07-30
 
 ### Wiki-link embed transclusion, phase 2, `feature/wikilink-embed-transclusion`
