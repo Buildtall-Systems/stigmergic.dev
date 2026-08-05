@@ -321,7 +321,7 @@ func TestMarkdownFullPageRendersOutlineRail(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), testThemes(), models.TreeView{}, []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline).Render(context.Background(), &sb)
+	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), testThemes(), models.TreeView{}, []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline, nil).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -361,7 +361,7 @@ func TestMarkdownBreadcrumbsUseHTMXSwaps(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := MarkdownContent(crumbs, "<p>hello</p>", "hello", "/root", "", nil, nil, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := MarkdownContent(crumbs, "<p>hello</p>", "hello", "/root", "", nil, nil, models.UICapabilities{}, nil).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -375,6 +375,50 @@ func TestMarkdownBreadcrumbsUseHTMXSwaps(t *testing.T) {
 	}
 	if !strings.Contains(html, `hx-push-url="true"`) {
 		t.Error("expected breadcrumb link to push URL")
+	}
+}
+
+func TestMarkdownContentCarriesTranscludedRoutes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		want        string
+		transcluded []string
+	}{
+		{
+			name:        "none",
+			want:        `data-transcluded="[]"`,
+			transcluded: nil,
+		},
+		{
+			name:        "one route",
+			want:        `data-transcluded="[&#34;notes/target.md&#34;]"`,
+			transcluded: []string{"notes/target.md"},
+		},
+		{
+			// A vault route carries spaces, which is why the attribute is
+			// JSON rather than a separator-joined list.
+			name:        "route with spaces",
+			want:        `data-transcluded="[&#34;reading/papers/lifes irreducible structure.md&#34;]"`,
+			transcluded: []string{"reading/papers/lifes irreducible structure.md"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var sb strings.Builder
+			err := MarkdownContent(nil, "<p>hello</p>", "hello", "/root", "", nil, nil, models.UICapabilities{}, tt.transcluded).Render(context.Background(), &sb)
+			if err != nil {
+				t.Fatalf("failed to render: %v", err)
+			}
+
+			if !strings.Contains(sb.String(), tt.want) {
+				t.Errorf("expected rendered content to contain %s", tt.want)
+			}
+		})
 	}
 }
 

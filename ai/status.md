@@ -29,6 +29,16 @@ Verified: lint, test, and build green, including a handler-level integration tes
 
 Verified: lint, test, and build green.
 
+### Wiki-link embed transclusion, phase 4
+
+Editing a note now refreshes every open page that transcludes it.
+
+- `EmbedContext` accumulates the routes a render pulled in, deduplicated and in document order, exposed through a `Transcluded` accessor read after `Parse` returns. The render pass is the only place that knows what a page actually transcluded, since resolution depends on the corpus. Recording happens once the content is in hand and before the recursion, so a nested render, which shares the host's context, contributes its own targets to the same list. Nothing is recorded for an unresolved target, an unmatched fragment, or an attachment: the first two show no content an edit could change, and an attachment is found by filesystem probe rather than by the scan, so the watcher never reports it.
+- `handleMarkdown` reads the list after parsing and passes it to both templ views. `MarkdownContent` renders it as `data-transcluded` on its outer container div, which is the element htmx swaps into `#content` on every navigation, so one site covers both the full-page and the partial path. The value is JSON, produced by `TranscludedAttr` in `web/templates/transclusion.go`, because a route is a file path and vault paths carry spaces that a separator-joined list would claim.
+- `contentShowsPath` in `internal/embed/web/static/js/app/events.js` consults that attribute after its existing current-file, ancestor, and home checks fail. A page with no embeds carries an empty array rather than no attribute, so the client parses one shape in every case.
+
+Verified: lint, test, and build green.
+
 ## 2026-07-29
 
 ### Wiki-link embed transclusion, `feature/wikilink-embed-transclusion`

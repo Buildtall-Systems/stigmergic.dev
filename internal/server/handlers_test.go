@@ -452,6 +452,13 @@ func TestMarkdownEmbedTranscludesSection(t *testing.T) {
 	if strings.Contains(html, omittedText) {
 		t.Errorf("expected only the named section to be transcluded, got: %s", html)
 	}
+
+	// The live-reload listener reads this attribute to decide whether an edit
+	// to a note the page transcludes should refresh the pane. The quotes are
+	// entity-escaped because templ escapes the attribute value.
+	if !strings.Contains(html, `data-transcluded="[&#34;target.md&#34;]"`) {
+		t.Errorf("expected the host page to carry its transcluded route, got: %s", html)
+	}
 }
 
 // TestMarkdownEmbedImageResolvesThroughAttachmentRoot follows an image embed

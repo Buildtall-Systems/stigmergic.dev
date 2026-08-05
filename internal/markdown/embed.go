@@ -49,23 +49,49 @@ func (n *embedBlock) Dump(source []byte, level int) {
 }
 
 // EmbedContext carries the state one page render needs to transclude: where to
-// read content from, how deep the current render sits, and which targets are
-// already open on the path to here.
+// read content from, how deep the current render sits, which targets are
+// already open on the path to here, and which targets the page pulled in.
 //
 // It is mutated during rendering and is not safe for concurrent use. Construct
 // one per request.
 type EmbedContext struct {
-	source  EmbedSource
-	visited map[string]struct{}
-	depth   int
+	source      EmbedSource
+	visited     map[string]struct{}
+	recorded    map[string]struct{}
+	transcluded []string
+	depth       int
 }
 
 // NewEmbedContext builds a context reading through source.
 func NewEmbedContext(source EmbedSource) *EmbedContext {
 	return &EmbedContext{
-		source:  source,
-		visited: make(map[string]struct{}),
+		source:   source,
+		visited:  make(map[string]struct{}),
+		recorded: make(map[string]struct{}),
 	}
+}
+
+// record notes a route the page pulled in. Order is first appearance and
+// repeats collapse, so the list reads as the page's dependencies rather than
+// as a trace of the render. Nested renders share the host's context, so a
+// route reached through another transclusion is recorded alongside the rest.
+func (c *EmbedContext) record(route string) {
+	if _, seen := c.recorded[route]; seen {
+		return
+	}
+	c.recorded[route] = struct{}{}
+	c.transcluded = append(c.transcluded, route)
+}
+
+// Transcluded returns the routes this render pulled in, read after Parse
+// returns. The render pass is the only place that knows what a page actually
+// transcluded, since resolution depends on the corpus. The result is nil when
+// the page transcluded nothing, and for a nil context.
+func (c *EmbedContext) Transcluded() []string {
+	if c == nil {
+		return nil
+	}
+	return c.transcluded
 }
 
 // nested reports whether this render sits inside a transclusion. Nested
@@ -206,6 +232,11 @@ func (r *embedRenderer) renderEmbed(w util.BufWriter, n *embedBlock) error {
 		}
 		content = section
 	}
+
+	// Recorded once the content is in hand and before the recursion, so the
+	// dependency list reads in document order and holds only routes an edit
+	// can change what the page shows.
+	r.ctx.record(route)
 
 	// The visited key is popped on the way out so the guard tracks the path
 	// to here rather than the whole page. Two sibling embeds of the same

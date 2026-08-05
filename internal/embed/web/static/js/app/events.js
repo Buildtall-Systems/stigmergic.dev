@@ -13,16 +13,33 @@ function parseSSEEvent(data) {
 	return {type: 'reload', path: ''}
 }
 
+// transcludedPaths reads the routes the server recorded for the document in
+// the reading pane. The attribute sits on the container htmx swaps into
+// #content, so it is current after any navigation.
+function transcludedPaths() {
+	var container = document.querySelector('#content [data-transcluded]')
+	if (!container) return []
+	try {
+		var routes = JSON.parse(container.getAttribute('data-transcluded'))
+		return Array.isArray(routes) ? routes : []
+	} catch (err) {
+		console.error('unparseable transcluded routes', err)
+		return []
+	}
+}
+
 // contentShowsPath reports whether the reading pane is displaying the changed
-// path: the file itself, a directory listing on its ancestor chain, or home.
-// An empty path means "refresh regardless" (gitignore toggle, legacy reload).
+// path: the file itself, a directory listing on its ancestor chain, home, or a
+// note the document transcludes. An empty path means "refresh regardless"
+// (gitignore toggle, legacy reload).
 function contentShowsPath(path) {
 	if (!path) return true
 	var pathname = decodeURIComponent(window.location.pathname)
 	if (pathname === '/') return true
 	if (!pathname.startsWith('/file/')) return false
 	var current = pathname.slice('/file/'.length)
-	return current === path || path.startsWith(current + '/')
+	if (current === path || path.startsWith(current + '/')) return true
+	return transcludedPaths().indexOf(path) !== -1
 }
 
 // refreshPane refetches without a history push, flagged so the follow store

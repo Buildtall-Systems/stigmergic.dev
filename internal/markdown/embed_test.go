@@ -16,6 +16,8 @@ const (
 	embedBetaSource  = "![[target#Beta]]\n"
 	embedImageSource = "![[dependency.png]]\n"
 	embedImageTag    = "<img"
+	embedTargetRoute = "target.md"
+	embedChainSource = "![[d1]]\n"
 )
 
 // embedTargetDoc carries a two-level heading structure so section slicing,
@@ -31,7 +33,7 @@ const embedTargetDoc = "# Target\n\n" +
 // found it without any index entry to help.
 func testEmbedVault() (fstest.MapFS, []models.SearchableFile) {
 	fsys := fstest.MapFS{
-		"target.md":                {Data: []byte(embedTargetDoc)},
+		embedTargetRoute:           {Data: []byte(embedTargetDoc)},
 		"d1.md":                    {Data: []byte("level one\n\n![[d2]]\n")},
 		"d2.md":                    {Data: []byte("level two\n\n![[d3]]\n")},
 		"d3.md":                    {Data: []byte("level three\n\n![[d4]]\n")},
@@ -120,12 +122,12 @@ func TestEmbedTransclusion(t *testing.T) {
 		},
 		{
 			name:     "nested embed renders at depth two",
-			source:   "![[d1]]\n",
+			source:   embedChainSource,
 			contains: []string{"level one", "level two", "level three"},
 		},
 		{
 			name:     "depth cap yields a marker instead of recursing",
-			source:   "![[d1]]\n",
+			source:   embedChainSource,
 			contains: []string{"level three", embedErrorAttr(embedErrDepth)},
 			excludes: []string{"level four"},
 		},
@@ -307,6 +309,89 @@ func TestEmbedHeadingsCarryNoID(t *testing.T) {
 	}
 	if strings.Contains(html, `id="alpha"`) {
 		t.Errorf("transcluded heading must not carry an id, got %q", html)
+	}
+}
+
+// transcludedRoutes parses source and returns the dependency list the render
+// recorded, which is what the live-reload client is handed.
+func transcludedRoutes(t *testing.T, source string) []string {
+	t.Helper()
+
+	fsys, files := testEmbedVault()
+	embeds := NewEmbedContext(NewFSEmbedSource(fsys, ""))
+	if _, _, err := Parse([]byte(source), NewTreeResolver(files), embeds); err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	return embeds.Transcluded()
+}
+
+func TestEmbedTranscludedRoutes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source string
+		want   []string
+	}{
+		{
+			name:   "no embeds",
+			source: "just text\n",
+			want:   nil,
+		},
+		{
+			name:   "one note",
+			source: "![[target#Alpha]]\n",
+			want:   []string{embedTargetRoute},
+		},
+		{
+			// Two sections of one note are one dependency: an edit to that
+			// note refreshes the page once, not twice.
+			name:   "repeated target collapses",
+			source: "![[target#Alpha]]\n\n" + embedBetaSource,
+			want:   []string{embedTargetRoute},
+		},
+		{
+			// A nested render shares the host's context, so a note reached
+			// only through another transclusion is a dependency too. d4 is
+			// absent because the depth cap stops the chain before it.
+			name:   "nested routes recorded in document order",
+			source: embedChainSource,
+			want:   []string{"d1.md", "d2.md", "d3.md"},
+		},
+		{
+			name:   "unresolved records nothing",
+			source: "![[nowhere]]\n",
+			want:   nil,
+		},
+		{
+			name:   "unmatched fragment records nothing",
+			source: "![[target#Missing]]\n",
+			want:   nil,
+		},
+		{
+			// An attachment is found by filesystem probe rather than by the
+			// scan, so the watcher never reports a change to it and it is not
+			// a dependency the client can act on.
+			name:   "attachment records nothing",
+			source: embedImageSource,
+			want:   nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := transcludedRoutes(t, tt.source)
+			if len(got) != len(tt.want) {
+				t.Fatalf("expected routes %v, got %v", tt.want, got)
+			}
+			for i, route := range tt.want {
+				if got[i] != route {
+					t.Errorf("expected route %d to be %q, got %q", i, route, got[i])
+				}
+			}
+		})
 	}
 }
 

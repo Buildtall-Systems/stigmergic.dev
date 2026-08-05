@@ -4,14 +4,17 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, themes []*theme.Theme, treeView models.TreeView, recentFiles []models.SearchableFile, indexReady bool, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities, outline []models.OutlineEntry) {
+templ Markdown(title string, breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, thm *theme.Theme, themes []*theme.Theme, treeView models.TreeView, recentFiles []models.SearchableFile, indexReady bool, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities, outline []models.OutlineEntry, transcluded []string) {
 	@components.Layout(title, thm, themes, treeView, recentFiles, indexReady, caps, outline) {
-		@MarkdownContent(breadcrumbs, content, rawContent, rootPath, relativePath, backlinks, metadata, caps)
+		@MarkdownContent(breadcrumbs, content, rawContent, rootPath, relativePath, backlinks, metadata, caps, transcluded)
 	}
 }
 
-templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities) {
-	<div class="space-y-6">
+// The transcluded routes ride on this outer div because it is the element htmx
+// swaps into #content on every navigation, so one site serves both the
+// full-page and the partial path.
+templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawContent string, rootPath string, relativePath string, backlinks []models.BacklinkEntry, metadata map[string]any, caps models.UICapabilities, transcluded []string) {
+	<div class="space-y-6" data-transcluded={ TranscludedAttr(transcluded) }>
 		if len(breadcrumbs) > 0 {
 			<nav class="breadcrumb" aria-label="Breadcrumb">
 				<div class="flex items-center justify-between gap-4">

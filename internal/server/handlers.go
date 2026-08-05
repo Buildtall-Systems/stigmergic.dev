@@ -349,15 +349,19 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	outline := markdown.ExtractOutline(content)
 
+	// The routes the render pulled in travel to the client, where the
+	// live-reload listener refreshes the pane when one of them changes.
+	transcluded := embeds.Transcluded()
+
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.source.Name(), relativePath, fileBacklinks, meta, s.uiCaps).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.source.Name(), relativePath, fileBacklinks, meta, s.uiCaps, transcluded).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown content template", "error", renderErr)
 		}
 		s.renderOutlineOOB(w, r, outline)
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, s.themes, treeViewFor(tree, filePath), recentFiles, indexReady, fileBacklinks, meta, s.uiCaps, outline).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, s.themes, treeViewFor(tree, filePath), recentFiles, indexReady, fileBacklinks, meta, s.uiCaps, outline, transcluded).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}
