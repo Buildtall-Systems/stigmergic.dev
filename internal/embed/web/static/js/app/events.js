@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	document.addEventListener('keydown', handleSourceKeydown);
 	document.addEventListener('keydown', handleThemeKeydown);
 	document.addEventListener('keydown', handleSectionKeydown);
+	document.addEventListener('keydown', handleParagraphKeydown);
 	document.addEventListener('keydown', handleReaderKeydown);
 	document.addEventListener('click', handleOutlineClick);
 

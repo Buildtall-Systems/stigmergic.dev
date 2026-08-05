@@ -227,37 +227,65 @@ function outlineHeadings() {
 	return headings
 }
 
+// nearestBlock finds the closest element past the top of the reading pane in
+// the given direction, or null at either end of the document. The 1px
+// tolerance keeps an element parked exactly at the top from matching itself.
+function nearestBlock(elements, contentTop, direction) {
+	if (direction > 0) {
+		for (var i = 0; i < elements.length; i++) {
+			if (elements[i].getBoundingClientRect().top > contentTop + 1) {
+				return elements[i]
+			}
+		}
+		return null
+	}
+	for (var j = elements.length - 1; j >= 0; j--) {
+		if (elements[j].getBoundingClientRect().top < contentTop - 1) {
+			return elements[j]
+		}
+	}
+	return null
+}
+
 // jumpToSection scrolls to the nearest heading beyond the top of the reading
 // pane in the given direction. Geometry-based rather than active-link-based:
 // backward from mid-section lands on the current section's heading first,
-// matching media-player prev semantics. The 1px tolerance keeps a heading
-// parked exactly at the top from matching itself.
+// matching media-player prev semantics.
 function jumpToSection(direction) {
 	var content = document.getElementById('content')
 	if (!content) return
 	var headings = outlineHeadings()
 	if (!headings.length) return
 
-	var contentTop = content.getBoundingClientRect().top
-	var target = null
-	if (direction > 0) {
-		for (var i = 0; i < headings.length; i++) {
-			if (headings[i].getBoundingClientRect().top > contentTop + 1) {
-				target = headings[i]
-				break
-			}
-		}
-	} else {
-		for (var j = headings.length - 1; j >= 0; j--) {
-			if (headings[j].getBoundingClientRect().top < contentTop - 1) {
-				target = headings[j]
-				break
-			}
-		}
-	}
+	var target = nearestBlock(headings, content.getBoundingClientRect().top, direction)
 	if (!target) return
 	target.scrollIntoView({behavior: 'smooth', block: 'start'})
 	setActiveOutlineLink(target.id)
+}
+
+// documentBlocks lists the rendered document's top-level blocks: paragraphs,
+// lists, code fences, tables, and headings alike. Elements hidden by the
+// source toggle report a zero rect, so they are filtered out here rather than
+// mis-measured by the geometry walk.
+function documentBlocks() {
+	var article = document.querySelector('#content article')
+	if (!article) return []
+	return Array.from(article.children).filter(function(el) {
+		return el.offsetParent !== null
+	})
+}
+
+// jumpToParagraph is jumpToSection at block granularity. No outline update:
+// the scrollspy observer keeps the active link current as headings cross.
+function jumpToParagraph(direction) {
+	var content = document.getElementById('content')
+	if (!content) return
+	var blocks = documentBlocks()
+	if (!blocks.length) return
+
+	var target = nearestBlock(blocks, content.getBoundingClientRect().top, direction)
+	if (!target) return
+	target.scrollIntoView({behavior: 'smooth', block: 'start'})
 }
 
 function handleSectionKeydown(evt) {
@@ -266,6 +294,14 @@ function handleSectionKeydown(evt) {
 	var t = evt.target
 	if (t && (t.matches('input, textarea, select') || t.isContentEditable)) return
 	jumpToSection(evt.key === 'n' || evt.key === 'N' ? 1 : -1)
+}
+
+function handleParagraphKeydown(evt) {
+	if (evt.key !== 'j' && evt.key !== 'J' && evt.key !== 'k' && evt.key !== 'K') return
+	if (evt.ctrlKey || evt.metaKey || evt.altKey) return
+	var t = evt.target
+	if (t && (t.matches('input, textarea, select') || t.isContentEditable)) return
+	jumpToParagraph(evt.key === 'j' || evt.key === 'J' ? 1 : -1)
 }
 
 function handleOutlineClick(evt) {
