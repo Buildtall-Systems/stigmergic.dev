@@ -14,6 +14,12 @@ Fixtures and documentation; the feature is now demonstrable from a clean checkou
 
 Verified: lint, test, and build green.
 
+### Release v0.6.0
+
+Master fast-forwarded `3fd0b78` to `b261f29`, nine commits: j/k paragraph navigation and the five-phase wiki-link embed transclusion. Tag `v0.6.0` published; goreleaser produced archives for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, plus checksums.
+
+Verification: the GitHub release carries all six assets and a changelog of exactly the nine commits; the annotated tag dereferences to `b261f29`; origin master matches. The flake smoke run (`nix run github:Buildtall-Systems/stigmergic.dev`) resolves to `b261f29` and builds current code, but the binary reports `stigmergic version 0.4.1`: `flake.nix` pins `version = "0.4.1"` into ldflags and no release since 0.4.1 has bumped it, so v0.5.0 shipped the same misreport. The goreleaser archives are unaffected, versioned from the tag. Open: bump the flake version during each release, or derive it from the tag, and add the bump to the release procedure.
+
 ## 2026-07-30
 
 ### Wiki-link embed transclusion, phase 2, `feature/wikilink-embed-transclusion`
