@@ -491,3 +491,11 @@ Added n/p section jumping and reader mode (branch `feature/section-jump-keys`).
 Commits: `eefc58f` (toolchain), `e8deffc` (features). Verification: `make build && make lint && make test` in devshell — all pass. Operator verified both features in browser.
 
 Remodeled the embedded site landing page (`site/content/index.md`): themed HTML hero with download CTAs, responsive feature-card grid, one-per-line keyboard shortcut list — all bare HTML blocks through the existing `WithUnsafe()` pipeline, styled with theme variables and em units so themes and reader mode compose. Stale screenshots removed (operator will retake); dropped the embedded-image assertion from `TestEmbeddedRealSiteFS` accordingly. Commit `9723e4a`. Verification: build, lint, tests all pass; operator reviewed in browser.
+
+## 2026-08-04
+
+Added j/k paragraph navigation (branch `feature/paragraph-nav`, worktree sibling).
+
+**Paragraph jumping**: `j`/`k` scroll the reading pane to the next/previous top-level block of the rendered document (paragraphs, lists, code fences, tables, and headings alike), a finer-grained analog of the `n`/`p` section jumps. The shared geometry walk is extracted into `nearestBlock` in `nav.js`, used by both `jumpToSection` and the new `jumpToParagraph`. `documentBlocks` enumerates the article's direct children, filtering elements hidden by the source toggle. Handler `handleParagraphKeydown` mirrors the section handler's modifier and form-field guards; registered in `events.js`. Help overlay documents J/K.
+
+Commits: `dd6e35a` (feature), `ad3afed` (help overlay). Verification: `make lint`, `make test`, `make build` in the worktree, all pass (worktree needed `pnpm install` first for the tailwind step). Operator browser verification pending; branch not yet integrated into develop.
