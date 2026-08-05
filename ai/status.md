@@ -20,6 +20,16 @@ Master fast-forwarded `3fd0b78` to `b261f29`, nine commits: j/k paragraph naviga
 
 Verification: the GitHub release carries all six assets and a changelog of exactly the nine commits; the annotated tag dereferences to `b261f29`; origin master matches. The flake smoke run (`nix run github:Buildtall-Systems/stigmergic.dev`) resolves to `b261f29` and builds current code, but the binary reports `stigmergic version 0.4.1`: `flake.nix` pins `version = "0.4.1"` into ldflags and no release since 0.4.1 has bumped it, so v0.5.0 shipped the same misreport. The goreleaser archives are unaffected, versioned from the tag. Open: bump the flake version during each release, or derive it from the tag, and add the bump to the release procedure.
 
+### Single-source release version (branch `fix/version-single-source`)
+
+Closes the open item above: the version now lives in one place, a `VERSION` file at the repository root, seeded `0.6.0`.
+
+- `flake.nix` reads the file (`builtins.readFile ./VERSION`, newline stripped) into the `version` attribute that already feeds the ldflags injection, so the flake-built binary reports the file's version. A flake sees only tracked files, so the file must be committed, which the release flow guarantees.
+- `make release` takes no argument. It reads the file and refuses when the tag `v<version>` already exists, so a forgotten bump halts the release instead of shipping a stale string; it also refuses a passed `VERSION=`, so the retired calling convention cannot silently diverge from the file.
+- The release procedure gains one step, performed on develop before the master fast-forward: bump `VERSION`, commit.
+
+Verified: lint, test, and build green; both release refusal paths exercised (`VERSION=` passed, tag already existing); `nix eval` reports `0.6.0` and a local `nix build` binary prints `stigmergic version 0.6.0`.
+
 ## 2026-07-30
 
 ### Wiki-link embed transclusion, phase 2, `feature/wikilink-embed-transclusion`

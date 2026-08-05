@@ -34,7 +34,7 @@
 
         packages.default = pkgs.buildGoModule rec {
           pname = "stigmergic";
-          version = "0.4.1";
+          version = builtins.replaceStrings [ "\n" ] [ "" ] (builtins.readFile ./VERSION);
           src = ./.;
           vendorHash = null;
 

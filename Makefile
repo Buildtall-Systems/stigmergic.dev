@@ -38,9 +38,13 @@ clean:
 	find . -name '*_templ.go' -delete
 
 release:
-	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=x.y.z"; exit 1; fi
-	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
-	git push origin "v$(VERSION)"
+	@if [ -n "$(VERSION)" ]; then echo "the version is read from the VERSION file; do not pass VERSION="; exit 1; fi
+	@v="$$(cat VERSION)" && \
+	if git rev-parse -q --verify "refs/tags/v$$v" >/dev/null; then \
+		echo "tag v$$v already exists; bump the VERSION file first"; exit 1; \
+	fi && \
+	git tag -a "v$$v" -m "Release v$$v" && \
+	git push origin "v$$v" && \
 	GITHUB_TOKEN=$$(gh auth token --user plantimals) nix develop -c goreleaser release --clean
 
 wiremd-js:
