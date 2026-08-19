@@ -15,8 +15,10 @@ type CorpusEntry struct {
 	Size    int64
 }
 
-// Corpus holds every markdown file's contents, keyed by route path (no
-// leading slash).
+// Corpus holds every markdown file's contents, keyed by the route serving
+// it: the mount prefix of the source holding the file, followed by the
+// file's path within that source. One corpus therefore spans every mounted
+// source without its keys ever colliding.
 type Corpus map[string]CorpusEntry
 
 // ChangedRoutes is the set of routes a rebuild actually read. Whatever is
@@ -40,19 +42,23 @@ type ChangedRoutes map[string]struct{}
 // filesystem's mod time granularity without changing the file's length. The
 // alternative, hashing contents, would mean reading every file on every
 // rebuild, which is the cost this exists to avoid.
-func ReadCorpus(contentFS fs.FS, prev Corpus, files []models.SearchableFile) (Corpus, ChangedRoutes) {
+// The files are one source's own, their paths relative to contentFS; mount
+// is the route prefix that source answers at, and prefixing it is what makes
+// the returned keys routes. prev is the whole corpus, every source included,
+// so a rebuild carries entries over no matter which source they came from.
+func ReadCorpus(contentFS fs.FS, prev Corpus, mount string, files []models.SearchableFile) (Corpus, ChangedRoutes) {
 	corpus := make(Corpus, len(files))
 	changed := make(ChangedRoutes)
 
 	for _, f := range files {
-		route := strings.TrimPrefix(f.Path, "/")
+		route := mount + strings.TrimPrefix(f.Path, "/")
 
 		if cached, ok := prev[route]; ok && cached.ModTime == f.ModTimeNano && cached.Size == f.Size {
 			corpus[route] = cached
 			continue
 		}
 
-		data, err := fs.ReadFile(contentFS, route)
+		data, err := fs.ReadFile(contentFS, strings.TrimPrefix(f.Path, "/"))
 		if err != nil {
 			continue
 		}

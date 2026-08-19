@@ -353,7 +353,7 @@ func TestServerUpdateTree(t *testing.T) {
 	}
 
 	srv.treeMux.RLock()
-	initialNode := srv.tree.Find("initial.md")
+	initialNode := srv.primary().tree.Find("initial.md")
 	srv.treeMux.RUnlock()
 
 	if initialNode == nil {
@@ -365,7 +365,7 @@ func TestServerUpdateTree(t *testing.T) {
 	srv.updateTree()
 
 	srv.treeMux.RLock()
-	newNode := srv.tree.Find("new.md")
+	newNode := srv.primary().tree.Find("new.md")
 	srv.treeMux.RUnlock()
 
 	if newNode == nil {
@@ -401,7 +401,7 @@ func TestServerUpdateTreeConcurrent(t *testing.T) {
 	go func() {
 		for i := 0; i < 100; i++ {
 			srv.treeMux.RLock()
-			_ = srv.tree
+			_ = srv.primary().tree
 			srv.treeMux.RUnlock()
 		}
 		done <- true
@@ -443,7 +443,7 @@ func TestServerUpdateTreeOnScanFailure(t *testing.T) {
 	}
 
 	srv.treeMux.RLock()
-	oldTree := srv.tree
+	oldTree := srv.primary().tree
 	srv.treeMux.RUnlock()
 
 	// Removing the content root makes the next scan fail.
@@ -454,7 +454,7 @@ func TestServerUpdateTreeOnScanFailure(t *testing.T) {
 	srv.updateTree()
 
 	srv.treeMux.RLock()
-	newTree := srv.tree
+	newTree := srv.primary().tree
 	srv.treeMux.RUnlock()
 
 	if newTree != oldTree {
@@ -555,7 +555,7 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 	}
 
 	srv.treeMux.RLock()
-	initialNode := srv.tree.Find("new-file.md")
+	initialNode := srv.primary().tree.Find("new-file.md")
 	srv.treeMux.RUnlock()
 
 	if initialNode != nil {
@@ -574,7 +574,7 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 	readBroadcastWithin(t, client, coalesceMaxDelay+5*time.Second)
 
 	srv.treeMux.RLock()
-	newNode := srv.tree.Find("new-file.md")
+	newNode := srv.primary().tree.Find("new-file.md")
 	srv.treeMux.RUnlock()
 
 	if newNode == nil {
@@ -836,7 +836,7 @@ func TestFollowModeCapabilityForFilesystemSource(t *testing.T) {
 	}
 	srv := newTestServer(t, cfg)
 
-	if !srv.uiCaps.FollowMode {
+	if !srv.primary().caps.FollowMode {
 		t.Error("expected FollowMode capability for watchable filesystem source")
 	}
 }

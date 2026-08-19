@@ -144,6 +144,7 @@ function commandPalette() {
 						id: 'content:' + m.path,
 						type: 'content',
 						name: m.title,
+						source: m.source,
 						path: m.path,
 						snippet: m.snippet,
 						matchStart: m.matchStart,
@@ -311,7 +312,10 @@ function commandPalette() {
 					item.action();
 				} else {
 					// Files and content matches both navigate to the document.
-					htmx.ajax('GET', '/file' + item.path, { source: this.$root, target: '#content', swap: 'innerHTML' });
+					// The path is the route already: a corpus can span more
+					// than one source, and only the route says which one a
+					// document came from.
+					htmx.ajax('GET', item.path, { source: this.$root, target: '#content', swap: 'innerHTML' });
 				}
 			}
 		}

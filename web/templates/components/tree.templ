@@ -11,14 +11,18 @@ import (
 // with its path, which nav.js fills from /partial/tree/ on first expand. The
 // same markup serves the full sidebar and the per-directory partial, so a
 // swapped-in subtree is indistinguishable from one that shipped with the page.
-templ Tree(node *models.Node, expanded models.ExpandedDirs) {
+//
+// mount is the route prefix the tree's own source answers at. A node's path
+// is relative to that source, so the mount is what turns it into the route a
+// row links to and into the source the next level is fetched from.
+templ Tree(node *models.Node, expanded models.ExpandedDirs, mount string) {
 	<ul class="space-y-1 pl-2">
 		for _, child := range node.Children {
 			<li>
 				if child.IsDir() {
-					@treeDirectory(child, expanded)
+					@treeDirectory(child, expanded, mount)
 				} else {
-					@treeFile(child)
+					@treeFile(child, mount)
 				}
 			</li>
 		}
@@ -28,7 +32,7 @@ templ Tree(node *models.Node, expanded models.ExpandedDirs) {
 // treeDirectory renders a directory row above its children container. The
 // container is emitted whether or not the children shipped, so nav.js always
 // has a stable swap target and expandAncestors always has a chain to walk.
-templ treeDirectory(node *models.Node, expanded models.ExpandedDirs) {
+templ treeDirectory(node *models.Node, expanded models.ExpandedDirs, mount string) {
 	<div class="flex flex-col">
 		<div class="flex items-center cursor-pointer" data-expanded={ strconv.FormatBool(expanded.Has(node.Path)) } onclick="toggleDirectory(this)">
 			<div class="chevron-btn p-1 mr-1">
@@ -40,20 +44,20 @@ templ treeDirectory(node *models.Node, expanded models.ExpandedDirs) {
 			</div>
 		</div>
 		if expanded.Has(node.Path) {
-			<div class="directory-children" data-children-path={ node.Path } data-loaded="true">
-				@Tree(node, expanded)
+			<div class="directory-children" data-children-path={ node.Path } data-mount={ mount } data-loaded="true">
+				@Tree(node, expanded, mount)
 			</div>
 		} else {
-			<div class="directory-children" data-children-path={ node.Path } data-loaded="false" style="display: none;"></div>
+			<div class="directory-children" data-children-path={ node.Path } data-mount={ mount } data-loaded="false" style="display: none;"></div>
 		}
 	</div>
 }
 
-templ treeFile(node *models.Node) {
+templ treeFile(node *models.Node, mount string) {
 	<a
-		href={ templ.SafeURL("/file/" + templ.EscapeString(node.Path)) }
+		href={ templ.SafeURL(mount + templ.EscapeString(node.Path)) }
 		class="tree-item group focus:outline-hidden"
-		hx-get={ "/file/" + templ.EscapeString(node.Path) }
+		hx-get={ mount + templ.EscapeString(node.Path) }
 		hx-target="#content"
 		hx-swap="innerHTML"
 		hx-push-url="true"

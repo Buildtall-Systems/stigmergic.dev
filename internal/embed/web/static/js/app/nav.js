@@ -1,7 +1,11 @@
 // treeChildrenURL is where an unmaterialized directory's rows come from. Each
-// segment is encoded separately so the separators survive.
-function treeChildrenURL(path) {
-	return '/partial/tree/' + path.split('/').map(encodeURIComponent).join('/')
+// segment is encoded separately so the separators survive. A directory path
+// is relative to its own source, so the row names the source it came from
+// and the server reads the same tree the row was drawn from.
+function treeChildrenURL(path, mount) {
+	var url = '/partial/tree/' + path.split('/').map(encodeURIComponent).join('/')
+	if (mount) url += '?mount=' + encodeURIComponent(mount)
+	return url
 }
 
 // loadDirectoryChildren fills a placeholder container, once. Resolves
@@ -16,7 +20,7 @@ function loadDirectoryChildren(container) {
 	var path = container.dataset.childrenPath
 	if (!path) return Promise.resolve()
 
-	var pending = htmx.ajax('GET', treeChildrenURL(path), {target: container, swap: 'innerHTML'})
+	var pending = htmx.ajax('GET', treeChildrenURL(path, container.dataset.mount), {target: container, swap: 'innerHTML'})
 		.then(function() {
 			container.dataset.loaded = 'true'
 		})

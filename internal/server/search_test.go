@@ -18,12 +18,13 @@ import (
 )
 
 const (
-	searchNotesFile = "notes.md"
+	searchNotesFile  = "notes.md"
+	searchSourceName = "test-source"
 
-	docRouteA = "a.md"
-	docRouteB = "b.md"
-	docRouteC = "docs/c.md"
-	docRouteD = "d.md"
+	docRouteA = markdown.FileMount + "a.md"
+	docRouteB = markdown.FileMount + "b.md"
+	docRouteC = markdown.FileMount + "docs/c.md"
+	docRouteD = markdown.FileMount + "d.md"
 )
 
 // coldSearchIndex builds an index from nothing, the way a first rebuild
@@ -35,19 +36,19 @@ func coldSearchIndex(contents map[string][]byte, files []models.SearchableFile) 
 		corpus[route] = markdown.CorpusEntry{Data: data}
 		changed[route] = struct{}{}
 	}
-	return orderSearchIndex(updateSearchDocs(nil, corpus, changed), files)
+	return orderSearchIndex(updateSearchDocs(nil, corpus, changed, searchSourceName), files)
 }
 
 func testSearchIndex() searchIndex {
 	contents := map[string][]byte{
-		searchNotesFile: []byte("# Notes\n\nThe freshness protocol tracks per-relay event recency across the fleet.\n"),
-		"docs/upper.md": []byte("# Upper\n\nFRESHNESS in capitals here.\n"),
-		"plain.md":      []byte("nothing relevant\n"),
+		markdown.FileMount + searchNotesFile: []byte("# Notes\n\nThe freshness protocol tracks per-relay event recency across the fleet.\n"),
+		markdown.FileMount + "docs/upper.md": []byte("# Upper\n\nFRESHNESS in capitals here.\n"),
+		markdown.FileMount + "plain.md":      []byte("nothing relevant\n"),
 	}
 	files := []models.SearchableFile{
-		{Path: "/" + searchNotesFile, Name: searchNotesFile},
-		{Path: "/docs/upper.md", Name: "upper.md"},
-		{Path: "/plain.md", Name: "plain.md"},
+		{Path: markdown.FileMount + searchNotesFile, Name: searchNotesFile},
+		{Path: markdown.FileMount + "docs/upper.md", Name: "upper.md"},
+		{Path: markdown.FileMount + "plain.md", Name: "plain.md"},
 	}
 	return coldSearchIndex(contents, files)
 }
@@ -67,7 +68,7 @@ func TestUpdateSearchDocsMatchesColdBuild(t *testing.T) {
 		docRouteA: {}, docRouteB: {}, docRouteC: {},
 	}
 
-	warm := updateSearchDocs(nil, first, firstChanged)
+	warm := updateSearchDocs(nil, first, firstChanged, searchSourceName)
 
 	// b edited, c untouched, a gone, d new.
 	second := markdown.Corpus{
@@ -77,10 +78,10 @@ func TestUpdateSearchDocsMatchesColdBuild(t *testing.T) {
 	}
 	secondChanged := markdown.ChangedRoutes{docRouteB: {}, docRouteD: {}}
 
-	got := updateSearchDocs(warm, second, secondChanged)
+	got := updateSearchDocs(warm, second, secondChanged, searchSourceName)
 	want := updateSearchDocs(nil, second, markdown.ChangedRoutes{
 		docRouteB: {}, docRouteC: {}, docRouteD: {},
-	})
+	}, searchSourceName)
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incremental document set differs from cold build\ngot:  %v\nwant: %v", got, want)
@@ -103,8 +104,11 @@ func TestSearchMatchesAndSnippets(t *testing.T) {
 		t.Fatalf("expected 1 result, got %d: %+v", len(resp.Results), resp.Results)
 	}
 	m := resp.Results[0]
-	if m.Path != "/"+searchNotesFile || m.Title != searchNotesFile {
+	if m.Path != markdown.FileMount+searchNotesFile || m.Title != searchNotesFile {
 		t.Errorf("unexpected result identity: %+v", m)
+	}
+	if m.Source != searchSourceName {
+		t.Errorf("result names source %q, want %q: a result says where it lives", m.Source, searchSourceName)
 	}
 	got := m.Snippet[m.MatchStart:m.MatchEnd]
 	if got != "freshness protocol" {
@@ -132,9 +136,9 @@ func TestSearchSnippetAtDocumentBoundaries(t *testing.T) {
 	t.Parallel()
 
 	contents := map[string][]byte{
-		"tiny.md": []byte("edge"),
+		markdown.FileMount + "tiny.md": []byte("edge"),
 	}
-	files := []models.SearchableFile{{Path: "/tiny.md", Name: "tiny.md"}}
+	files := []models.SearchableFile{{Path: markdown.FileMount + "tiny.md", Name: "tiny.md"}}
 
 	resp := coldSearchIndex(contents, files).search("edge", 20)
 
@@ -156,9 +160,10 @@ func TestSearchResultCapAndTruncation(t *testing.T) {
 	contents := make(map[string][]byte)
 	files := make([]models.SearchableFile, 0, 25)
 	for i := range 25 {
-		route := fmt.Sprintf("doc%02d.md", i)
+		name := fmt.Sprintf("doc%02d.md", i)
+		route := markdown.FileMount + name
 		contents[route] = []byte("shared target phrase\n")
-		files = append(files, models.SearchableFile{Path: "/" + route, Name: route})
+		files = append(files, models.SearchableFile{Path: route, Name: name})
 	}
 
 	resp := coldSearchIndex(contents, files).search("target", 20)
@@ -241,8 +246,8 @@ func TestSearchAPIFilesystemSource(t *testing.T) {
 	if len(out.Results) != 1 {
 		t.Fatalf("expected 1 result once indexed, got %+v", out)
 	}
-	if out.Results[0].Path != "/research.md" {
-		t.Errorf("expected /research.md, got %s", out.Results[0].Path)
+	if want := markdown.FileMount + "research.md"; out.Results[0].Path != want {
+		t.Errorf("expected %s, got %s", want, out.Results[0].Path)
 	}
 }
 
@@ -257,8 +262,8 @@ func TestSearchAPIEmbeddedSource(t *testing.T) {
 	if len(out.Results) != 1 {
 		t.Fatalf("expected 1 result from embedded corpus, got %+v", out)
 	}
-	if out.Results[0].Path != "/"+testIndexFile {
-		t.Errorf("expected /%s, got %s", testIndexFile, out.Results[0].Path)
+	if want := markdown.FileMount + testIndexFile; out.Results[0].Path != want {
+		t.Errorf("expected %s, got %s", want, out.Results[0].Path)
 	}
 }
 
@@ -286,7 +291,7 @@ func TestSearchIndexRebuildOnChange(t *testing.T) {
 	if len(out.Results) != 1 {
 		t.Fatalf("expected new file's content to be searchable after rescan, got %+v", out)
 	}
-	if out.Results[0].Path != "/second.md" {
-		t.Errorf("expected /second.md, got %s", out.Results[0].Path)
+	if want := markdown.FileMount + "second.md"; out.Results[0].Path != want {
+		t.Errorf("expected %s, got %s", want, out.Results[0].Path)
 	}
 }

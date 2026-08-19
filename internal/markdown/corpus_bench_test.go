@@ -42,7 +42,7 @@ func BenchmarkReadCorpusCold(b *testing.B) {
 	files := scanFiles(b, dir)
 
 	for b.Loop() {
-		ReadCorpus(fsys, nil, files)
+		ReadCorpus(fsys, nil, FileMount, files)
 	}
 }
 
@@ -50,17 +50,17 @@ func BenchmarkReadCorpusWarm(b *testing.B) {
 	dir := benchCorpusDir(b)
 	fsys := os.DirFS(dir)
 	files := scanFiles(b, dir)
-	warm, _ := ReadCorpus(fsys, nil, files)
+	warm, _ := ReadCorpus(fsys, nil, FileMount, files)
 
 	for b.Loop() {
-		ReadCorpus(fsys, warm, files)
+		ReadCorpus(fsys, warm, FileMount, files)
 	}
 }
 
 func BenchmarkExtractLinkRefsCold(b *testing.B) {
 	dir := benchCorpusDir(b)
 	files := scanFiles(b, dir)
-	corpus, changed := ReadCorpus(os.DirFS(dir), nil, files)
+	corpus, changed := ReadCorpus(os.DirFS(dir), nil, FileMount, files)
 
 	for b.Loop() {
 		ExtractLinkRefs(nil, corpus, changed)
@@ -70,10 +70,10 @@ func BenchmarkExtractLinkRefsCold(b *testing.B) {
 func BenchmarkExtractLinkRefsWarm(b *testing.B) {
 	dir := benchCorpusDir(b)
 	files := scanFiles(b, dir)
-	corpus, changed := ReadCorpus(os.DirFS(dir), nil, files)
+	corpus, changed := ReadCorpus(os.DirFS(dir), nil, FileMount, files)
 	warm := ExtractLinkRefs(nil, corpus, changed)
 
-	oneChanged := ChangedRoutes{"note-0.md": {}}
+	oneChanged := ChangedRoutes{route("note-0.md"): {}}
 
 	for b.Loop() {
 		ExtractLinkRefs(warm, corpus, oneChanged)
@@ -86,10 +86,10 @@ func BenchmarkExtractLinkRefsWarm(b *testing.B) {
 func BenchmarkBuildBacklinkIndex(b *testing.B) {
 	dir := benchCorpusDir(b)
 	files := scanFiles(b, dir)
-	corpus, changed := ReadCorpus(os.DirFS(dir), nil, files)
+	corpus, changed := ReadCorpus(os.DirFS(dir), nil, FileMount, files)
 	refs := ExtractLinkRefs(nil, corpus, changed)
 
 	for b.Loop() {
-		BuildBacklinkIndex(refs, files)
+		mountedIndex(refs, files)
 	}
 }

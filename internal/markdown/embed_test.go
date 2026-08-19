@@ -66,7 +66,7 @@ func renderEmbeddedWithRoot(t *testing.T, source, attachmentRoot string) string 
 	t.Helper()
 
 	fsys, files := testEmbedVault()
-	html, _, err := Parse([]byte(source), NewTreeResolver(files), NewEmbedContext(NewFSEmbedSource(fsys, attachmentRoot)))
+	html, _, err := Parse([]byte(source), NewTreeResolver(files), NewEmbedContext(FileMount, NewFSEmbedSource(fsys, attachmentRoot)))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
@@ -318,7 +318,7 @@ func transcludedRoutes(t *testing.T, source string) []string {
 	t.Helper()
 
 	fsys, files := testEmbedVault()
-	embeds := NewEmbedContext(NewFSEmbedSource(fsys, ""))
+	embeds := NewEmbedContext(FileMount, NewFSEmbedSource(fsys, ""))
 	if _, _, err := Parse([]byte(source), NewTreeResolver(files), embeds); err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}

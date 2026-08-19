@@ -81,19 +81,35 @@ func parseLinkRefs(md goldmark.Markdown, source []byte) []LinkRef {
 	return refs
 }
 
-// BuildBacklinkIndex resolves every extracted wikilink against the current
-// file set and inverts the result, mapping each target route to the files
-// that link to it. Self-links and repeats within one source are skipped.
-func BuildBacklinkIndex(refs LinkRefs, files []models.SearchableFile) models.BacklinkIndex {
-	resolver := NewTreeResolver(files)
+// ResolverFor supplies the resolver that answers one document's links. It is
+// per document rather than per corpus because a source can match
+// doc-relative: the same target written in two documents of one vault can
+// name two different files, and an index that resolved them any other way
+// than the page render does would disagree with the page it describes.
+type ResolverFor func(route string) wikilink.Resolver
 
+// BuildBacklinkIndex resolves every extracted wikilink and inverts the
+// result, mapping each target route to the files that link to it. Self-links
+// and repeats within one source are skipped.
+//
+// files and the keys of refs are routes, mount prefix included, so one index
+// spans every mounted source: a document in one source linking to a document
+// in another is a backlink like any other. mounts are the registered route
+// prefixes; a destination lying outside all of them names nothing the corpus
+// holds and is passed over.
+func BuildBacklinkIndex(refs LinkRefs, files []models.SearchableFile, resolveFor ResolverFor, mounts []string) models.BacklinkIndex {
 	index := make(models.BacklinkIndex)
 
 	for _, f := range files {
-		route := strings.TrimPrefix(f.Path, "/")
+		route := f.Path
 
 		fileRefs, ok := refs[route]
 		if !ok {
+			continue
+		}
+
+		resolver := resolveFor(route)
+		if resolver == nil {
 			continue
 		}
 
@@ -106,10 +122,9 @@ func BuildBacklinkIndex(refs LinkRefs, files []models.SearchableFile) models.Bac
 				continue
 			}
 
-			targetRoute := strings.TrimPrefix(string(dest), "/file/")
-			// Strip fragment anchors.
-			if idx := strings.Index(targetRoute, "#"); idx >= 0 {
-				targetRoute = targetRoute[:idx]
+			targetRoute, inCorpus := mountedRoute(string(dest), mounts)
+			if !inCorpus {
+				continue
 			}
 
 			if targetRoute == route || seen[targetRoute] {
@@ -138,6 +153,22 @@ func BuildBacklinkIndex(refs LinkRefs, files []models.SearchableFile) models.Bac
 	}
 
 	return index
+}
+
+// mountedRoute drops a resolved destination's anchor and reports what is
+// left as a corpus route when it lies inside one of the registered mounts.
+// A destination naming no mount is not a document this corpus serves, which
+// is how an external or malformed target stays out of the index.
+func mountedRoute(dest string, mounts []string) (string, bool) {
+	if idx := strings.Index(dest, "#"); idx >= 0 {
+		dest = dest[:idx]
+	}
+	for _, mount := range mounts {
+		if len(dest) > len(mount) && strings.HasPrefix(dest, mount) {
+			return dest, true
+		}
+	}
+	return "", false
 }
 
 // titleFromFilename extracts a display name from a route path.

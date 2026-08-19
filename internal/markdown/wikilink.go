@@ -14,27 +14,53 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 )
 
-// TreeResolver resolves wikilinks against the file tree index.
-// It implements the wikilink.Resolver interface.
-type TreeResolver struct {
-	pathIndex map[string]string   // normalized full path → route path
-	nameIndex map[string][]string // normalized filename → []route paths
+// FileMount is the route prefix the filesystem and embedded sources serve
+// under. A resolver built from a flat file list names its destinations here.
+const FileMount = "/file/"
+
+// RouteEntry is one document as a resolver knows it: the path a link writes
+// to reach it, relative to the source holding it, and the route that serves
+// it. The two differ once more than one source is mounted, and keeping both
+// is what lets a corpus-wide resolver match a name written in one source
+// against a document held by another.
+type RouteEntry struct {
+	Path  string
+	Route string
 }
 
-// NewTreeResolver builds a resolver from the flat list of searchable files.
-func NewTreeResolver(files []models.SearchableFile) *TreeResolver {
-	r := &TreeResolver{
-		pathIndex: make(map[string]string, len(files)),
-		nameIndex: make(map[string][]string),
-	}
-	for _, f := range files {
-		route := strings.TrimPrefix(f.Path, "/")
-		normPath := normalize(route)
-		r.pathIndex[normPath] = route
+// TreeResolver resolves wikilinks against a set of route entries.
+// It implements the wikilink.Resolver interface.
+type TreeResolver struct {
+	pathIndex map[string]RouteEntry   // normalized source path → entry
+	nameIndex map[string][]RouteEntry // normalized filename → entries
+}
 
-		name := filepath.Base(route)
-		normName := normalize(name)
-		r.nameIndex[normName] = append(r.nameIndex[normName], route)
+// NewTreeResolver builds a resolver from the flat list of searchable files,
+// whose paths are relative to a single source mounted at FileMount.
+func NewTreeResolver(files []models.SearchableFile) *TreeResolver {
+	entries := make([]RouteEntry, 0, len(files))
+	for _, f := range files {
+		p := strings.TrimPrefix(f.Path, "/")
+		entries = append(entries, RouteEntry{Path: p, Route: FileMount + p})
+	}
+	return NewRouteResolver(entries)
+}
+
+// NewRouteResolver builds a resolver over documents that may sit in
+// different sources. Matching runs against each entry's source-relative
+// path, so a link writes the name it would write inside its own source, and
+// the destination is the entry's route, wherever that source is mounted.
+func NewRouteResolver(entries []RouteEntry) *TreeResolver {
+	r := &TreeResolver{
+		pathIndex: make(map[string]RouteEntry, len(entries)),
+		nameIndex: make(map[string][]RouteEntry),
+	}
+	for _, e := range entries {
+		normPath := normalize(e.Path)
+		r.pathIndex[normPath] = e
+
+		normName := normalize(filepath.Base(e.Path))
+		r.nameIndex[normName] = append(r.nameIndex[normName], e)
 	}
 	return r
 }
@@ -50,30 +76,53 @@ func (r *TreeResolver) ResolveWikilink(n *wikilink.Node) ([]byte, error) {
 		return nil, nil
 	}
 
-	norm := normalize(target)
-
-	// Try exact path match first.
-	if route, ok := r.pathIndex[norm]; ok {
-		return r.buildURL(route, n.Fragment), nil
+	entry, ok := r.match(target)
+	if !ok {
+		return nil, nil
 	}
-
-	// Try filename match.
-	normName := normalize(filepath.Base(target))
-	if routes, ok := r.nameIndex[normName]; ok && len(routes) > 0 {
-		best := routes[0]
-		for _, route := range routes[1:] {
-			if len(route) < len(best) {
-				best = route
-			}
-		}
-		return r.buildURL(best, n.Fragment), nil
-	}
-
-	return nil, nil
+	return r.buildURL(entry, n.Fragment), nil
 }
 
-func (r *TreeResolver) buildURL(route string, fragment []byte) []byte {
-	url := "/file/" + route
+// ResolveRoute answers a CommonMark destination against the same index,
+// which is what keeps a plain markdown link and a wikilink to the same
+// document pointing at one route. The fragment travels with the route so an
+// anchored link keeps its anchor.
+func (r *TreeResolver) ResolveRoute(target string) (string, bool) {
+	name, fragment, _ := strings.Cut(target, "#")
+	entry, ok := r.match(name)
+	if !ok {
+		return "", false
+	}
+	return string(r.buildURL(entry, []byte(fragment))), true
+}
+
+// match finds the entry a target names: an exact path first, then a
+// filename. Ambiguity resolves rather than refuses, the shortest source path
+// winning, so one corpus yields one graph however the ambiguity arose.
+func (r *TreeResolver) match(target string) (RouteEntry, bool) {
+	if target == "" {
+		return RouteEntry{}, false
+	}
+
+	if entry, ok := r.pathIndex[normalize(target)]; ok {
+		return entry, true
+	}
+
+	entries, ok := r.nameIndex[normalize(filepath.Base(target))]
+	if !ok || len(entries) == 0 {
+		return RouteEntry{}, false
+	}
+	best := entries[0]
+	for _, e := range entries[1:] {
+		if len(e.Path) < len(best.Path) {
+			best = e
+		}
+	}
+	return best, true
+}
+
+func (r *TreeResolver) buildURL(entry RouteEntry, fragment []byte) []byte {
+	url := entry.Route
 	if len(fragment) > 0 {
 		url += "#" + string(fragment)
 	}

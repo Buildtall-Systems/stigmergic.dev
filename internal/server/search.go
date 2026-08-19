@@ -15,10 +15,11 @@ const (
 )
 
 type searchDoc struct {
-	Path  string // route path with leading slash, as served by /api/files
-	Title string
-	Text  string
-	Lower string
+	Path   string // the route serving the document, mount prefix included
+	Title  string
+	Source string // the name of the source holding it
+	Text   string
+	Lower  string
 }
 
 // searchIndex holds every document's content twice — original for snippet
@@ -29,6 +30,7 @@ type searchIndex []searchDoc
 type searchMatch struct {
 	Path       string `json:"path"`
 	Title      string `json:"title"`
+	Source     string `json:"source"`
 	Snippet    string `json:"snippet"`
 	MatchStart int    `json:"matchStart"`
 	MatchEnd   int    `json:"matchEnd"`
@@ -47,8 +49,9 @@ type searchDocs map[string]searchDoc
 
 // updateSearchDocs returns the document set for corpus, recomputing only the
 // routes named in changed and carrying the rest over from prev. Routes
-// absent from corpus are dropped.
-func updateSearchDocs(prev searchDocs, corpus markdown.Corpus, changed markdown.ChangedRoutes) searchDocs {
+// absent from corpus are dropped. sourceName travels onto every document so
+// a result from a corpus spanning several sources says which one holds it.
+func updateSearchDocs(prev searchDocs, corpus markdown.Corpus, changed markdown.ChangedRoutes, sourceName string) searchDocs {
 	docs := make(searchDocs, len(corpus))
 
 	for route, entry := range corpus {
@@ -61,10 +64,11 @@ func updateSearchDocs(prev searchDocs, corpus markdown.Corpus, changed markdown.
 
 		body := string(entry.Data)
 		docs[route] = searchDoc{
-			Path:  "/" + route,
-			Title: path.Base(route),
-			Text:  body,
-			Lower: strings.ToLower(body),
+			Path:   route,
+			Title:  path.Base(route),
+			Source: sourceName,
+			Text:   body,
+			Lower:  strings.ToLower(body),
 		}
 	}
 
@@ -76,7 +80,7 @@ func updateSearchDocs(prev searchDocs, corpus markdown.Corpus, changed markdown.
 func orderSearchIndex(docs searchDocs, files []models.SearchableFile) searchIndex {
 	idx := make(searchIndex, 0, len(files))
 	for _, f := range files {
-		if doc, ok := docs[strings.TrimPrefix(f.Path, "/")]; ok {
+		if doc, ok := docs[f.Path]; ok {
 			idx = append(idx, doc)
 		}
 	}
@@ -114,6 +118,7 @@ func (idx searchIndex) search(query string, limit int) searchResponse {
 		resp.Results = append(resp.Results, searchMatch{
 			Path:       doc.Path,
 			Title:      doc.Title,
+			Source:     doc.Source,
 			Snippet:    snippet,
 			MatchStart: start,
 			MatchEnd:   end,

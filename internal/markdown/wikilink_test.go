@@ -12,7 +12,7 @@ import (
 func testFiles() []models.SearchableFile {
 	return []models.SearchableFile{
 		{Name: "Simple Note.md", Path: "/Simple Note.md"},
-		{Name: "note.md", Path: "/folder/note.md"},
+		{Name: noteFile, Path: "/folder/note.md"},
 		{Name: "Deep Note.md", Path: "/a/b/c/Deep Note.md"},
 		{Name: "Deep Note.md", Path: "/x/Deep Note.md"},
 		{Name: "kebab-case.md", Path: "/kebab-case.md"},

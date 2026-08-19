@@ -138,7 +138,7 @@ templ MarkdownContent(breadcrumbs []models.Breadcrumb, content string, rawConten
 				<ul class="space-y-1">
 					for _, bl := range backlinks {
 						<li class="text-sm">
-							<a href={ templ.SafeURL("/file/" + bl.SourcePath) } class="transition-colors hover:underline" style="color: var(--link-color);">{ bl.SourceTitle }</a>
+							<a href={ templ.SafeURL(bl.SourcePath) } class="transition-colors hover:underline" style="color: var(--link-color);">{ bl.SourceTitle }</a>
 						</li>
 					}
 				</ul>

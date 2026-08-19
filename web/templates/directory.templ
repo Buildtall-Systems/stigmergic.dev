@@ -4,13 +4,15 @@ import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 import "github.com/Buildtall-Systems/stigmergic.dev/web/templates/components"
 
-templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, thm *theme.Theme, themes []*theme.Theme, treeView models.TreeView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+templ Directory(title string, breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, mount string, thm *theme.Theme, themes []*theme.Theme, treeView models.TreeView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
 	@components.Layout(title, thm, themes, treeView, recentFiles, indexReady, caps, nil) {
-		@DirectoryContent(breadcrumbs, node, rootPath)
+		@DirectoryContent(breadcrumbs, node, rootPath, mount)
 	}
 }
 
-templ DirectoryContent(breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string) {
+// mount is the route prefix of the source the listing describes, which the
+// rows link through: a directory read from a vault lists into that vault.
+templ DirectoryContent(breadcrumbs []models.Breadcrumb, node *models.Node, rootPath string, mount string) {
 	<div class="space-y-6">
 		if len(breadcrumbs) > 0 {
 			<nav class="breadcrumb" aria-label="Breadcrumb">
@@ -42,7 +44,7 @@ templ DirectoryContent(breadcrumbs []models.Breadcrumb, node *models.Node, rootP
 				// entries, with subdirectories expandable on demand. A
 				// directory page used to dump its entire subtree, which for a
 				// deep directory cost as much as the old sidebar did.
-				@components.Tree(node, nil)
+				@components.Tree(node, nil, mount)
 			} else {
 				<p style="color: var(--comment-color);">Empty directory</p>
 			}

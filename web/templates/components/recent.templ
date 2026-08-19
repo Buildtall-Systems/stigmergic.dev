@@ -24,8 +24,8 @@ templ RecentlyUpdated(files []models.SearchableFile, indexReady bool) {
 				for _, f := range files {
 					<li>
 						<a
-							href={ templ.SafeURL("/file" + f.Path) }
-							hx-get={ "/file" + f.Path }
+							href={ templ.SafeURL(f.Path) }
+							hx-get={ f.Path }
 							hx-target="#content"
 							hx-swap="innerHTML"
 							hx-push-url="true"

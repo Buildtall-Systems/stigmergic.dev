@@ -65,6 +65,7 @@ templ CommandPalette() {
 										<div x-show="item.type === 'content'" style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-html="item.snippet ? snippetHtml(item) : ''"></div>
 										<div x-show="item.type !== 'content' && item.description" style="color: var(--comment-color); font-size: 0.875em;" class="truncate" x-text="item.description"></div>
 									</div>
+									<span x-show="item.source" class="shrink-0 text-xs px-2 py-0.5 rounded" style="color: var(--comment-color); background-color: var(--bg-alt-color);" x-text="item.source"></span>
 									<span x-show="selectedIndex === item.resultIndex" x-html="getReturnIcon()" style="color: var(--fg-color);"></span>
 								</div>
 							</template>

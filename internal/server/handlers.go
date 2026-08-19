@@ -42,7 +42,12 @@ func (s *Server) setupRoutes() {
 	}
 
 	s.mux.HandleFunc("/", s.handleHome)
-	s.mux.HandleFunc("/file/", s.handleMarkdown)
+	s.mux.HandleFunc(markdown.FileMount, s.handleMarkdown)
+
+	// One registration serves every vault: the mounts are discovered while
+	// the server runs, so the handler picks the source by longest matching
+	// prefix rather than the mux picking it by pattern.
+	s.mux.HandleFunc(vaultRoutePrefix, s.handleMarkdown)
 	s.mux.HandleFunc("/events", s.handleSSE)
 	s.mux.HandleFunc("/api/files", s.handleFilesAPI)
 	s.mux.HandleFunc("/api/search", s.handleSearchAPI)
@@ -50,7 +55,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/partial/recent", s.handleRecentPartial)
 	s.mux.HandleFunc("/partial/tree/", s.handleTreePartial)
 
-	if s.uiCaps.GitignoreToggle {
+	if s.primary().caps.GitignoreToggle {
 		s.mux.HandleFunc("/api/gitignore", s.handleGitignoreStatus)
 		s.mux.HandleFunc("/api/gitignore/toggle", s.handleToggleGitignore)
 		logger.Log.Info("gitignore routes registered")
@@ -59,22 +64,57 @@ func (s *Server) setupRoutes() {
 	logger.Log.Info("routes configured")
 }
 
-func (s *Server) uiData() (*models.Tree, []models.SearchableFile, []models.SearchableFile, bool) {
+// vaultRoutePrefix is the namespace every vault mounts inside, and the one
+// pattern the mux needs for all of them.
+const vaultRoutePrefix = "/vault/"
+
+// uiData gathers what a page render needs from the primary source: the tree
+// the sidebar draws, how many documents it holds, its recently updated
+// documents, and whether the background scan has finished. The sidebar
+// describes the primary source alone, so the corpus-wide caches are read
+// where they are used rather than here.
+func (s *Server) uiData() (*models.Tree, int, []models.SearchableFile, bool) {
+	primary := s.primary()
+
 	s.treeMux.RLock()
-	tree := s.tree
+	tree := primary.tree
+	files := primary.files
 	s.treeMux.RUnlock()
 
-	var files []models.SearchableFile
-	if v, ok := s.cachedFiles.Load().([]models.SearchableFile); ok {
-		files = v
-	}
-
+	// The recent list is routed after it is cut to length rather than
+	// before, so a page render restates five paths instead of the whole
+	// corpus's.
 	var recentFiles []models.SearchableFile
-	if s.uiCaps.RecentlyUpdated {
-		recentFiles = s.computeRecentFiles(files)
+	if primary.caps.RecentlyUpdated {
+		recentFiles = routedFiles(primary.prefix, s.computeRecentFiles(files))
 	}
 
-	return tree, files, recentFiles, s.IsIndexReady()
+	return tree, len(files), recentFiles, s.IsIndexReady()
+}
+
+// pageCaps blends the two places a page's affordances come from: those
+// acting on the document on screen belong to the source serving it, while
+// the sidebar's own belong to the primary source whatever is being read. A
+// vault document therefore offers no path to copy and no changes to follow,
+// while the tree beside it keeps both.
+func (s *Server) pageCaps(m *mount) models.UICapabilities {
+	primary := s.primary().caps
+	return models.UICapabilities{
+		RecentlyUpdated: primary.RecentlyUpdated,
+		GitignoreToggle: primary.GitignoreToggle,
+		CopyPath:        m.caps.CopyPath,
+		FollowMode:      m.caps.FollowMode,
+	}
+}
+
+// expansionFor is the path the sidebar opens to. The sidebar draws the
+// primary source, so a document read from anywhere else leaves it as it is
+// rather than opening it to a path it does not hold.
+func (s *Server) expansionFor(m *mount, filePath string) string {
+	if m != s.primary() {
+		return ""
+	}
+	return filePath
 }
 
 // canonicalPath accepts only already-canonical fs paths: anything path.Clean
@@ -89,12 +129,13 @@ func canonicalPath(p string) (string, bool) {
 	return cleaned, true
 }
 
-// treeViewFor pairs the tree with the directories that render expanded, which
-// are those containing filePath. Every other directory ships as a placeholder,
-// so the cold sidebar is proportional to what is visible rather than to the
-// corpus. An empty filePath collapses everything below the root.
-func treeViewFor(tree *models.Tree, filePath string) models.TreeView {
-	return models.TreeView{Tree: tree, Expanded: models.AncestorDirs(filePath)}
+// treeViewFor pairs the tree with the mount its rows link through and the
+// directories that render expanded, which are those containing filePath.
+// Every other directory ships as a placeholder, so the cold sidebar is
+// proportional to what is visible rather than to the corpus. An empty
+// filePath collapses everything below the root.
+func treeViewFor(tree *models.Tree, mount, filePath string) models.TreeView {
+	return models.TreeView{Tree: tree, Mount: mount, Expanded: models.AncestorDirs(filePath)}
 }
 
 func countDirs(node *models.Node) int {
@@ -116,27 +157,31 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.observeSession(r)
+
 	if s.config.DefaultFile != "" && !isHTMXRequest(r) {
-		http.Redirect(w, r, "/file/"+s.config.DefaultFile, http.StatusFound)
+		http.Redirect(w, r, markdown.FileMount+s.config.DefaultFile, http.StatusFound)
 		return
 	}
 
-	tree, files, recentFiles, indexReady := s.uiData()
+	tree, fileCount, recentFiles, indexReady := s.uiData()
 
 	var dirCount int
 	if tree != nil {
 		dirCount = countDirs(tree.Root)
 	}
 
+	primary := s.primary()
+
 	if isHTMXRequest(r) {
 		logger.Log.Debug("rendering HTMX home partial")
-		if err := templates.HomeContent(s.source.Name(), recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+		if err := templates.HomeContent(primary.src.Name(), recentFiles, fileCount, dirCount, indexReady, primary.caps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home content template", "error", err)
 		}
 		s.renderOutlineOOB(w, r, nil)
 	} else {
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(treeViewFor(tree, ""), s.source.Name(), s.theme, s.themes, recentFiles, len(files), dirCount, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+		if err := templates.Home(treeViewFor(tree, s.primary().prefix, ""), primary.src.Name(), s.theme, s.themes, recentFiles, fileCount, dirCount, indexReady, primary.caps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
 	}
@@ -156,7 +201,7 @@ func (s *Server) renderOutlineOOB(w http.ResponseWriter, r *http.Request, outlin
 // instead of the whole tree.
 func (s *Server) handleRecentPartial(w http.ResponseWriter, r *http.Request) {
 	_, _, recentFiles, _ := s.uiData()
-	if err := components.SidebarRecent(recentFiles, s.uiCaps).Render(r.Context(), w); err != nil {
+	if err := components.SidebarRecent(recentFiles, s.primary().caps).Render(r.Context(), w); err != nil {
 		logger.Log.Error("failed to render recent partial", "error", err)
 	}
 }
@@ -179,7 +224,7 @@ func (s *Server) handleSidebarPartial(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := components.Sidebar(treeViewFor(tree, current), recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); err != nil {
+	if err := components.Sidebar(treeViewFor(tree, s.primary().prefix, current), recentFiles, indexReady, s.primary().caps).Render(r.Context(), w); err != nil {
 		logger.Log.Error("failed to render sidebar partial", "error", err)
 	}
 }
@@ -198,24 +243,48 @@ func (s *Server) handleTreePartial(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The directory path alone no longer says which tree it belongs to, so
+	// the row that asked names its own source; naming none means the
+	// primary, which is what every row the sidebar ships today names.
+	m, ok := s.mountAt(r.URL.Query().Get("mount"))
+	if !ok {
+		logger.Log.Warn("tree partial named no mounted source", "mount", r.URL.Query().Get("mount"))
+		http.NotFound(w, r)
+		return
+	}
+
 	s.treeMux.RLock()
 	var node *models.Node
-	if s.tree != nil {
-		node = s.tree.Find(cleaned)
+	if m.tree != nil {
+		node = m.tree.Find(cleaned)
 	}
 	s.treeMux.RUnlock()
 
 	if node == nil || !node.IsDir() {
-		logger.Log.Warn("tree directory not found", "path", cleaned)
+		logger.Log.Warn("tree directory not found", "path", cleaned, "source", m.src.Name())
 		http.NotFound(w, r)
 		return
 	}
 
 	// Nil expansion: the requested level renders collapsed, and each nested
 	// directory becomes a placeholder resolved by its own request.
-	if err := components.Tree(node, nil).Render(r.Context(), w); err != nil {
+	if err := components.Tree(node, nil, m.prefix).Render(r.Context(), w); err != nil {
 		logger.Log.Error("failed to render tree partial", "error", err)
 	}
+}
+
+// mountAt finds a mounted source by its route prefix, answering with the
+// primary when none is named.
+func (s *Server) mountAt(prefix string) (*mount, bool) {
+	if prefix == "" {
+		return s.primary(), true
+	}
+	for _, m := range s.mountList() {
+		if m.prefix == prefix {
+			return m, true
+		}
+	}
+	return nil, false
 }
 
 func (s *Server) computeRecentFiles(files []models.SearchableFile) []models.SearchableFile {
@@ -238,8 +307,16 @@ func (s *Server) computeRecentFiles(files []models.SearchableFile) []models.Sear
 }
 
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
-	filePath := strings.TrimPrefix(r.URL.Path, "/file/")
-	logger.Log.Info("file request", "path", filePath, "htmx", isHTMXRequest(r))
+	s.observeSession(r)
+
+	m, filePath, mounted := mountOf(s.mountList(), r.URL.Path)
+	if !mounted {
+		logger.Log.Warn("no source mounted for route", "route", r.URL.Path)
+		http.NotFound(w, r)
+		return
+	}
+
+	logger.Log.Info("file request", "route", r.URL.Path, "source", m.src.Name(), "htmx", isHTMXRequest(r))
 
 	// Only already-canonical fs paths are served: anything path.Clean would
 	// rewrite (empty, trailing slash, ".." or "." elements) is rejected, and
@@ -250,41 +327,42 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	// see one behind a call, and this path reaches http.ServeFileFS.
 	cleaned := path.Clean(filePath)
 	if cleaned != filePath || !fs.ValidPath(cleaned) {
-		logger.Log.Warn("invalid file path", "path", filePath)
+		logger.Log.Warn("invalid file path", "path", filePath, "source", m.src.Name())
 		http.NotFound(w, r)
 		return
 	}
 	filePath = cleaned
 
-	contentFS := s.source.FS()
+	contentFS := m.src.FS()
 
 	info, err := fs.Stat(contentFS, filePath)
 	if err != nil {
-		logger.Log.Warn("path not found", "path", filePath, "error", err)
+		logger.Log.Warn("path not found", "path", filePath, "source", m.src.Name(), "error", err)
 		http.NotFound(w, r)
 		return
 	}
 
-	breadcrumbs := buildBreadcrumbs(filePath)
+	breadcrumbs := buildBreadcrumbs(m.prefix, filePath)
 	title := filepath.Base(filePath)
 	isHTMX := isHTMXRequest(r)
+	caps := s.pageCaps(m)
 
-	tree, files, recentFiles, indexReady := s.uiData()
+	tree, _, recentFiles, indexReady := s.uiData()
 
 	if info.IsDir() {
 		s.treeMux.RLock()
-		node := s.tree.Find(filePath)
+		node := m.tree.Find(filePath)
 		s.treeMux.RUnlock()
 
 		if node == nil {
-			logger.Log.Warn("directory node not found in tree", "path", filePath)
+			logger.Log.Warn("directory node not found in tree", "path", filePath, "source", m.src.Name())
 			http.NotFound(w, r)
 			return
 		}
 
 		if isHTMX {
 			logger.Log.Debug("rendering HTMX directory partial")
-			if renderErr := templates.DirectoryContent(breadcrumbs, node, s.source.Name()).Render(r.Context(), w); renderErr != nil {
+			if renderErr := templates.DirectoryContent(breadcrumbs, node, m.src.Name(), m.prefix).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory content template", "error", renderErr)
 			}
 			s.renderOutlineOOB(w, r, nil)
@@ -292,9 +370,11 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			logger.Log.Debug("rendering full directory page")
 			// A directory page shows its own contents, so the directory
 			// itself joins its ancestors in the expansion.
-			view := treeViewFor(tree, filePath)
-			view.Expanded.Add(filePath)
-			if renderErr := templates.Directory(title, breadcrumbs, node, s.source.Name(), s.theme, s.themes, view, recentFiles, indexReady, s.uiCaps).Render(r.Context(), w); renderErr != nil {
+			view := treeViewFor(tree, s.primary().prefix, s.expansionFor(m, filePath))
+			if m == s.primary() {
+				view.Expanded.Add(filePath)
+			}
+			if renderErr := templates.Directory(title, breadcrumbs, node, m.src.Name(), m.prefix, s.theme, s.themes, view, recentFiles, indexReady, caps).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory template", "error", renderErr)
 			}
 		}
@@ -303,14 +383,14 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	// Serve non-markdown files directly (images, PDFs, etc.)
 	if filepath.Ext(filePath) != models.MarkdownExt {
-		logger.Log.Debug("serving static asset", "path", filePath)
+		logger.Log.Debug("serving static asset", "path", filePath, "source", m.src.Name())
 		http.ServeFileFS(w, r, contentFS, filePath)
 		return
 	}
 
 	content, err := fs.ReadFile(contentFS, filePath)
 	if err != nil {
-		logger.Log.Warn("file read failed", "path", filePath, "error", err)
+		logger.Log.Warn("file read failed", "path", filePath, "source", m.src.Name(), "error", err)
 		http.NotFound(w, r)
 		return
 	}
@@ -321,8 +401,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	// read the host file from, rather than through the search corpus, which
 	// sits behind a mutex and can lag during a rebuild. A context is built
 	// per request because rendering mutates its depth and visited set.
-	resolver := markdown.NewTreeResolver(files)
-	embeds := markdown.NewEmbedContext(markdown.NewFSEmbedSource(contentFS, s.config.AttachmentRoot))
+	//
+	// The source holding the document answers its links first and the
+	// corpus-wide resolver stands behind it, so a name the source holds
+	// always wins and a link reaching into another source still resolves.
+	own, embedSource := m.renderSeams(filePath, s.config.AttachmentRoot)
+	resolver := markdown.Chain{own, s.corpusRoutes()}
+	embeds := markdown.NewEmbedContext(m.prefix, embedSource)
 	html, meta, err := markdown.Parse(content, resolver, embeds)
 	if err != nil {
 		logger.Log.Error("markdown parse failed", "error", err)
@@ -339,10 +424,10 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.cachedBacklinks.Load().(models.BacklinkIndex); ok {
 		backlinks = v
 	}
-	fileBacklinks := backlinks[filePath]
+	fileBacklinks := backlinks[m.prefix+filePath]
 
 	var relativePath string
-	if rooted, ok := s.source.(source.Rooted); ok {
+	if rooted, ok := m.src.(source.Rooted); ok {
 		relativePath = computeBuildtallRelativePath(rooted.Root(), filePath)
 	}
 
@@ -354,13 +439,13 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 
 	if isHTMX {
 		logger.Log.Debug("rendering HTMX partial")
-		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), s.source.Name(), relativePath, fileBacklinks, meta, s.uiCaps, transcluded).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.MarkdownContent(breadcrumbs, string(html), string(content), m.src.Name(), relativePath, fileBacklinks, meta, caps, transcluded).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown content template", "error", renderErr)
 		}
 		s.renderOutlineOOB(w, r, outline)
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), s.source.Name(), relativePath, s.theme, s.themes, treeViewFor(tree, filePath), recentFiles, indexReady, fileBacklinks, meta, s.uiCaps, outline, transcluded).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), m.src.Name(), relativePath, s.theme, s.themes, treeViewFor(tree, s.primary().prefix, s.expansionFor(m, filePath)), recentFiles, indexReady, fileBacklinks, meta, caps, outline, transcluded).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}
@@ -376,7 +461,9 @@ func computeBuildtallRelativePath(watchPath, filePath string) string {
 	return relPath
 }
 
-func buildBreadcrumbs(path string) []models.Breadcrumb {
+// buildBreadcrumbs names each ancestor of a document, every crumb carrying
+// the route that serves it inside mount.
+func buildBreadcrumbs(mount, path string) []models.Breadcrumb {
 	parts := strings.Split(filepath.Clean(path), string(filepath.Separator))
 	var crumbs []models.Breadcrumb
 	var currentPath string
@@ -389,7 +476,7 @@ func buildBreadcrumbs(path string) []models.Breadcrumb {
 			}
 			crumbs = append(crumbs, models.Breadcrumb{
 				Name: part,
-				Path: "/file/" + currentPath,
+				Path: mount + currentPath,
 			})
 		}
 	}

@@ -91,7 +91,7 @@ func TestEmbeddedFollowModeAbsent(t *testing.T) {
 	}
 	srv := NewServer(cfg, source.NewEmbedded(embeddedTestFS(), embeddedSourceName))
 
-	if srv.uiCaps.FollowMode {
+	if srv.primary().caps.FollowMode {
 		t.Error("embedded source must not advertise the FollowMode capability")
 	}
 }

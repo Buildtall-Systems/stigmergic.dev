@@ -961,7 +961,7 @@ func TestTreePartialRendersOneDirectory(t *testing.T) {
 	if !strings.Contains(body, "guide.md") {
 		t.Errorf("expected the directory's own file, got: %s", body)
 	}
-	if !strings.Contains(body, `data-children-path="docs/deep" data-loaded="false"`) {
+	if !strings.Contains(body, `data-children-path="docs/deep" data-mount="/file/" data-loaded="false"`) {
 		t.Errorf("expected a nested directory to render as an unloaded placeholder, got: %s", body)
 	}
 	if strings.Contains(body, "buried.md") {

@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -14,6 +17,8 @@ import (
 
 	"github.com/buildtall-systems/buildtall/btk/auth/nip98"
 	"github.com/buildtall-systems/buildtall/btk/auth/session"
+
+	"go.abhg.dev/goldmark/wikilink"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/auth"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
@@ -28,31 +33,65 @@ type Server struct {
 	httpServer      *http.Server
 	config          *config.Config
 	mux             *http.ServeMux
-	tree            *models.Tree
 	cachedFiles     atomic.Value
 	cachedBacklinks atomic.Value
 	cachedContent   atomic.Value
-	source          source.ContentSource
-	watchable       source.Watchable
+	cachedRoutes    atomic.Value
 	theme           *theme.Theme
 	themes          []*theme.Theme
 	clients         map[chan string]bool
 	ctx             context.Context
 	cancel          context.CancelFunc
 	sessionManager  *session.Manager
+	loadVaults      VaultLoader
+	owners          chan string
+	observed        map[string]bool
+	primaryMount    *mount
 	index           contentIndex
 	serverURL       string
-	treeSignature   string
 	allowedPubkeys  []string
+	mounts          []*mount
 	treeMux         sync.RWMutex
 	clientsMux      sync.RWMutex
 	indexMux        sync.Mutex
+	observedMux     sync.Mutex
 	wg              sync.WaitGroup
-	uiCaps          models.UICapabilities
 	indexReady      atomic.Bool
 }
 
+// ownerQueue bounds the npubs waiting to have their vaults discovered. A
+// full queue is not a dropped reader: observe leaves the npub unrecorded, so
+// the reader's next request offers it again.
+const ownerQueue = 8
+
+// primary is the source the server was started on: the one the sidebar
+// draws, the one ignore patterns and the gitignore toggle act on, and the
+// one at FileMount. It is held apart from the mounts slice because that
+// slice grows as vaults arrive, and every reader of the primary would
+// otherwise have to take the lock to read a mount that never changes.
+func (s *Server) primary() *mount {
+	return s.primaryMount
+}
+
+// mountList snapshots the mounted sources. The slice grows as vaults are
+// discovered, so every reader outside the mount goroutine takes a copy
+// rather than ranging over the field.
+func (s *Server) mountList() []*mount {
+	s.treeMux.RLock()
+	defer s.treeMux.RUnlock()
+	return slices.Clone(s.mounts)
+}
+
+// NewServer serves one content source at the /file/ mount.
 func NewServer(cfg *config.Config, src source.ContentSource) *Server {
+	return NewServerWithVaults(cfg, src, nil)
+}
+
+// NewServerWithVaults serves the primary source at /file/ and mounts every
+// vault the loader finds: at startup for each configured npub and, when auth
+// is on, for each npub that signs in. A nil loader mounts no vaults, which
+// is the whole of today's behavior.
+func NewServerWithVaults(cfg *config.Config, src source.ContentSource, load VaultLoader) *Server {
 	mux := http.NewServeMux()
 
 	handler := loggingMiddleware(mux)
@@ -93,9 +132,6 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 		IdleTimeout: 60 * time.Second,
 	}
 
-	// Initialize with empty tree - background scan will populate it
-	tree := &models.Tree{}
-
 	logger.Log.Info("loading theme", "theme", cfg.Theme)
 	thm, err := theme.Load(cfg.Theme)
 	if err != nil {
@@ -122,33 +158,23 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	var watchable source.Watchable
-	if w, ok := src.(source.Watchable); ok {
-		watchable = w
-	}
-	_, gitignoreAware := src.(source.GitignoreAware)
-	_, timestamped := src.(source.Timestamped)
-	_, rooted := src.(source.Rooted)
+	primary := newMount(markdown.FileMount, src, cfg.IgnorePatterns)
 
 	s := &Server{
-		httpServer: srv,
-		config:     cfg,
-		mux:        mux,
-		tree:       tree,
-		source:     src,
-		watchable:  watchable,
-		uiCaps: models.UICapabilities{
-			RecentlyUpdated: timestamped,
-			GitignoreToggle: gitignoreAware,
-			CopyPath:        rooted,
-			FollowMode:      watchable != nil,
-		},
+		httpServer:     srv,
+		config:         cfg,
+		mux:            mux,
+		primaryMount:   primary,
+		mounts:         []*mount{primary},
 		theme:          thm,
 		themes:         themes,
 		clients:        make(map[chan string]bool),
 		ctx:            ctx,
 		cancel:         cancel,
 		sessionManager: sm,
+		loadVaults:     load,
+		owners:         make(chan string, ownerQueue),
+		observed:       make(map[string]bool),
 		allowedPubkeys: allowedPubkeys,
 		serverURL:      serverURL,
 	}
@@ -156,13 +182,19 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 	s.cachedFiles.Store([]models.SearchableFile{})
 	s.cachedBacklinks.Store(models.BacklinkIndex{})
 	s.cachedContent.Store(searchIndex{})
+	s.cachedRoutes.Store(markdown.NewRouteResolver(nil))
 
 	s.wg.Add(1)
 	go s.initialScan()
 
-	if s.watchable != nil {
+	if w := primary.watchable; w != nil {
 		s.wg.Add(1)
-		go s.broadcastEvents()
+		go s.broadcastEvents(w)
+	}
+
+	if s.loadVaults != nil {
+		s.wg.Add(1)
+		go s.mountOwners()
 	}
 
 	s.setupRoutes()
@@ -218,9 +250,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.clients = make(map[chan string]bool)
 	s.clientsMux.Unlock()
 
-	if s.source != nil {
-		if err := s.source.Close(); err != nil {
-			logger.Log.Error("error closing content source", "error", err)
+	for _, m := range s.mountList() {
+		if err := m.src.Close(); err != nil {
+			logger.Log.Error("error closing content source", "source", m.src.Name(), "error", err)
 		}
 	}
 
@@ -299,7 +331,7 @@ const (
 // window restarts on every arrival, and the ceiling forces a flush when
 // arrivals never stop. Rebuild cost therefore tracks the number of bursts,
 // not the number of files touched.
-func (s *Server) broadcastEvents() {
+func (s *Server) broadcastEvents(w source.Watchable) {
 	logger.Log.Info("broadcast events goroutine started")
 	defer func() {
 		s.wg.Done()
@@ -349,7 +381,7 @@ func (s *Server) broadcastEvents() {
 		case <-s.ctx.Done():
 			logger.Log.Info("broadcast context cancelled, stopping")
 			return
-		case event, ok := <-s.watchable.Events():
+		case event, ok := <-w.Events():
 			if !ok {
 				logger.Log.Info("source events channel closed, stopping broadcast")
 				return
@@ -375,7 +407,7 @@ func (s *Server) broadcastEvents() {
 		case <-maxC:
 			logger.Log.Info("coalesce ceiling reached, rebuilding under sustained writes")
 			flush()
-		case err, ok := <-s.watchable.Errors():
+		case err, ok := <-w.Errors():
 			if !ok {
 				logger.Log.Info("source errors channel closed")
 				return
@@ -406,36 +438,59 @@ func (s *Server) removeClient(client chan string) {
 	logger.Log.Info("SSE client disconnected", "remaining_clients", clientCount)
 }
 
-func (s *Server) scan() (*models.Tree, error) {
+// scanMount rescans one source and stores everything its shape decides: the
+// tree the sidebar draws, the flat file list the corpus reads, and the
+// resolver its own documents' links answer through. It reports whether the
+// tree's shape changed. A failed rescan leaves the previous tree in place
+// and is therefore never structural.
+func (s *Server) scanMount(m *mount) bool {
 	respectGitignore := false
-	if ga, ok := s.source.(source.GitignoreAware); ok {
+	if ga, ok := m.src.(source.GitignoreAware); ok {
 		respectGitignore = ga.RespectingGitignore()
 	}
-	return source.Scan(s.source.FS(), respectGitignore, s.config.IgnorePatterns)
-}
 
-// updateTree rescans the content tree and refreshes every derived index. It
-// reports whether the tree's shape changed, which is how clients tell the
-// two cases apart: a file whose contents changed, and a corpus that gained,
-// lost, or renamed an entry. A failed rescan leaves the previous tree in
-// place and is therefore never structural.
-func (s *Server) updateTree() bool {
-	logger.Log.Info("rescanning content tree", "source", s.source.Name())
-	newTree, err := s.scan()
+	tree, err := source.Scan(m.src.FS(), respectGitignore, m.ignore)
 	if err != nil {
-		logger.Log.Error("failed to rescan content tree", "error", err)
+		logger.Log.Error("failed to scan content source", "source", m.src.Name(), "error", err)
 		return false
 	}
 
-	signature := newTree.Signature()
+	files := tree.FlattenMarkdownFiles()
+	signature := tree.Signature()
+
+	m.resolver.Store(markdown.NewRouteResolver(routeEntries(m.prefix, files)))
 
 	s.treeMux.Lock()
-	structural := signature != s.treeSignature
-	s.tree = newTree
-	s.treeSignature = signature
+	structural := signature != m.signature
+	m.tree = tree
+	m.signature = signature
+	m.files = files
 	s.treeMux.Unlock()
 
-	s.rebuildIndexes(newTree)
+	return structural
+}
+
+// updateTree rescans every source whose tree can have changed and refreshes
+// the corpus-wide indexes. It reports whether any tree's shape changed,
+// which is how clients tell the two cases apart: a file whose contents
+// changed, and a corpus that gained, lost, or renamed an entry.
+//
+// A fetched vault and an embedded site are scanned once, when they are
+// mounted, and skipped here: their bytes are fixed for the life of the
+// serve, so rescanning them would walk a tree that cannot have moved.
+func (s *Server) updateTree() bool {
+	structural := false
+	for _, m := range s.mountList() {
+		if !m.mutable() {
+			continue
+		}
+		logger.Log.Info("rescanning content tree", "source", m.src.Name())
+		if s.scanMount(m) {
+			structural = true
+		}
+	}
+
+	s.rebuildIndexes()
 	logger.Log.Info("content tree updated successfully", "structural", structural)
 	return structural
 }
@@ -463,42 +518,90 @@ type contentIndex struct {
 // Rebuilds are serialized: broadcastEvents and a gitignore toggle can both
 // reach here, and the carried-forward state is not safe for concurrent
 // mutation.
-func (s *Server) rebuildIndexes(newTree *models.Tree) {
-	files := newTree.FlattenMarkdownFiles()
-	s.cachedFiles.Store(files)
+func (s *Server) rebuildIndexes() {
+	mounts := s.mountList()
 
 	s.indexMux.Lock()
 	defer s.indexMux.Unlock()
 
-	corpus, changed := markdown.ReadCorpus(s.source.FS(), s.index.corpus, files)
-	links := markdown.ExtractLinkRefs(s.index.links, corpus, changed)
-	docs := updateSearchDocs(s.index.docs, corpus, changed)
+	prev := s.index
+	corpus := make(markdown.Corpus, len(prev.corpus))
+	changed := make(markdown.ChangedRoutes)
+	docs := make(searchDocs, len(prev.docs))
+	files := make([]models.SearchableFile, 0, len(prev.corpus))
+	entries := make([]markdown.RouteEntry, 0, len(prev.corpus))
 
+	for _, m := range mounts {
+		mounted := s.mountFiles(m)
+
+		read, reread := markdown.ReadCorpus(m.src.FS(), prev.corpus, m.prefix, mounted)
+		maps.Copy(corpus, read)
+		maps.Copy(changed, reread)
+		maps.Copy(docs, updateSearchDocs(prev.docs, read, reread, m.src.Name()))
+
+		files = append(files, routedFiles(m.prefix, mounted)...)
+		entries = append(entries, routeEntries(m.prefix, mounted)...)
+	}
+
+	links := markdown.ExtractLinkRefs(prev.links, corpus, changed)
 	s.index = contentIndex{corpus: corpus, links: links, docs: docs}
 
-	logger.Log.Debug("rebuilt content indexes", "files", len(files), "reread", len(changed))
+	// One order for the whole corpus, most recently modified first, which is
+	// what the files API, the recent list, and search results all read as
+	// their order.
+	sort.SliceStable(files, func(i, j int) bool { return files[i].ModTime > files[j].ModTime })
 
-	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(links, files))
+	routes := markdown.NewRouteResolver(entries)
+
+	logger.Log.Debug("rebuilt content indexes", "files", len(files), "reread", len(changed), "sources", len(mounts))
+
+	s.cachedRoutes.Store(routes)
+	s.cachedFiles.Store(files)
+	s.cachedBacklinks.Store(markdown.BuildBacklinkIndex(links, files, s.linkResolvers(mounts, routes), mountPrefixes(mounts)))
 	s.cachedContent.Store(orderSearchIndex(docs, files))
+}
+
+// mountFiles reads one mount's current file list.
+func (s *Server) mountFiles(m *mount) []models.SearchableFile {
+	s.treeMux.RLock()
+	defer s.treeMux.RUnlock()
+	return m.files
+}
+
+// linkResolvers answers one document's links exactly as its own page render
+// would: the source holding it answers first, so a name it holds always
+// wins, and the corpus-wide resolver stands behind it so a link reaching
+// into another source resolves rather than dangling. Index and render
+// agreeing on this is what makes a backlink a claim about the page.
+func (s *Server) linkResolvers(mounts []*mount, routes *markdown.TreeResolver) markdown.ResolverFor {
+	return func(route string) wikilink.Resolver {
+		m, rel, ok := mountOf(mounts, route)
+		if !ok {
+			return routes
+		}
+		own, _ := m.renderSeams(rel, s.config.AttachmentRoot)
+		return markdown.Chain{own, routes}
+	}
+}
+
+// corpusRoutes is the resolver over every mounted source, which a page
+// render chains behind its own source's.
+func (s *Server) corpusRoutes() *markdown.TreeResolver {
+	if v, ok := s.cachedRoutes.Load().(*markdown.TreeResolver); ok {
+		return v
+	}
+	return markdown.NewRouteResolver(nil)
 }
 
 func (s *Server) initialScan() {
 	defer s.wg.Done()
-	logger.Log.Info("starting background content scan", "source", s.source.Name(), "ignore_patterns", len(s.config.IgnorePatterns))
+	logger.Log.Info("starting background content scan", "source", s.primary().src.Name(), "ignore_patterns", len(s.config.IgnorePatterns))
 
-	newTree, err := s.scan()
-	if err != nil {
-		logger.Log.Error("background scan failed", "error", err)
-		s.indexReady.Store(true) // Mark ready even on failure so UI doesn't hang
-		return
+	for _, m := range s.mountList() {
+		s.scanMount(m)
 	}
 
-	s.treeMux.Lock()
-	s.tree = newTree
-	s.treeSignature = newTree.Signature()
-	s.treeMux.Unlock()
-
-	s.rebuildIndexes(newTree)
+	s.rebuildIndexes()
 	s.indexReady.Store(true)
 	logger.Log.Info("background scan complete, index ready")
 
@@ -521,15 +624,18 @@ func (s *Server) IsIndexReady() bool {
 	return s.indexReady.Load()
 }
 
+// IsRespectingGitignore reports the primary source's filtering. Gitignore is
+// a working copy's own rule, so it is the primary source's alone: a fetched
+// vault carries no such file and never answers here.
 func (s *Server) IsRespectingGitignore() bool {
-	if ga, ok := s.source.(source.GitignoreAware); ok {
+	if ga, ok := s.primary().src.(source.GitignoreAware); ok {
 		return ga.RespectingGitignore()
 	}
 	return false
 }
 
 func (s *Server) ToggleRespectGitignore() bool {
-	ga, ok := s.source.(source.GitignoreAware)
+	ga, ok := s.primary().src.(source.GitignoreAware)
 	if !ok {
 		return false
 	}

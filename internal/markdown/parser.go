@@ -64,6 +64,17 @@ func Parse(source []byte, resolver wikilink.Resolver, embeds *EmbedContext) ([]b
 			renderer.WithNodeRenderers(util.Prioritized(&WikilinkRenderer{Resolver: resolver}, 199)),
 		)
 
+		// Plain CommonMark links and images bypass wikilink syntax
+		// entirely, so a resolver that can answer them is consulted
+		// through the AST: the destination a node carries is rewritten
+		// before rendering, leaving goldmark's own markup rules the only
+		// copy of themselves.
+		if routes, ok := resolver.(RouteResolver); ok {
+			parserOpts = append(parserOpts,
+				parser.WithASTTransformers(util.Prioritized(&routeTransformer{routes: routes}, 200)),
+			)
+		}
+
 		// Transclusion needs the wikilink parser to see an embed at all,
 		// so it is registered only alongside the resolver it also uses to
 		// turn a target into a route.

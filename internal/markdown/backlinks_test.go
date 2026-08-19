@@ -6,7 +6,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
+
+	"go.abhg.dev/goldmark/wikilink"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 )
@@ -27,11 +30,36 @@ func writeTestFile(t *testing.T, dir, route, content string) {
 	}
 }
 
+// mounted restates a scanned file list the way the server does before
+// indexing: each path becomes the route serving it under the single /file/
+// mount these tests scan into.
+func mounted(files []models.SearchableFile) []models.SearchableFile {
+	routed := make([]models.SearchableFile, 0, len(files))
+	for _, f := range files {
+		f.Path = FileMount + strings.TrimPrefix(f.Path, "/")
+		routed = append(routed, f)
+	}
+	return routed
+}
+
+// route is where a source-relative path is served from in these tests.
+func route(rel string) string {
+	return FileMount + rel
+}
+
+// mountedIndex inverts one source's links the way a server holding a single
+// mount does: every document answers through the same tree resolver, and the
+// only registered route prefix is the one mount.
+func mountedIndex(refs LinkRefs, files []models.SearchableFile) models.BacklinkIndex {
+	resolver := NewTreeResolver(files)
+	return BuildBacklinkIndex(refs, mounted(files), func(string) wikilink.Resolver { return resolver }, []string{FileMount})
+}
+
 // coldBacklinkIndex builds the index from nothing, the way a first rebuild
 // does: read everything, parse everything, resolve and invert.
 func coldBacklinkIndex(dir string, files []models.SearchableFile) models.BacklinkIndex {
-	corpus, changed := ReadCorpus(os.DirFS(dir), nil, files)
-	return BuildBacklinkIndex(ExtractLinkRefs(nil, corpus, changed), files)
+	corpus, changed := ReadCorpus(os.DirFS(dir), nil, FileMount, files)
+	return mountedIndex(ExtractLinkRefs(nil, corpus, changed), files)
 }
 
 // scanFiles lists the markdown files under dir the way the real scanner
@@ -146,10 +174,10 @@ func TestIncrementalIndexMatchesFullRebuild(t *testing.T) {
 		files := scanFiles(t, dir)
 
 		var changed ChangedRoutes
-		corpus, changed = ReadCorpus(os.DirFS(dir), corpus, files)
+		corpus, changed = ReadCorpus(os.DirFS(dir), corpus, FileMount, files)
 		links = ExtractLinkRefs(links, corpus, changed)
 
-		got := BuildBacklinkIndex(links, files)
+		got := mountedIndex(links, files)
 		want := coldBacklinkIndex(dir, files)
 
 		if !reflect.DeepEqual(got, want) {
@@ -169,23 +197,23 @@ func TestIncrementalCorpusRereadsOnlyChangedFiles(t *testing.T) {
 	writeTestFile(t, dir, "c.md", "third")
 
 	files := scanFiles(t, dir)
-	corpus, changed := ReadCorpus(os.DirFS(dir), nil, files)
+	corpus, changed := ReadCorpus(os.DirFS(dir), nil, FileMount, files)
 	if len(changed) != 3 {
 		t.Fatalf("expected a cold build to read all 3 files, read %d", len(changed))
 	}
 
-	corpus, changed = ReadCorpus(os.DirFS(dir), corpus, scanFiles(t, dir))
+	corpus, changed = ReadCorpus(os.DirFS(dir), corpus, FileMount, scanFiles(t, dir))
 	if len(changed) != 0 {
 		t.Errorf("expected an unchanged corpus to read nothing, read %d", len(changed))
 	}
 
 	writeTestFile(t, dir, "b.md", "second, edited to a different length")
 
-	_, changed = ReadCorpus(os.DirFS(dir), corpus, scanFiles(t, dir))
+	_, changed = ReadCorpus(os.DirFS(dir), corpus, FileMount, scanFiles(t, dir))
 	if len(changed) != 1 {
 		t.Fatalf("expected exactly 1 re-read, got %d", len(changed))
 	}
-	if _, ok := changed["b.md"]; !ok {
+	if _, ok := changed[route("b.md")]; !ok {
 		t.Errorf("expected b.md to be the re-read file, got %v", changed)
 	}
 }
@@ -199,18 +227,18 @@ func TestIncrementalCorpusDropsRemovedFiles(t *testing.T) {
 	writeTestFile(t, dir, "a.md", "first")
 	writeTestFile(t, dir, "b.md", "second")
 
-	corpus, _ := ReadCorpus(os.DirFS(dir), nil, scanFiles(t, dir))
+	corpus, _ := ReadCorpus(os.DirFS(dir), nil, FileMount, scanFiles(t, dir))
 
 	if err := os.Remove(filepath.Join(dir, "b.md")); err != nil {
 		t.Fatalf("failed to remove: %v", err)
 	}
 
-	corpus, _ = ReadCorpus(os.DirFS(dir), corpus, scanFiles(t, dir))
+	corpus, _ = ReadCorpus(os.DirFS(dir), corpus, FileMount, scanFiles(t, dir))
 
-	if _, ok := corpus["b.md"]; ok {
+	if _, ok := corpus[route("b.md")]; ok {
 		t.Error("expected the removed file to be dropped from the corpus")
 	}
-	if _, ok := corpus["a.md"]; !ok {
+	if _, ok := corpus[route("a.md")]; !ok {
 		t.Error("expected the surviving file to remain in the corpus")
 	}
 }
@@ -231,7 +259,7 @@ func TestBuildBacklinkIndex(t *testing.T) {
 
 	index := coldBacklinkIndex(dir, files)
 
-	entries := index["b.md"]
+	entries := index[route("b.md")]
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 backlinks to b.md, got %d", len(entries))
 	}
@@ -240,10 +268,10 @@ func TestBuildBacklinkIndex(t *testing.T) {
 	for _, e := range entries {
 		sources[e.SourcePath] = true
 	}
-	if !sources["a.md"] {
+	if !sources[route("a.md")] {
 		t.Error("expected a.md in backlinks to b.md")
 	}
-	if !sources["c.md"] {
+	if !sources[route("c.md")] {
 		t.Error("expected c.md in backlinks to b.md")
 	}
 }
@@ -277,7 +305,7 @@ func TestBuildBacklinkIndexSelfLink(t *testing.T) {
 
 	index := coldBacklinkIndex(dir, files)
 
-	if entries := index["a.md"]; len(entries) != 0 {
+	if entries := index[route("a.md")]; len(entries) != 0 {
 		t.Errorf("expected self-links to be excluded, got %d entries", len(entries))
 	}
 }
@@ -296,7 +324,7 @@ func TestBuildBacklinkIndexDuplicateLinks(t *testing.T) {
 
 	index := coldBacklinkIndex(dir, files)
 
-	entries := index["b.md"]
+	entries := index[route("b.md")]
 	if len(entries) != 1 {
 		t.Errorf("expected 1 backlink entry (deduped), got %d", len(entries))
 	}

@@ -9,7 +9,7 @@ templ Sidebar(view models.TreeView, recentFiles []models.SearchableFile, indexRe
 		} else if view.Tree == nil || view.Tree.Root == nil {
 			<p class="px-3 py-2 text-sm" style="color: var(--comment-color);">No markdown files found.</p>
 		} else {
-			@Tree(view.Tree.Root, view.Expanded)
+			@Tree(view.Tree.Root, view.Expanded, view.Mount)
 		}
 	</nav>
 	<div id="recent">
@@ -30,8 +30,8 @@ templ SidebarRecent(recentFiles []models.SearchableFile, caps models.UICapabilit
 				for _, f := range recentFiles {
 					<li>
 						<a
-							href={ templ.SafeURL("/file" + f.Path) }
-							hx-get={ "/file" + f.Path }
+							href={ templ.SafeURL(f.Path) }
+							hx-get={ f.Path }
 							hx-target="#content"
 							hx-swap="innerHTML"
 							hx-push-url="true"

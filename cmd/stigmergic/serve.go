@@ -93,7 +93,7 @@ If no path is provided, the current directory is used.`,
 			return fmt.Errorf("failed to create content source: %w", err)
 		}
 
-		srv := server.NewServer(loadedConfig, src)
+		srv := server.NewServerWithVaults(loadedConfig, src, vaultLoader(loadedConfig))
 		return srv.Start()
 	},
 }

@@ -147,6 +147,10 @@ func nestedTestTree() *models.Tree {
 	}
 }
 
+// testMount is the route prefix a tree's rows link through, the one the
+// primary source answers at.
+const testMount = "/file/"
+
 func renderHomeTree(t *testing.T, view models.TreeView) string {
 	t.Helper()
 
@@ -166,25 +170,25 @@ func TestHomeRendersNestedDirectoriesOnlyWhenExpanded(t *testing.T) {
 
 	tree := nestedTestTree()
 
-	collapsed := renderHomeTree(t, models.TreeView{Tree: tree})
+	collapsed := renderHomeTree(t, models.TreeView{Tree: tree, Mount: testMount})
 	if !strings.Contains(collapsed, ">dir</span>") {
 		t.Error("expected the directory row to render")
 	}
 	if strings.Contains(collapsed, "nested.md") {
 		t.Error("a collapsed directory must not ship its children")
 	}
-	if !strings.Contains(collapsed, `data-children-path="/test/dir" data-loaded="false"`) {
+	if !strings.Contains(collapsed, `data-children-path="/test/dir" data-mount="`+testMount+`" data-loaded="false"`) {
 		t.Error("expected an unloaded placeholder carrying the directory path")
 	}
 	if !strings.Contains(collapsed, `data-expanded="false"`) {
 		t.Error("expected the collapsed directory row to report its state")
 	}
 
-	expanded := renderHomeTree(t, models.TreeView{Tree: tree, Expanded: models.AncestorDirs("/test/dir/nested.md")})
+	expanded := renderHomeTree(t, models.TreeView{Tree: tree, Mount: testMount, Expanded: models.AncestorDirs("/test/dir/nested.md")})
 	if !strings.Contains(expanded, "nested.md") {
 		t.Error("expected an expanded directory to ship its children")
 	}
-	if !strings.Contains(expanded, `data-children-path="/test/dir" data-loaded="true"`) {
+	if !strings.Contains(expanded, `data-children-path="/test/dir" data-mount="`+testMount+`" data-loaded="true"`) {
 		t.Error("expected the expanded container to be marked loaded")
 	}
 	if !strings.Contains(expanded, `data-expanded="true"`) {

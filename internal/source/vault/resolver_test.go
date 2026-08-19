@@ -82,8 +82,8 @@ func testAdapterOnly(t *testing.T) *Resolver {
 	return r
 }
 
-func TestEmbedSourceProbesAssetsIntoTheMount(t *testing.T) {
-	r, v, owner := testAdapter(t, "")
+func TestEmbedSourceProbesAssetsInsideTheVault(t *testing.T) {
+	r, v, _ := testAdapter(t, "")
 	fsys, err := NewFS(context.Background(), v.Bundle, v.Name, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("NewFS: %v", err)
@@ -94,8 +94,8 @@ func TestEmbedSourceProbesAssetsIntoTheMount(t *testing.T) {
 	if !ok {
 		t.Fatal("the stated attachment did not probe")
 	}
-	if want := testMount(owner) + "/" + dirThoughts + "/" + nameArt; route != want {
-		t.Errorf("route = %q, want %q", route, want)
+	if want := dirThoughts + "/" + nameArt; route != want {
+		t.Errorf("route = %q, want %q: the seam speaks paths inside the vault, and the renderer prefixes the mount", route, want)
 	}
 	if _, ok := es.ProbeAsset("missing.png"); ok {
 		t.Error("a missing asset probed, want a miss")
@@ -130,10 +130,9 @@ func TestEmbedSourceReadsNotesThroughTheFS(t *testing.T) {
 // TestBundleToRenderWalk is the integration walk: synthetic vault events in,
 // the first document's bytes read through the filesystem and rendered with
 // the adapter. Wikilink hrefs land inside the mount, a dangling link renders
-// visibly, and the standalone note embed renders the unresolved marker for
-// now: the embed renderer still strips a literal /file/ prefix, the seam the
-// multi-source server phase generalizes, at which point this assertion flips
-// to transcluded content.
+// visibly, and the standalone note embed transcludes the note it names,
+// because the embed renderer now strips the mount the page is served under
+// rather than a literal /file/.
 func TestBundleToRenderWalk(t *testing.T) {
 	r, v, owner := testAdapter(t, "")
 	fsys, err := NewFS(context.Background(), v.Bundle, v.Name, v.docModTimes(), nil, nil)
@@ -146,7 +145,7 @@ func TestBundleToRenderWalk(t *testing.T) {
 		t.Fatal("the first document did not read through the filesystem")
 	}
 
-	html, _, err := markdown.Parse(source, r, markdown.NewEmbedContext(NewEmbedSource(fsys, r)))
+	html, _, err := markdown.Parse(source, r, markdown.NewEmbedContext(mountPrefix(owner), NewEmbedSource(fsys, r)))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
@@ -158,7 +157,97 @@ func TestBundleToRenderWalk(t *testing.T) {
 		`href="` + mount + "/" + cidSecond + conceptExt + `#history"`,
 		`href="` + mount + "/" + dirThoughts + "/" + nameArt + `"`,
 		`class="wikilink-unresolved"`,
-		`data-embed-error="unresolved"`,
+		`class="transclusion" data-embed-route="` + cidSecond + conceptExt + `"`,
+		"the second body",
+		`href="` + mount + "/" + cidSecond + conceptExt + `">second-note</a>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the rendered page lacks %s\npage: %s", want, page)
+		}
+	}
+	if strings.Contains(page, `data-embed-error=`) {
+		t.Errorf("an embed failed to render\npage: %s", page)
+	}
+}
+
+// mountPrefix is the route prefix a vault page is served under, the trailing
+// slash included: it is what the embed renderer strips off a resolved
+// destination to reach a path inside the vault.
+func mountPrefix(owner string) string {
+	return testMount(owner) + "/"
+}
+
+func TestAdapterResolvesACommonMarkDestination(t *testing.T) {
+	r, _, owner := testAdapter(t, "")
+
+	route, ok := r.ResolveRoute("second-note.md")
+	if !ok {
+		t.Fatal("a plain markdown link to a stated concept did not resolve")
+	}
+	if want := testMount(owner) + "/" + cidSecond + conceptExt; route != want {
+		t.Errorf("route = %q, want %q", route, want)
+	}
+}
+
+// TestAdapterKeepsACommonMarkFragment pins the anchor travelling with the
+// route, and TestAdapterDecodesACommonMarkDestination the percent-decoding a
+// foreign corpus needs: the name in the vault is the reference.
+func TestAdapterKeepsACommonMarkFragment(t *testing.T) {
+	r, _, owner := testAdapter(t, "")
+
+	route, ok := r.ResolveRoute("second-note.md#history")
+	if !ok {
+		t.Fatal("an anchored markdown link did not resolve")
+	}
+	if want := testMount(owner) + "/" + cidSecond + conceptExt + "#history"; route != want {
+		t.Errorf("route = %q, want %q", route, want)
+	}
+}
+
+func TestAdapterDecodesACommonMarkDestination(t *testing.T) {
+	r, _, owner := testAdapter(t, "")
+
+	route, ok := r.ResolveRoute("thoughts%2Fsecond-note.md")
+	if !ok {
+		t.Fatal("a percent-encoded destination did not resolve")
+	}
+	if want := testMount(owner) + "/" + cidSecond + conceptExt; route != want {
+		t.Errorf("route = %q, want %q", route, want)
+	}
+}
+
+// TestAdapterDeclinesAnUnstatedDestination is the verbatim fallback: what the
+// vault does not hold keeps the destination its author wrote.
+func TestAdapterDeclinesAnUnstatedDestination(t *testing.T) {
+	r, _, _ := testAdapter(t, "")
+
+	if route, ok := r.ResolveRoute("nowhere.md"); ok {
+		t.Errorf("route = %q, want a miss for a target the vault does not hold", route)
+	}
+}
+
+// TestAdapterResolvesAnImageDestination walks the whole render: a plain
+// markdown image naming a stated attachment reaches the browser pointing
+// inside the mount, where the filesystem serves the blob.
+func TestAdapterResolvesAnImageDestination(t *testing.T) {
+	r, v, owner := testAdapter(t, "")
+	fsys, err := NewFS(context.Background(), v.Bundle, v.Name, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("NewFS: %v", err)
+	}
+
+	body := "![the art](art.png) and [the guide](" + cidGuide + ".md) and [away](https://example.com/art.png)\n"
+	html, _, err := markdown.Parse([]byte(body), r, markdown.NewEmbedContext(mountPrefix(owner), NewEmbedSource(fsys, r)))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	page := string(html)
+
+	mount := testMount(owner)
+	for _, want := range []string{
+		`src="` + mount + "/" + dirThoughts + "/" + nameArt + `"`,
+		`href="` + mount + "/" + cidGuide + conceptExt + `"`,
+		`href="https://example.com/art.png"`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the rendered page lacks %s\npage: %s", want, page)

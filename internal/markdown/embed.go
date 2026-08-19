@@ -49,8 +49,9 @@ func (n *embedBlock) Dump(source []byte, level int) {
 }
 
 // EmbedContext carries the state one page render needs to transclude: where to
-// read content from, how deep the current render sits, which targets are
-// already open on the path to here, and which targets the page pulled in.
+// read content from, which mount the page is being served under, how deep the
+// current render sits, which targets are already open on the path to here, and
+// which targets the page pulled in.
 //
 // It is mutated during rendering and is not safe for concurrent use. Construct
 // one per request.
@@ -58,14 +59,20 @@ type EmbedContext struct {
 	source      EmbedSource
 	visited     map[string]struct{}
 	recorded    map[string]struct{}
+	mount       string
 	transcluded []string
 	depth       int
 }
 
-// NewEmbedContext builds a context reading through source.
-func NewEmbedContext(source EmbedSource) *EmbedContext {
+// NewEmbedContext builds a context reading through source for a page served
+// under mount. The mount is the route prefix the page's own source answers
+// at: transclusion reads and records source-relative paths, while the links
+// it writes back into the page are routes, and the mount is what turns one
+// into the other.
+func NewEmbedContext(mount string, source EmbedSource) *EmbedContext {
 	return &EmbedContext{
 		source:   source,
+		mount:    mount,
 		visited:  make(map[string]struct{}),
 		recorded: make(map[string]struct{}),
 	}
@@ -257,8 +264,8 @@ func (r *embedRenderer) renderEmbed(w util.BufWriter, n *embedBlock) error {
 	h.str(`<div class="transclusion-body">`)
 	h.bytes(inner)
 	h.str(`</div>`)
-	h.str(`<a class="transclusion-source" href="/file/`)
-	h.bytes(util.URLEscape([]byte(route), true))
+	h.str(`<a class="transclusion-source" href="`)
+	h.bytes(util.URLEscape([]byte(r.ctx.mount+route), true))
 	h.str(`">`)
 	h.escaped(embedDisplayLabel(n))
 	h.str(`</a></div>` + "\n")
@@ -278,16 +285,16 @@ func (r *embedRenderer) renderAsset(w util.BufWriter, n *embedBlock, asImage boo
 
 	h := &embedWriter{w: w}
 	if !asImage {
-		h.str(`<a class="attachment" href="/file/`)
-		h.bytes(util.URLEscape([]byte(route), true))
+		h.str(`<a class="attachment" href="`)
+		h.bytes(util.URLEscape([]byte(r.ctx.mount+route), true))
 		h.str(`">`)
 		h.escaped(embedDisplayLabel(n))
 		h.str(`</a>` + "\n")
 		return h.err
 	}
 
-	h.str(`<img src="/file/`)
-	h.bytes(util.URLEscape([]byte(route), true))
+	h.str(`<img src="`)
+	h.bytes(util.URLEscape([]byte(r.ctx.mount+route), true))
 	// The label becomes alt text only when the author wrote one, matching
 	// the rule the wikilink package's own image renderer follows: ![[x.png]]
 	// must not become alt="x.png", while ![[x.png|a diagram]] does.
@@ -299,10 +306,14 @@ func (r *embedRenderer) renderAsset(w util.BufWriter, n *embedBlock, asImage boo
 	return h.err
 }
 
-// resolveRoute turns an embed target into a content-root relative path by
-// asking the same resolver ordinary wikilinks use. The node carries no
-// fragment, so the resolver returns a bare route and no anchor has to be
-// trimmed back off.
+// resolveRoute turns an embed target into a path inside the page's own
+// source by asking the same resolver ordinary wikilinks use. The node
+// carries no fragment, so the resolver returns a bare route and no anchor
+// has to be trimmed back off.
+//
+// A destination outside the current mount is not transcludable here: its
+// bytes live in another source's filesystem, which this render holds no
+// handle on, so it reports a miss and renders as an unresolved embed.
 func (r *embedRenderer) resolveRoute(target string) (string, bool) {
 	if r.resolver == nil || target == "" {
 		return "", false
@@ -311,7 +322,7 @@ func (r *embedRenderer) resolveRoute(target string) (string, bool) {
 	if err != nil || len(dest) == 0 {
 		return "", false
 	}
-	route, found := strings.CutPrefix(string(dest), "/file/")
+	route, found := strings.CutPrefix(string(dest), r.ctx.mount)
 	if !found {
 		return "", false
 	}

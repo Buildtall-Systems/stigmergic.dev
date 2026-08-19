@@ -68,13 +68,15 @@ func (e ExpandedDirs) Add(path string) {
 	e[path] = struct{}{}
 }
 
-// TreeView is one render of the content tree: the tree itself and the
-// directories that render expanded. Passing the pair keeps the expansion
-// travelling with the tree through the layout rather than as a separate
-// argument at every layer.
+// TreeView is one render of a content tree: the tree itself, the route
+// prefix its source answers at, and the directories that render expanded.
+// Passing them together keeps the expansion and the mount travelling with
+// the tree through the layout rather than as separate arguments at every
+// layer.
 type TreeView struct {
 	Tree     *Tree
 	Expanded ExpandedDirs
+	Mount    string
 }
 
 // AncestorDirs is the set of directories containing path, so a render can show
