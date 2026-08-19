@@ -4,6 +4,55 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-08-19
 
+### vault reader Phase 4: the multi-source server
+
+The server holds an ordered set of mounted sources on
+`feature/vault-reader`: the filesystem at `/file/` and each discovered
+vault at `/vault/<npub>/<name>/`.
+
+- `internal/server/mount.go`: the `mount` type pairs a content source
+  with its route prefix, the capabilities it supports, the tree and
+  file list a scan derives, and the resolver its own documents answer
+  through. `mountOf` picks the longest matching prefix; `routable`
+  declines a vault whose owner or name carries a slash.
+- `internal/server/vaults.go`: `VaultLoader` is injected, so the server
+  owns no relay connection; one goroutine turns the configured npubs,
+  then each npub that signs in, into mounted sources. Discovery runs
+  off the request path, and an owner is recorded as observed only once
+  it is queued, so a full queue defers rather than drops.
+- `internal/server/server.go`: `scanMount` per source, `updateTree`
+  rescanning only sources whose tree can change (a fetched vault and an
+  embedded site are scanned once, when mounted), and `rebuildIndexes`
+  merging every mount into one corpus, one search index, one backlink
+  index, and one corpus-wide resolver.
+- Routes are the key space above the mount: `ReadCorpus` takes the
+  mount prefix, `SearchableFile.Path` and `searchDoc.Path` carry the
+  route, and `searchMatch` carries the name of the source holding the
+  document. The templates and the palette navigate by that path
+  directly instead of concatenating `/file`.
+- `BuildBacklinkIndex` takes a per-document resolver and the registered
+  mount prefixes: a document resolves through its own source first with
+  the corpus-wide resolver behind it, so a local document naming a
+  vault document is a backlink and the link renders as one.
+- `markdown/resolve.go`: `Chain` (first resolver that answers wins) and
+  the `RouteResolver` seam for plain CommonMark links and images.
+- `embed.go` strips the current mount rather than a literal `/file/`,
+  and its hrefs are formed from the mount, which flips Phase 3's
+  deferred assertion: the standalone note embed now transcludes.
+- Capabilities split: copy-path and follow-mode follow the document on
+  screen, the gitignore toggle and the recent list stay with the
+  primary source. Ignore patterns apply to the primary source alone.
+- Deviations from the plan, both narrower than what it named: the
+  CommonMark seam is an AST transformer rather than a `LinkRenderer`
+  field plus an `ast.KindImage` renderer, which keeps one copy of
+  goldmark's markup rules; and `components.Tree` took its mount
+  parameter here rather than in Phase 5, because a vault directory
+  listing had to link into its own mount to work at all.
+- `make lint`, `make test`, `make build` green, including two data
+  races the race detector caught and the fix removed: the mounts slice
+  header read without the lock, and the per-mount resolver replaced by
+  a rescan while a render read it.
+
 ### vault reader Phase 3: the vault source
 
 `internal/source/vault/` turns relay URLs plus owner npubs into mounted,
