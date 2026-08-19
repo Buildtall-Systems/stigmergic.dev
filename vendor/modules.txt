@@ -30,6 +30,11 @@ github.com/btcsuite/btcd/chaincfg/chainhash
 ## explicit; go 1.25.7
 github.com/buildtall-systems/buildtall/btk/auth/nip98
 github.com/buildtall-systems/buildtall/btk/auth/session
+github.com/buildtall-systems/buildtall/btk/lists
+github.com/buildtall-systems/buildtall/btk/nostr
+github.com/buildtall-systems/buildtall/btk/okf
+github.com/buildtall-systems/buildtall/btk/retry
+github.com/buildtall-systems/buildtall/btk/vault
 # github.com/bytedance/sonic v1.13.2
 ## explicit; go 1.17
 github.com/bytedance/sonic/ast
@@ -235,6 +240,9 @@ golang.org/x/arch/x86/x86asm
 # golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546
 ## explicit; go 1.24.0
 golang.org/x/exp/constraints
+# golang.org/x/sync v0.20.0
+## explicit; go 1.25.0
+golang.org/x/sync/errgroup
 # golang.org/x/sys v0.46.0
 ## explicit; go 1.25.0
 golang.org/x/sys/unix

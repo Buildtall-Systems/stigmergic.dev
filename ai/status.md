@@ -4,6 +4,45 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-08-19
 
+### vault reader Phase 3: the vault source
+
+`internal/source/vault/` turns relay URLs plus owner npubs into mounted,
+readable vault sources, on `feature/vault-reader`.
+
+- `discover.go`: one kind 30101 query per owner, `ClassifyVaultDTag` on
+  each d-tag, every vault-family root one descriptor; zero relays or
+  owners is an empty list, not an error.
+- `fetch.go`: `Load` resolves the subject, fetches root, sets, and
+  documents through btk/vault, takes the store list from the root's
+  okf-server tags with the owner's kind 10063 as fallback, exports the
+  bundle, and indexes `okf.NewResolver` over the same sets with the
+  first store as base. A storeless vault loads; attachments dangle.
+- `fs.go`: the synthetic read-only `fs.FS`: directories from the bundle
+  tree as `fs.ReadDirFile`, concepts as `okf.WriteConcept` bytes with
+  ModTime from the document event's created_at, attachments fetched
+  from the stores in preference order by bare-hash GET on first use,
+  sha256-verified, materialized behind a `bytes.Reader` for
+  `http.ServeFileFS`; a failed or unverified fetch is `fs.ErrNotExist`.
+  The root stat is named for the vault.
+- `resolver.go`: the `wikilink.Resolver` adapter over `okf.Resolver`
+  (documents keep the fragment, attachments route into the mount) and
+  the companion `EmbedSource` (notes through the FS, assets through the
+  same matcher).
+- `keys.go`: `DocDTag`, the route-to-d-tag inverse seeding each Resolve.
+- `config.go`: `vault.relays` (wss required, ws only toward localhost,
+  checked at load) and `vault.npubs` (validated where decoded, like the
+  auth allowlist); both default empty.
+- Tests: `fstest.TestFS` conformance over the synthetic bundle with a
+  stub store, blob hash acceptance and mismatch refusal, discovery
+  classification, adapter cases across the matcher tiers, and the
+  bundle-to-render walk through `markdown.Parse`. One assertion is
+  deliberately deferred: the standalone note embed renders the
+  unresolved marker because the embed renderer still strips a literal
+  `/file/` prefix; the Phase 4 seam change flips that assertion to
+  transcluded content. Asset and link resolution are fully covered.
+- `make lint`, `make test`, `make build` green; fieldalignment,
+  goconst, and gosec all at zero without suppression.
+
 ### vault reader Phase 2: btk module migration
 
 stigmergic.dev now builds against the monorepo btk, vendored, on
