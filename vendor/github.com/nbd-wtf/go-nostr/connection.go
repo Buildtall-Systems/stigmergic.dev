@@ -18,8 +18,8 @@ type Connection struct {
 }
 
 // NewConnection creates a new websocket connection to a Nostr relay.
-func NewConnection(ctx context.Context, url string, requestHeader http.Header, tlsConfig *tls.Config) (*Connection, error) {
-	c, _, err := ws.Dial(ctx, url, getConnectionOptions(requestHeader, tlsConfig))
+func NewConnection(ctx context.Context, url string, requestHeader http.Header, tlsConfig *tls.Config, httpClient *http.Client) (*Connection, error) {
+	c, _, err := ws.Dial(ctx, url, getConnectionOptions(requestHeader, tlsConfig, httpClient))
 	if err != nil {
 		return nil, err
 	}

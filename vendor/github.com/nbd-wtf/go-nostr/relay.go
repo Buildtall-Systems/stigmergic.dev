@@ -23,7 +23,8 @@ type Relay struct {
 	closeMutex sync.Mutex
 
 	URL           string
-	requestHeader http.Header // e.g. for origin header
+	requestHeader http.Header  // e.g. for origin header
+	httpClient    *http.Client // optional caller-supplied HTTP client (e.g. SOCKS5-routed)
 
 	Connection    *Connection
 	Subscriptions *xsync.MapOf[int64, *Subscription]
@@ -32,12 +33,17 @@ type Relay struct {
 	connectionContext       context.Context // will be canceled when the connection closes
 	connectionContextCancel context.CancelCauseFunc
 
+	challengeMu                   sync.Mutex   // guards challenge; not closeMutex, so auth never orders against teardown
 	challenge                     string       // NIP-42 challenge, we only keep the last
 	noticeHandler                 func(string) // NIP-01 NOTICEs
 	customHandler                 func(string) // nonstandard unparseable messages
 	okCallbacks                   *xsync.MapOf[string, func(bool, string)]
 	writeQueue                    chan writeRequest
 	subscriptionChannelCloseQueue chan *Subscription
+
+	authDone    chan struct{} // closed exactly once when auth succeeds (proactive or reactive)
+	authOnce    sync.Once    // guards authDone close to prevent double-close panic
+	challengeCh chan string   // buffered(1), notifies when a new challenge arrives from relay
 
 	// custom things that aren't often used
 	//
@@ -61,6 +67,8 @@ func NewRelay(ctx context.Context, url string, opts ...RelayOption) *Relay {
 		writeQueue:                    make(chan writeRequest),
 		subscriptionChannelCloseQueue: make(chan *Subscription),
 		requestHeader:                 nil,
+		authDone:                      make(chan struct{}),
+		challengeCh:                   make(chan string, 1),
 	}
 
 	for _, opt := range opts {
@@ -91,6 +99,7 @@ var (
 	_ RelayOption = (WithNoticeHandler)(nil)
 	_ RelayOption = (WithCustomHandler)(nil)
 	_ RelayOption = (WithRequestHeader)(nil)
+	_ RelayOption = (*WithHTTPClient)(nil)
 )
 
 // WithNoticeHandler just takes notices and is expected to do something with them.
@@ -116,6 +125,14 @@ func (ch WithRequestHeader) ApplyRelayOption(r *Relay) {
 	r.requestHeader = http.Header(ch)
 }
 
+// WithHTTPClient sets a custom HTTP client used for the WebSocket dial.
+// Use this to route connections through a proxy (e.g. SOCKS5).
+type WithHTTPClient struct{ Client *http.Client }
+
+func (wh *WithHTTPClient) ApplyRelayOption(r *Relay) {
+	r.httpClient = wh.Client
+}
+
 // String just returns the relay URL.
 func (r *Relay) String() string {
 	return r.URL
@@ -127,6 +144,29 @@ func (r *Relay) Context() context.Context { return r.connectionContext }
 
 // IsConnected returns true if the connection to this relay seems to be active.
 func (r *Relay) IsConnected() bool { return r.connectionContext.Err() == nil }
+
+// AuthDone returns a channel that is closed when NIP-42 authentication
+// succeeds, whether via proactive PerformAuth or reactive Auth.
+func (r *Relay) AuthDone() <-chan struct{} { return r.authDone }
+
+// setChallenge records the newest NIP-42 challenge. Called only from the
+// message read loop.
+func (r *Relay) setChallenge(challenge string) {
+	r.challengeMu.Lock()
+	r.challenge = challenge
+	r.challengeMu.Unlock()
+}
+
+// currentChallenge returns the newest NIP-42 challenge, or "" if none has
+// arrived. The read loop writes the field while callers read it from their own
+// goroutines, so every access is guarded: an unsynchronized read can tear the
+// string header, and a stale one gets stamped into an AUTH event the relay then
+// rejects.
+func (r *Relay) currentChallenge() string {
+	r.challengeMu.Lock()
+	defer r.challengeMu.Unlock()
+	return r.challenge
+}
 
 // Connect tries to establish a websocket connection to r.URL.
 // If the context expires before the connection is complete, an error is returned.
@@ -156,7 +196,7 @@ func (r *Relay) ConnectWithTLS(ctx context.Context, tlsConfig *tls.Config) error
 		defer cancel()
 	}
 
-	conn, err := NewConnection(ctx, r.URL, r.requestHeader, tlsConfig)
+	conn, err := NewConnection(ctx, r.URL, r.requestHeader, tlsConfig, r.httpClient)
 	if err != nil {
 		return fmt.Errorf("error opening websocket to '%s': %w", r.URL, err)
 	}
@@ -167,16 +207,30 @@ func (r *Relay) ConnectWithTLS(ctx context.Context, tlsConfig *tls.Config) error
 
 	// queue all write operations here so we don't do mutex spaghetti
 	go func() {
+		defer func() {
+			ticker.Stop()
+
+			// close() reads and dereferences Connection under closeMutex, and
+			// it is close() that cancels connectionContext and so schedules
+			// this very cleanup. Without the lock the nil assignment can land
+			// between close()'s nil check and its Close() call, dereferencing
+			// nil.
+			// ConnectionError is written by the read loop under the same lock,
+			// so it is snapshotted here rather than read inside the loop below.
+			r.closeMutex.Lock()
+			r.Connection = nil
+			connErr := r.ConnectionError
+			r.closeMutex.Unlock()
+
+			for _, sub := range r.Subscriptions.Range {
+				sub.unsub(fmt.Errorf("relay connection closed: %w / %w", context.Cause(r.connectionContext), connErr))
+			}
+		}()
+
 		pingAttempt := 0
 		for {
 			select {
 			case <-r.connectionContext.Done():
-				ticker.Stop()
-				r.Connection = nil
-
-				for _, sub := range r.Subscriptions.Range {
-					sub.unsub(fmt.Errorf("relay connection closed: %w / %w", context.Cause(r.connectionContext), r.ConnectionError))
-				}
 				return
 
 			case <-ticker.C:
@@ -192,6 +246,7 @@ func (r *Relay) ConnectWithTLS(ctx context.Context, tlsConfig *tls.Config) error
 						if err != nil {
 							debugLogf("{%s} failed to close relay: %v", r.URL, err)
 						}
+						return
 					}
 					continue
 				}
@@ -219,7 +274,12 @@ func (r *Relay) ConnectWithTLS(ctx context.Context, tlsConfig *tls.Config) error
 			buf.Reset()
 
 			if err := conn.ReadMessage(r.connectionContext, buf); err != nil {
+				// Released before close(), which takes the same non-reentrant
+				// lock.
+				r.closeMutex.Lock()
 				r.ConnectionError = err
+				r.closeMutex.Unlock()
+
 				r.close(err)
 				break
 			}
@@ -266,7 +326,12 @@ func (r *Relay) ConnectWithTLS(ctx context.Context, tlsConfig *tls.Config) error
 				if env.Challenge == nil {
 					continue
 				}
-				r.challenge = *env.Challenge
+				r.setChallenge(*env.Challenge)
+				select {
+				case <-r.challengeCh:
+				default:
+				}
+				r.challengeCh <- *env.Challenge
 			case *EventEnvelope:
 				// we already have the subscription from the pre-check above, so we can just reuse it
 				if sub == nil {
@@ -341,7 +406,7 @@ func (r *Relay) Auth(ctx context.Context, sign func(event *Event) error) error {
 		Kind:      KindClientAuthentication,
 		Tags: Tags{
 			Tag{"relay", r.URL},
-			Tag{"challenge", r.challenge},
+			Tag{"challenge", r.currentChallenge()},
 		},
 		Content: "",
 	}
@@ -349,7 +414,27 @@ func (r *Relay) Auth(ctx context.Context, sign func(event *Event) error) error {
 		return fmt.Errorf("error signing auth event: %w", err)
 	}
 
-	return r.publish(ctx, authEvent.ID, &AuthEnvelope{Event: authEvent})
+	if err := r.publish(ctx, authEvent.ID, &AuthEnvelope{Event: authEvent}); err != nil {
+		return err
+	}
+	r.authOnce.Do(func() { close(r.authDone) })
+	return nil
+}
+
+// PerformAuth blocks until a NIP-42 challenge is available (or uses one already
+// received), signs and sends the AUTH event, and waits for the relay's OK.
+// On success AuthDone() will be closed.
+func (r *Relay) PerformAuth(ctx context.Context, sign func(event *Event) error) error {
+	if r.currentChallenge() == "" {
+		select {
+		case <-r.challengeCh:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-r.connectionContext.Done():
+			return fmt.Errorf("connection closed while waiting for auth challenge")
+		}
+	}
+	return r.Auth(ctx, sign)
 }
 
 func (r *Relay) publish(ctx context.Context, id string, env Envelope) error {
@@ -407,7 +492,13 @@ func (r *Relay) publish(ctx context.Context, id string, env Envelope) error {
 func (r *Relay) Subscribe(ctx context.Context, filters Filters, opts ...SubscriptionOption) (*Subscription, error) {
 	sub := r.PrepareSubscription(ctx, filters, opts...)
 
-	if r.Connection == nil {
+	// Read under closeMutex: the write pump nils Connection on teardown, so an
+	// unguarded read here races a concurrent disconnect.
+	r.closeMutex.Lock()
+	connected := r.Connection != nil
+	r.closeMutex.Unlock()
+
+	if !connected {
 		return nil, fmt.Errorf("not connected to %s", r.URL)
 	}
 

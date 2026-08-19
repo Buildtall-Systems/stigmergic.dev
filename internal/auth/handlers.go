@@ -8,8 +8,9 @@ import (
 
 	"github.com/nbd-wtf/go-nostr"
 
-	"github.com/Buildtall-Systems/btk/auth/nip98"
-	"github.com/Buildtall-Systems/btk/auth/session"
+	"github.com/buildtall-systems/buildtall/btk/auth/nip98"
+	"github.com/buildtall-systems/buildtall/btk/auth/session"
+
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
@@ -73,7 +74,7 @@ func VerifyHandler(sm *session.Manager, allowedPubkeys []string, serverURL strin
 			return
 		}
 
-		sm.SetSessionCookie(w, r, req.Event.PubKey)
+		sm.SetSessionCookie(w, req.Event.PubKey)
 		logger.Log.Info("authentication successful", "pubkey", req.Event.PubKey)
 
 		redirect := r.URL.Query().Get("redirect")
@@ -93,7 +94,7 @@ func LogoutHandler(sm *session.Manager) http.HandlerFunc {
 		}
 
 		sm.ClearSessionCookie(w)
-		http.Redirect(w, r, session.LoginPath, http.StatusSeeOther)
+		http.Redirect(w, r, LoginPath, http.StatusSeeOther)
 	}
 }
 

@@ -29,6 +29,10 @@
             echo "Templ version: $(templ version 2>/dev/null || echo 'installed')"
             echo "Tailwind: $(tailwindcss --help > /dev/null 2>&1 && echo 'installed' || echo 'not found')"
             echo ""
+            export GOPRIVATE="github.com/buildtall-systems/buildtall"
+            export GIT_CONFIG_COUNT=1
+            export GIT_CONFIG_KEY_0="url.git@github.com:buildtall-systems/.insteadOf"
+            export GIT_CONFIG_VALUE_0="https://github.com/buildtall-systems/"
           '';
         };
 

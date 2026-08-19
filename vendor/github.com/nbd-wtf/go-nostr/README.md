@@ -1,16 +1,42 @@
-<div>
-<p><b>This repository is in maintenance mode and adventurous programmers are encouraged to try <a href="https://pkg.go.dev/fiatjaf.com/nostr"><code>fiatjaf.com/nostr@master</code></a> instead.</b></p>
+## Buildtall-Systems Fork of go-nostr
 
-<p>The core codebase and functionality are the same, but the API breaks a little bit (for good reason) and there are some new features.</p>
-</div>
+> **Fork policy: stability-first. Security patches, critical bug fixes, and targeted feature work that we need before migrating to `fiatjaf.com/nostr`.**
+
+This is a working fork of [`nbd-wtf/go-nostr`](https://github.com/nbd-wtf/go-nostr) maintained by [Buildtall Systems](https://github.com/Buildtall-Systems) while we migrate to the successor library [`fiatjaf.com/nostr`](https://pkg.go.dev/fiatjaf.com/nostr).
+
+### Why this fork exists
+
+The upstream `nbd-wtf/go-nostr` repository has been archived. The Go module proxy continues to serve cached versions, but no patches or new work will land upstream. This fork provides a patchable, extensible base for buildtall.systems projects during the migration period.
+
+### What this fork will do
+
+- Security patches for cryptographic, WebSocket, or NIP-44 vulnerabilities
+- Critical bug fixes that affect buildtall.systems production
+- Targeted features we need now (e.g., NIP-42 auth-completion synchronization — see [operations#26](https://github.com/Buildtall-Systems/operations/issues/26))
+
+### What this fork will NOT do
+
+- Broad API redesign (that's what `fiatjaf.com/nostr` is for)
+- NIP additions unrelated to buildtall.systems needs
+- Dependency upgrades beyond what security patches require
+
+### How to use this fork
+
+The module path remains `github.com/nbd-wtf/go-nostr` — no import changes required. To point a project at this fork, add a `replace` directive to your `go.mod`:
+
+```
+replace github.com/nbd-wtf/go-nostr => github.com/Buildtall-Systems/go-nostr buildtall
+```
+
+All existing imports (`github.com/nbd-wtf/go-nostr`, `github.com/nbd-wtf/go-nostr/nip19`, etc.) continue to work unchanged.
+
+### Migration tracker
+
+See [Buildtall-Systems/operations#27](https://github.com/Buildtall-Systems/operations/issues/27) for the full migration epic. This fork will be archived once migration is complete.
 
 ---
 
-[![Run Tests](https://github.com/nbd-wtf/go-nostr/actions/workflows/test.yml/badge.svg)](https://github.com/nbd-wtf/go-nostr/actions/workflows/test.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/nbd-wtf/go-nostr.svg)](https://pkg.go.dev/github.com/nbd-wtf/go-nostr)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nbd-wtf/go-nostr)](https://goreportcard.com/report/github.com/nbd-wtf/go-nostr)
-
-<a href="https://nbd.wtf"><img align="right" height="196" src="https://user-images.githubusercontent.com/1653275/194609043-0add674b-dd40-41ed-986c-ab4a2e053092.png" /></a>
 
 go-nostr
 ========

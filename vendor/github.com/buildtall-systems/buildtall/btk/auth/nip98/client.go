@@ -1,7 +1,9 @@
 package nip98
 
 import (
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -11,7 +13,15 @@ import (
 	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
-func SignRequest(nsec, url, method string) (*nostr.Event, error) {
+// NIP-98 tag names.
+const (
+	tagMethod  = "method"
+	tagPayload = "payload"
+)
+
+const nonceBytes = 16
+
+func SignRequest(nsec, url, method string, payloadHash ...string) (*nostr.Event, error) {
 	var sk string
 
 	switch {
@@ -25,7 +35,11 @@ func SignRequest(nsec, url, method string) (*nostr.Event, error) {
 		if prefix != "nsec" {
 			return nil, fmt.Errorf("expected nsec prefix, got %s", prefix)
 		}
-		sk = value.(string)
+		var ok bool
+		sk, ok = value.(string)
+		if !ok {
+			return nil, fmt.Errorf("decoded nsec value is not a string")
+		}
 	default:
 		return nil, fmt.Errorf("invalid secret key format: must be 64-char hex or nsec1 bech32")
 	}
@@ -35,15 +49,29 @@ func SignRequest(nsec, url, method string) (*nostr.Event, error) {
 		return nil, fmt.Errorf("deriving public key: %w", err)
 	}
 
+	// A random nonce makes each signed event's ID unique, so server-side
+	// replay caches never conflate two otherwise-identical requests signed
+	// within the same second. Servers ignore unknown tags.
+	nonce := make([]byte, nonceBytes)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("generating nonce: %w", err)
+	}
+
+	tags := nostr.Tags{
+		{"u", url},
+		{tagMethod, method},
+		{"nonce", hex.EncodeToString(nonce)},
+	}
+	if len(payloadHash) > 0 && payloadHash[0] != "" {
+		tags = append(tags, nostr.Tag{tagPayload, payloadHash[0]})
+	}
+
 	ev := nostr.Event{
 		Kind:      KindHTTPAuth,
 		CreatedAt: nostr.Timestamp(time.Now().Unix()),
-		Tags: nostr.Tags{
-			{"u", url},
-			{"method", method},
-		},
-		Content: "",
-		PubKey:  pk,
+		Tags:      tags,
+		Content:   "",
+		PubKey:    pk,
 	}
 
 	if err := ev.Sign(sk); err != nil {

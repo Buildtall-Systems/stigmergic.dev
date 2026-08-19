@@ -12,8 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Buildtall-Systems/btk/auth/nip98"
-	"github.com/Buildtall-Systems/btk/auth/session"
+	"github.com/buildtall-systems/buildtall/btk/auth/nip98"
+	"github.com/buildtall-systems/buildtall/btk/auth/session"
+
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/auth"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
@@ -80,7 +82,7 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 		} else {
 			serverURL = fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
 		}
-		handler = session.Middleware(sm)(handler)
+		handler = auth.Middleware(sm)(handler)
 		logger.Log.Info("auth enabled", "allowed_pubkeys", len(allowedPubkeys))
 	}
 

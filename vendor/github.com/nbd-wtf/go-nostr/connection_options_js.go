@@ -9,7 +9,7 @@ import (
 
 var emptyOptions = ws.DialOptions{}
 
-func getConnectionOptions(_ http.Header, _ *tls.Config) *ws.DialOptions {
+func getConnectionOptions(_ http.Header, _ *tls.Config, _ *http.Client) *ws.DialOptions {
 	// on javascript we ignore everything because there is nothing else we can do
 	return &emptyOptions
 }

@@ -2,6 +2,39 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-08-19
+
+### vault reader Phase 2: btk module migration
+
+stigmergic.dev now builds against the monorepo btk, vendored, on
+`feature/vault-reader` (worktree sibling), per the plan at
+`thoughts/plans/2026-08-18_20-00-25_stigmergic-vault-reader.md`.
+
+- `go.mod` drops `github.com/Buildtall-Systems/btk` and requires
+  `github.com/buildtall-systems/buildtall` at
+  `v0.0.0-20260819133600-1999f06ede4b` (the Phase 1 head of
+  `feature/okf-server`, pushed for the fetch); the go directive rises to
+  1.25.7 and the go-nostr fork replace mirrors the monorepo's pin
+  (`v0.52.4-0.20260808214928-3137f4cb164a`). `go mod vendor` publishes
+  `btk/auth` in the vendor tree, approved by ruling 1.
+- The four session breaks land as planned: `SetSessionCookie` drops its
+  request argument, `session.LoginPath` becomes the local
+  `auth.LoginPath`, and `session.Middleware` is replaced by
+  `internal/auth/middleware.go`, a local gate around the monorepo's
+  `ExtractSession` that keeps the redirect login experience (public
+  paths `/auth/`, `/static/`, `/events`; the redirect query now
+  URL-encodes the original path via `url.Values`, which also keeps the
+  location taint-clean for gosec).
+- `flake.nix` gains the twarp GOPRIVATE + insteadOf exports so the
+  private module fetch works in the devShell; `vendorHash` stays null.
+  `ai/context.md` gains rows for go-nostr and the monorepo btk pointing
+  into the vendor tree.
+- New middleware tests: authenticated pass-through with the identity in
+  context, unauthenticated redirect carrying the encoded path, bare
+  redirect for the root, and public-path exemption. `make lint`,
+  `make test`, `make build` all green (fresh worktree needed
+  `make generate` and `pnpm install --frozen-lockfile` first).
+
 ## 2026-08-05
 
 ### Wiki-link embed transclusion, phase 5

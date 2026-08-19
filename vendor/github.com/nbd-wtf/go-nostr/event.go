@@ -57,6 +57,22 @@ func (evt *Event) CheckID() bool {
 	return true
 }
 
+// PublishedTime returns the event's time on the publication axis used by the
+// relay "order":"published_at" filter extension: the first parseable
+// published_at tag value, falling back to CreatedAt. Mirrors the relay's
+// published_time derivation so client-side matching agrees with relay-side
+// selection.
+func (evt *Event) PublishedTime() Timestamp {
+	for _, tag := range evt.Tags {
+		if len(tag) >= 2 && tag[0] == "published_at" {
+			if secs, err := strconv.ParseUint(tag[1], 10, 63); err == nil {
+				return Timestamp(secs)
+			}
+		}
+	}
+	return evt.CreatedAt
+}
+
 // Serialize outputs a byte array that can be hashed to produce the canonical event "id".
 func (evt *Event) Serialize() []byte {
 	// the serialization process is just putting everything into a JSON array

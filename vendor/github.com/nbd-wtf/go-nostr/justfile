@@ -1,6 +1,9 @@
 list:
     @just --list
 
+test:
+    go test ./...
+
 vendor-libsecp256k1:
     #!/usr/bin/env fish
     rm -r libsecp256k1

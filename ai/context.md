@@ -38,4 +38,6 @@ empty fields should be left empty... no "NA" or "*Not Found*"... nothing, just a
 | go stdlib             | /golang/go                     |                                    |
 | wiremd                |                                | ai/context/wiremd/                 |
 | goldmark wikilink     |                                | vendor/go.abhg.dev/goldmark/wikilink/ |
+| go-nostr              |                                | vendor/github.com/nbd-wtf/go-nostr/ |
+| buildtall btk         |                                | vendor/github.com/buildtall-systems/buildtall/btk/ |
 | goldmark frontmatter  |                                | vendor/go.abhg.dev/goldmark/frontmatter/ |

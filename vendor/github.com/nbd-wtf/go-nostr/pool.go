@@ -32,6 +32,8 @@ type SimplePool struct {
 	duplicateMiddleware func(relay string, id string)
 	queryMiddleware     func(relay string, pubkey string, kind int)
 
+	proactiveAuth bool
+
 	// custom things not often used
 	penaltyBoxMu sync.Mutex
 	penaltyBox   map[string][2]float64
@@ -93,6 +95,16 @@ type WithAuthHandler func(ctx context.Context, authEvent RelayEvent) error
 
 func (h WithAuthHandler) ApplyPoolOption(pool *SimplePool) {
 	pool.authHandler = h
+}
+
+// WithProactiveAuth enables proactive NIP-42 authentication: after EnsureRelay
+// connects to a relay, PerformAuth is called automatically. The signing callback
+// is the same as WithAuthHandler and also serves as the reactive auth fallback.
+type WithProactiveAuth func(ctx context.Context, authEvent RelayEvent) error
+
+func (h WithProactiveAuth) ApplyPoolOption(pool *SimplePool) {
+	pool.authHandler = h
+	pool.proactiveAuth = true
 }
 
 // WithPenaltyBox just sets the penalty box mechanism so relays that fail to connect
@@ -200,6 +212,14 @@ func (pool *SimplePool) EnsureRelay(url string) (*Relay, error) {
 			pool.penaltyBox[nm] = [2]float64{v[0] + 1, 30.0 + math.Pow(2, v[0]+1)}
 		}
 		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+
+	if pool.proactiveAuth && pool.authHandler != nil {
+		authCtx, authCancel := context.WithTimeout(pool.Context, 5*time.Second)
+		defer authCancel()
+		relay.PerformAuth(authCtx, func(event *Event) error {
+			return pool.authHandler(authCtx, RelayEvent{Event: event, Relay: relay})
+		})
 	}
 
 	pool.Relays.Store(nm, relay)
@@ -337,7 +357,9 @@ func (pool *SimplePool) FetchManyReplaceable(
 			}
 			return latest, false // the one we had was already more recent
 		})
-		return updated
+		// WithCheckDuplicateReplaceable follows the "true == skip this event" contract
+		// (see relay.go). Skip the staler duplicates; let the newest event through.
+		return !updated
 	}))
 
 	for _, url := range urls {

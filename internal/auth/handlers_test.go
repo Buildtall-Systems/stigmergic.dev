@@ -11,7 +11,7 @@ import (
 
 	"github.com/nbd-wtf/go-nostr"
 
-	"github.com/Buildtall-Systems/btk/auth/session"
+	"github.com/buildtall-systems/buildtall/btk/auth/session"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 )
@@ -44,7 +44,7 @@ func TestLoginHandler_GET(t *testing.T) {
 
 	thm, themes := testThemes(t)
 	handler := LoginHandler("http://localhost:8080", thm, themes)
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, session.LoginPath, nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, LoginPath, nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -64,7 +64,7 @@ func TestLoginHandler_POST_MethodNotAllowed(t *testing.T) {
 
 	thm, themes := testThemes(t)
 	handler := LoginHandler("http://localhost:8080", thm, themes)
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, session.LoginPath, nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, LoginPath, nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -215,7 +215,7 @@ func TestLogoutHandler(t *testing.T) {
 	}
 
 	location := rec.Header().Get("Location")
-	if location != session.LoginPath {
+	if location != LoginPath {
 		t.Errorf("expected redirect to /auth/login, got %s", location)
 	}
 

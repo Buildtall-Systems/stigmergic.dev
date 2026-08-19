@@ -129,6 +129,10 @@ func easyjson4d398eaaDecodeGithubComNbdWtfGoNostr(in *jlexer.Lexer, out *Filter)
 			}
 		case "search":
 			out.Search = string(in.String())
+		case "order":
+			out.Order = string(in.String())
+		case "until_id":
+			out.UntilID = string(in.String())
 		default:
 			if len(key) > 1 && key[0] == '#' {
 				tagValues := make([]string, 0, 40)
@@ -260,6 +264,26 @@ func easyjson4d398eaaEncodeGithubComNbdWtfGoNostr(out *jwriter.Writer, in Filter
 			out.RawString(prefix)
 		}
 		out.String(string(in.Search))
+	}
+	if in.Order != "" {
+		const prefix string = ",\"order\":"
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		out.String(string(in.Order))
+	}
+	if in.UntilID != "" {
+		const prefix string = ",\"until_id\":"
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		out.String(string(in.UntilID))
 	}
 	for tag, values := range in.Tags {
 		const prefix string = ",\"authors\":"

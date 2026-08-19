@@ -95,7 +95,9 @@ func (m *Manager) ValidateSession(cookieValue string) (string, error) {
 	return pubkey, nil
 }
 
-func (m *Manager) SetSessionCookie(w http.ResponseWriter, r *http.Request, pubkey string) {
+// Secure is always set: browsers exempt localhost from the https
+// requirement for Secure cookies, so local dev over http keeps working.
+func (m *Manager) SetSessionCookie(w http.ResponseWriter, pubkey string) {
 	value, expiry := m.CreateSession(pubkey)
 	cookie := &http.Cookie{
 		Name:     m.cookieName,
@@ -104,7 +106,7 @@ func (m *Manager) SetSessionCookie(w http.ResponseWriter, r *http.Request, pubke
 		Expires:  expiry,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureContext(r),
+		Secure:   true,
 	}
 	http.SetCookie(w, cookie)
 }
@@ -116,6 +118,8 @@ func (m *Manager) ClearSessionCookie(w http.ResponseWriter) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
 	}
 	http.SetCookie(w, cookie)
 }
@@ -124,12 +128,4 @@ func (m *Manager) sign(payload string) string {
 	mac := hmac.New(sha256.New, m.secret)
 	mac.Write([]byte(payload))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-}
-
-func isSecureContext(r *http.Request) bool {
-	host := r.Host
-	if idx := strings.IndexByte(host, ':'); idx != -1 {
-		host = host[:idx]
-	}
-	return host != "localhost" && host != "127.0.0.1" && host != "::1"
 }

@@ -17,18 +17,22 @@ var defaultConnectionOptions = &ws.DialOptions{
 	},
 }
 
-func getConnectionOptions(requestHeader http.Header, tlsConfig *tls.Config) *ws.DialOptions {
-	if requestHeader == nil && tlsConfig == nil {
+func getConnectionOptions(requestHeader http.Header, tlsConfig *tls.Config, httpClient *http.Client) *ws.DialOptions {
+	if requestHeader == nil && tlsConfig == nil && httpClient == nil {
 		return defaultConnectionOptions
+	}
+
+	if httpClient == nil {
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: tlsConfig,
+			},
+		}
 	}
 
 	return &ws.DialOptions{
 		HTTPHeader:      requestHeader,
 		CompressionMode: ws.CompressionContextTakeover,
-		HTTPClient: &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: tlsConfig,
-			},
-		},
+		HTTPClient:      httpClient,
 	}
 }

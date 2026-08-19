@@ -10,7 +10,7 @@ import (
 	"github.com/nbd-wtf/go-nostr"
 )
 
-const KindHTTPAuth = 27235
+const KindHTTPAuth = nostr.KindHTTPAuth
 
 const DefaultMaxSkew = 60 * time.Second
 
@@ -32,15 +32,15 @@ func VerifyNIP98Event(event *nostr.Event, expectedURL, expectedMethod string, ma
 	}
 
 	uTag := event.Tags.Find("u")
-	if uTag == nil {
+	if len(uTag) < 2 {
 		return fmt.Errorf("missing required 'u' tag")
 	}
 	if uTag[1] != expectedURL {
 		return fmt.Errorf("URL mismatch: expected %s, got %s", expectedURL, uTag[1])
 	}
 
-	methodTag := event.Tags.Find("method")
-	if methodTag == nil {
+	methodTag := event.Tags.Find(tagMethod)
+	if len(methodTag) < 2 {
 		return fmt.Errorf("missing required 'method' tag")
 	}
 	if !strings.EqualFold(methodTag[1], expectedMethod) {
