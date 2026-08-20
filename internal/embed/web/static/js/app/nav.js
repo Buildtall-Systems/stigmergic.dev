@@ -2,8 +2,13 @@
 // segment is encoded separately so the separators survive. A directory path
 // is relative to its own source, so the row names the source it came from
 // and the server reads the same tree the row was drawn from.
+//
+// A source's root is the empty remainder, never the "." its own tree calls
+// it: a lone "." is cleaned out of a URL path and redirected away before it
+// reaches a handler, so it is dropped here instead of bouncing twice.
 function treeChildrenURL(path, mount) {
-	var url = '/partial/tree/' + path.split('/').map(encodeURIComponent).join('/')
+	var segments = path === '.' ? '' : path.split('/').map(encodeURIComponent).join('/')
+	var url = '/partial/tree/' + segments
 	if (mount) url += '?mount=' + encodeURIComponent(mount)
 	return url
 }
@@ -93,22 +98,44 @@ function handleNavKeydown(evt) {
 	items[nextIdx].focus()
 }
 
-// currentFilePath is the route-relative path of the document on screen, or ''
-// on any page that is not a file view.
+// routeParts splits a pathname into the route prefix of the source serving
+// it and the path inside that source, or null on any page that is not a
+// document view. A vault's prefix carries its owner and its name, so it is
+// three segments deep where the local tree's is one.
+function routeParts(pathname) {
+	if (pathname.indexOf('/file/') === 0) {
+		return {mount: '/file/', path: pathname.slice('/file/'.length)}
+	}
+	if (pathname.indexOf('/vault/') === 0) {
+		var parts = pathname.split('/')
+		if (parts.length < 5) return null
+		return {mount: '/vault/' + parts[2] + '/' + parts[3] + '/', path: parts.slice(4).join('/')}
+	}
+	return null
+}
+
+// currentFilePath is the path of the document on screen inside the primary
+// source, or '' anywhere else. Deliberately blank for a vault document: the
+// only caller hands it to the sidebar partial, which opens the local tree,
+// and a vault's path names nothing that tree holds.
 function currentFilePath() {
-	var pathname = decodeURIComponent(window.location.pathname)
-	if (pathname.indexOf('/file/') !== 0) return ''
-	return pathname.slice('/file/'.length)
+	var route = routeParts(decodeURIComponent(window.location.pathname))
+	if (!route || route.mount !== '/file/') return ''
+	return route.path
 }
 
 // markCurrentFile highlights the row for the document on screen and reports
 // whether it found one. A miss means the row lives in a subtree that has not
 // been fetched.
+//
+// A row is matched on its whole route rather than its path, because two
+// mounted sources can hold the same path and only one of them is on screen.
 function markCurrentFile() {
 	var pathname = decodeURIComponent(window.location.pathname)
 	var found = false
 	document.querySelectorAll('#sidebar [data-path]').forEach(function(item) {
-		var isCurrent = '/file/' + item.getAttribute('data-path') === pathname
+		var mount = item.getAttribute('data-mount') || '/file/'
+		var isCurrent = mount + item.getAttribute('data-path') === pathname
 		item.classList.toggle('tree-item-current', isCurrent)
 		if (isCurrent) {
 			found = true
@@ -124,12 +151,18 @@ function attrValue(s) {
 	return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
-// revealPath materializes the rows leading to a file and opens them. The
-// directories load in sequence because a nested placeholder does not exist in
-// the DOM until its parent's rows have arrived.
-function revealPath(filePath) {
+// revealPath materializes the rows leading to a file inside one mount and
+// opens them. The directories load in sequence because a nested placeholder
+// does not exist in the DOM until its parent's rows have arrived.
+//
+// The chain starts at the source's own root, ".", which is the container a
+// vault row holds and the local tree has none of: the sidebar ships the
+// primary tree's rows already, so that first step finds nothing and costs
+// nothing. Containers are matched on mount as well as path, because two
+// sources can hold a directory of the same name.
+function revealPath(mount, filePath) {
 	var parts = filePath.split('/')
-	var chain = []
+	var chain = ['.']
 	var acc = ''
 	for (var i = 0; i < parts.length - 1; i++) {
 		acc = acc ? acc + '/' + parts[i] : parts[i]
@@ -137,7 +170,9 @@ function revealPath(filePath) {
 	}
 	return chain.reduce(function(prev, dir) {
 		return prev.then(function() {
-			var container = document.querySelector('#sidebar .directory-children[data-children-path="' + attrValue(dir) + '"]')
+			var selector = '#sidebar .directory-children[data-children-path="' + attrValue(dir) + '"]' +
+				'[data-mount="' + attrValue(mount) + '"]'
+			var container = document.querySelector(selector)
 			if (!container) return
 			expandContainer(container)
 			return loadDirectoryChildren(container)
@@ -151,9 +186,9 @@ function revealPath(filePath) {
 // fetches after a swap that changed #content alone.
 function syncCurrentFile() {
 	if (markCurrentFile()) return
-	var filePath = currentFilePath()
-	if (!filePath) return
-	revealPath(filePath).then(markCurrentFile)
+	var route = routeParts(decodeURIComponent(window.location.pathname))
+	if (!route || !route.path) return
+	revealPath(route.mount, route.path).then(markCurrentFile)
 }
 
 var outlineObserver = null

@@ -296,7 +296,7 @@ templ BuildtallLogo() {
 	</svg>
 }
 
-templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, treeView models.TreeView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities, outline []models.OutlineEntry) {
+templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, sidebar models.SidebarView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities, outline []models.OutlineEntry) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -415,7 +415,7 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, treeView mod
 			</header>
 			<div class="flex flex-1 min-h-0">
 				<aside id="sidebar" x-show="sidebarOpen" class="hidden md:block w-64 shrink-0 overflow-y-auto p-3" style="background-color: var(--bg-alt-color); border-right: 1px solid var(--border-color);">
-					@Sidebar(treeView, recentFiles, indexReady, caps)
+					@Sidebar(sidebar, recentFiles, indexReady, caps)
 				</aside>
 				<main id="content" tabindex="0" class="flex-1 min-w-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
 					{ children... }

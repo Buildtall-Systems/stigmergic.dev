@@ -53,6 +53,11 @@ templ treeDirectory(node *models.Node, expanded models.ExpandedDirs, mount strin
 	</div>
 }
 
+// treeFile is one document's row. It carries both halves of the route it
+// links to, the mount and the source-relative path, because the path alone
+// no longer identifies a document: two sources can hold the same path, and
+// the client decides which row belongs to the document on screen by
+// comparing the whole route.
 templ treeFile(node *models.Node, mount string) {
 	<a
 		href={ templ.SafeURL(mount + templ.EscapeString(node.Path)) }
@@ -63,6 +68,7 @@ templ treeFile(node *models.Node, mount string) {
 		hx-push-url="true"
 		data-nav-item
 		data-path={ node.Path }
+		data-mount={ mount }
 	>
 		<svg class="tree-item-icon"><use href="#tree-icon-file"></use></svg>
 		<span class="tree-item-text">{ node.Name }</span>

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +22,7 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/config"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
+	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/source"
 	vaultsrc "github.com/Buildtall-Systems/stigmergic.dev/internal/source/vault"
 )
@@ -214,6 +217,31 @@ func TestVaultDirectoryListsIntoItsOwnMount(t *testing.T) {
 	}
 }
 
+// TestVaultRowExpandsThroughTheTreePartial walks what a click on a vault row
+// does. The row ships one empty container naming the vault's root and its
+// mount; the client asks the tree partial for that mount's root, and the
+// answer is the vault's own top level, every row linking back into the same
+// mount rather than into the local tree beside it.
+func TestVaultRowExpandsThroughTheTreePartial(t *testing.T) {
+	t.Parallel()
+
+	srv, v := serverWithVault(t)
+	mount := vaultMount(v.Owner, v.Name)
+
+	rec := getRoute(t, srv, "/partial/tree/?mount="+url.QueryEscape(mount))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 expanding the vault root, got %d", rec.Code)
+	}
+
+	html := rec.Body.String()
+	if !strings.Contains(html, `data-children-path="thoughts" data-mount="`+mount+`"`) {
+		t.Errorf("the vault's top level does not carry its own mount\nbody: %s", html)
+	}
+	if strings.Contains(html, `data-mount="`+markdown.FileMount+`"`) {
+		t.Error("a vault's rows must not point at the local tree's mount")
+	}
+}
+
 // TestSearchSpansEverySourceAndSaysWhere is ruling 8's window: one corpus,
 // and every result carrying the name of the source holding it.
 func TestSearchSpansEverySourceAndSaysWhere(t *testing.T) {
@@ -290,10 +318,9 @@ func TestLocalDocumentLinksIntoTheVault(t *testing.T) {
 	}
 }
 
-// TestSidebarShowsTheLocalTreeAlone holds Phase 4's boundary: the vault is
-// reachable by route and searchable, and the panel that would show it is the
-// next phase's work.
-func TestSidebarShowsTheLocalTreeAlone(t *testing.T) {
+// TestSidebarShowsBothHalves is the panel end to end: the local tree above
+// and the mounted vault below, each expandable through its own mount.
+func TestSidebarShowsBothHalves(t *testing.T) {
 	t.Parallel()
 
 	srv, v := serverWithVault(t)
@@ -302,8 +329,130 @@ func TestSidebarShowsTheLocalTreeAlone(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200 for the sidebar, got %d", rec.Code)
 	}
-	if strings.Contains(rec.Body.String(), vaultMount(v.Owner, v.Name)) {
-		t.Error("the sidebar shows a vault route, which no panel offers yet")
+
+	html := rec.Body.String()
+	mount := vaultMount(v.Owner, v.Name)
+	if !strings.Contains(html, `aria-label="File tree"`) {
+		t.Error("expected the local tree to keep its landmark")
+	}
+	if !strings.Contains(html, `aria-label="Vaults"`) {
+		t.Error("expected the vault panel to render its own landmark")
+	}
+	if strings.Index(html, `aria-label="Vaults"`) < strings.Index(html, `aria-label="File tree"`) {
+		t.Error("the vault panel belongs below the local tree, not above it")
+	}
+	if !strings.Contains(html, `data-children-path="." data-mount="`+mount+`" data-loaded="false"`) {
+		t.Errorf("expected a collapsed container pointed at %s", mount)
+	}
+	if !strings.Contains(html, `title="`+v.Owner+`"`) {
+		t.Error("expected the whole npub in the row's title attribute")
+	}
+	if !strings.Contains(html, ">"+v.Name+"<") {
+		t.Errorf("expected the vault to be labeled %q", v.Name)
+	}
+	if !strings.Contains(html, ">"+models.ShortNpub(v.Owner)+"<") {
+		t.Error("expected the shortened npub beside the vault name")
+	}
+	if strings.Contains(html, ">"+v.Owner+"<") {
+		t.Error("the whole npub belongs in the title attribute, not in the label")
+	}
+}
+
+// TestSidebarWithoutVaultsIsTodaysPanel holds the promise the split makes to
+// a reader who configured no vaults: the lower half is absent rather than
+// empty, and the upper half renders exactly as it did before.
+func TestSidebarWithoutVaultsIsTodaysPanel(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, fixtureLocalDoc), []byte(fixtureLocalBody), 0o600); err != nil {
+		t.Fatalf("writing the local document: %v", err)
+	}
+	src, err := source.NewFilesystem(dir, false, nil)
+	if err != nil {
+		t.Fatalf("NewFilesystem: %v", err)
+	}
+	srv := newServerWithSource(t, src)
+
+	rec := getRoute(t, srv, "/partial/sidebar")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for the sidebar, got %d", rec.Code)
+	}
+
+	html := rec.Body.String()
+	if !strings.Contains(html, `aria-label="File tree"`) {
+		t.Error("expected the local tree to render")
+	}
+	if strings.Contains(html, `aria-label="Vaults"`) {
+		t.Error("a server with no vault mounted must render no vault panel")
+	}
+	if strings.Contains(html, "/vault/") {
+		t.Error("a server with no vault mounted must name no vault route")
+	}
+}
+
+// npubFixture derives one real npub. No identifier in these tests is written
+// by hand: a bech32 string no key ever produced would satisfy a comparison
+// here and fail everything that decodes it.
+func npubFixture(t *testing.T) string {
+	t.Helper()
+
+	pub, err := nostr.GetPublicKey(nostr.GeneratePrivateKey())
+	if err != nil {
+		t.Fatalf("deriving a vault owner: %v", err)
+	}
+	npub, err := nip19.EncodePublicKey(pub)
+	if err != nil {
+		t.Fatalf("encoding a vault owner: %v", err)
+	}
+	return npub
+}
+
+// vaultDescribed is a vault reduced to what the panel reads off it.
+func vaultDescribed(name, owner string) *vaultsrc.Vault {
+	return &vaultsrc.Vault{Descriptor: vaultsrc.Descriptor{Name: name, Owner: owner}}
+}
+
+// TestVaultEntriesSortByNameThenOwner pins the panel's order against
+// discovery's: relays answer in whatever order they answer, and the rows
+// must not rearrange as they do. The two owners are real npubs put in the
+// order they sort, so the expectation names an order rather than assuming
+// one of two random keys wins.
+func TestVaultEntriesSortByNameThenOwner(t *testing.T) {
+	t.Parallel()
+
+	first, second := npubFixture(t), npubFixture(t)
+	if first > second {
+		first, second = second, first
+	}
+
+	srv := &Server{mounts: []*mount{
+		{prefix: markdown.FileMount},
+		{vault: vaultDescribed("notes", second), prefix: vaultMount(second, "notes")},
+		{vault: vaultDescribed("archive", second), prefix: vaultMount(second, "archive")},
+		{vault: vaultDescribed("notes", first), prefix: vaultMount(first, "notes")},
+	}}
+
+	entries := srv.vaultEntries()
+	got := make([]string, 0, len(entries))
+	for _, e := range entries {
+		got = append(got, e.Name+" "+e.Owner)
+	}
+	want := []string{"archive " + second, "notes " + first, "notes " + second}
+	if !slices.Equal(got, want) {
+		t.Errorf("expected the rows in order %v, got %v", want, got)
+	}
+}
+
+// TestVaultEntriesLeaveThePrimaryOut holds the panel's boundary: it lists
+// fetched vaults, and the local tree is the half above it.
+func TestVaultEntriesLeaveThePrimaryOut(t *testing.T) {
+	t.Parallel()
+
+	srv := &Server{mounts: []*mount{{prefix: markdown.FileMount}}}
+
+	if entries := srv.vaultEntries(); len(entries) != 0 {
+		t.Errorf("expected no vault rows for a server with only its primary source, got %v", entries)
 	}
 }
 

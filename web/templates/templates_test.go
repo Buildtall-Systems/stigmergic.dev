@@ -60,7 +60,7 @@ func TestHomeRendersWithoutTree(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(models.TreeView{}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(localPanel(models.TreeView{}), "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestHomeRendersWithEmptyTree(t *testing.T) {
 
 	tree := &models.Tree{}
 	var sb strings.Builder
-	err := Home(models.TreeView{Tree: tree}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(localPanel(models.TreeView{Tree: tree}), "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestHomeRendersWithTree(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(models.TreeView{Tree: tree}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(localPanel(models.TreeView{Tree: tree}), "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -151,11 +151,17 @@ func nestedTestTree() *models.Tree {
 // primary source answers at.
 const testMount = "/file/"
 
+// localPanel is the sidebar a test renders when it cares about the local
+// tree alone: the primary source's view with no vault mounted beneath it.
+func localPanel(view models.TreeView) models.SidebarView {
+	return models.SidebarView{Primary: view}
+}
+
 func renderHomeTree(t *testing.T, view models.TreeView) string {
 	t.Helper()
 
 	var sb strings.Builder
-	err := Home(view, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
+	err := Home(localPanel(view), "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 1, true, models.UICapabilities{RecentlyUpdated: true, GitignoreToggle: true, CopyPath: true}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -241,7 +247,7 @@ func TestLayoutRendersThreePaneLandmarks(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(models.TreeView{}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(localPanel(models.TreeView{}), "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -279,7 +285,7 @@ func TestTreeLinksCarryDataPathAndContentTarget(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Home(models.TreeView{Tree: tree}, "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(localPanel(models.TreeView{Tree: tree}), "/test/path", testTheme(), testThemes(), []models.SearchableFile{}, 1, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -301,7 +307,7 @@ func TestLayoutFollowToggleGatedOnCapability(t *testing.T) {
 
 	renderHome := func(caps models.UICapabilities) string {
 		var sb strings.Builder
-		err := Home(models.TreeView{}, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, caps).Render(context.Background(), &sb)
+		err := Home(localPanel(models.TreeView{}), testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, caps).Render(context.Background(), &sb)
 		if err != nil {
 			t.Fatalf("failed to render: %v", err)
 		}
@@ -325,7 +331,7 @@ func TestMarkdownFullPageRendersOutlineRail(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), testThemes(), models.TreeView{}, []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline, nil).Render(context.Background(), &sb)
+	err := Markdown("doc.md", nil, "<p>hi</p>", "hi", testTreeRoot, "", testTheme(), testThemes(), localPanel(models.TreeView{}), []models.SearchableFile{}, true, nil, nil, models.UICapabilities{}, outline, nil).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -346,7 +352,7 @@ func TestLayoutOutlineRailEmptyWithoutEntries(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(models.TreeView{}, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(localPanel(models.TreeView{}), testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -430,7 +436,7 @@ func TestLayoutEmitsThemeSwitchingScaffolding(t *testing.T) {
 	t.Parallel()
 
 	var sb strings.Builder
-	err := Home(models.TreeView{}, testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
+	err := Home(localPanel(models.TreeView{}), testTreeRoot, testTheme(), testThemes(), []models.SearchableFile{}, 0, 0, true, models.UICapabilities{}).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}

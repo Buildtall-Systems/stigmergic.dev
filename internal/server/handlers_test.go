@@ -975,6 +975,33 @@ func TestTreePartialRendersOneDirectory(t *testing.T) {
 	}
 }
 
+// A source's root has no path segment, so the bare route is what a vault row
+// asks for when it is first opened. It answers with the top level and
+// nothing below it, the same one-level contract every other directory gets.
+func TestTreePartialServesTheSourceRoot(t *testing.T) {
+	t.Parallel()
+
+	srv := treePartialServer(t)
+
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/partial/tree/", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for the source root, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "top.md") {
+		t.Errorf("expected the root's own file, got: %s", body)
+	}
+	if !strings.Contains(body, `data-children-path="docs" data-mount="/file/" data-loaded="false"`) {
+		t.Errorf("expected the root's directory to render as an unloaded placeholder, got: %s", body)
+	}
+	if strings.Contains(body, "guide.md") {
+		t.Error("the partial must render one level; a nested file means it recursed")
+	}
+}
+
 func TestTreePartialRejectsNonCanonicalAndUnknownPaths(t *testing.T) {
 	t.Parallel()
 
@@ -982,7 +1009,6 @@ func TestTreePartialRejectsNonCanonicalAndUnknownPaths(t *testing.T) {
 
 	for _, path := range []string{
 		"/partial/tree/docs/",
-		"/partial/tree/",
 		"/partial/tree/nosuchdir",
 		"/partial/tree/top.md",
 	} {

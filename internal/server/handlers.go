@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -68,12 +69,16 @@ func (s *Server) setupRoutes() {
 // pattern the mux needs for all of them.
 const vaultRoutePrefix = "/vault/"
 
-// uiData gathers what a page render needs from the primary source: the tree
-// the sidebar draws, how many documents it holds, its recently updated
-// documents, and whether the background scan has finished. The sidebar
-// describes the primary source alone, so the corpus-wide caches are read
-// where they are used rather than here.
-func (s *Server) uiData() (*models.Tree, int, []models.SearchableFile, bool) {
+// uiData gathers what a page render needs for the left panel: the primary
+// source's tree and the vaults mounted beneath it, how many documents the
+// primary holds, its recently updated documents, and whether the background
+// scan has finished. The corpus-wide caches are read where they are used
+// rather than here, because only search and backlinks span every source.
+//
+// The panel comes back fully collapsed. A caller showing a document opens
+// it to that document with expandTo, which is the one thing that differs
+// between one page render and the next.
+func (s *Server) uiData() (models.SidebarView, int, []models.SearchableFile, bool) {
 	primary := s.primary()
 
 	s.treeMux.RLock()
@@ -89,7 +94,38 @@ func (s *Server) uiData() (*models.Tree, int, []models.SearchableFile, bool) {
 		recentFiles = routedFiles(primary.prefix, s.computeRecentFiles(files))
 	}
 
-	return tree, len(files), recentFiles, s.IsIndexReady()
+	view := models.SidebarView{
+		Primary: models.TreeView{Tree: tree, Mount: primary.prefix},
+		Vaults:  s.vaultEntries(),
+	}
+
+	return view, len(files), recentFiles, s.IsIndexReady()
+}
+
+// vaultEntries names the mounted vaults for the panel's lower half, in an
+// order the reader can rely on. Discovery mounts a vault as its relays
+// answer, which is an order no one should have to watch rearrange, so the
+// rows sort by name and then by owner: two owners publishing the same vault
+// name sit together, and neither one moves when the other arrives.
+func (s *Server) vaultEntries() []models.VaultEntry {
+	var entries []models.VaultEntry
+	for _, m := range s.mountList() {
+		if m.vault == nil {
+			continue
+		}
+		entries = append(entries, models.VaultEntry{
+			Name:  m.vault.Name,
+			Owner: m.vault.Owner,
+			Mount: m.prefix,
+		})
+	}
+	slices.SortFunc(entries, func(a, b models.VaultEntry) int {
+		if byName := strings.Compare(a.Name, b.Name); byName != 0 {
+			return byName
+		}
+		return strings.Compare(a.Owner, b.Owner)
+	})
+	return entries
 }
 
 // pageCaps blends the two places a page's affordances come from: those
@@ -129,13 +165,18 @@ func canonicalPath(p string) (string, bool) {
 	return cleaned, true
 }
 
-// treeViewFor pairs the tree with the mount its rows link through and the
-// directories that render expanded, which are those containing filePath.
-// Every other directory ships as a placeholder, so the cold sidebar is
-// proportional to what is visible rather than to the corpus. An empty
-// filePath collapses everything below the root.
-func treeViewFor(tree *models.Tree, mount, filePath string) models.TreeView {
-	return models.TreeView{Tree: tree, Mount: mount, Expanded: models.AncestorDirs(filePath)}
+// expandTo opens the panel's local tree to a document: the directories
+// containing filePath render with their children, and every other directory
+// ships as a placeholder the client fills on first expand. That is what
+// keeps the cold sidebar proportional to what is visible rather than to the
+// corpus. An empty filePath collapses everything below the root.
+//
+// Only the local tree is opened. A vault row is drawn collapsed whatever is
+// on screen, and the client reveals the row for a vault document it is
+// displaying by walking that vault's own mount.
+func expandTo(view models.SidebarView, filePath string) models.SidebarView {
+	view.Primary.Expanded = models.AncestorDirs(filePath)
+	return view
 }
 
 func countDirs(node *models.Node) int {
@@ -164,11 +205,11 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tree, fileCount, recentFiles, indexReady := s.uiData()
+	view, fileCount, recentFiles, indexReady := s.uiData()
 
 	var dirCount int
-	if tree != nil {
-		dirCount = countDirs(tree.Root)
+	if view.Primary.Tree != nil {
+		dirCount = countDirs(view.Primary.Tree.Root)
 	}
 
 	primary := s.primary()
@@ -181,7 +222,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		s.renderOutlineOOB(w, r, nil)
 	} else {
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(treeViewFor(tree, s.primary().prefix, ""), primary.src.Name(), s.theme, s.themes, recentFiles, fileCount, dirCount, indexReady, primary.caps).Render(r.Context(), w); err != nil {
+		if err := templates.Home(view, primary.src.Name(), s.theme, s.themes, recentFiles, fileCount, dirCount, indexReady, primary.caps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
 	}
@@ -212,7 +253,7 @@ func (s *Server) handleRecentPartial(w http.ResponseWriter, r *http.Request) {
 // filesystem, so a non-canonical one is dropped and the tree renders collapsed
 // rather than the request failing.
 func (s *Server) handleSidebarPartial(w http.ResponseWriter, r *http.Request) {
-	tree, _, recentFiles, indexReady := s.uiData()
+	view, _, recentFiles, indexReady := s.uiData()
 
 	var current string
 	if raw := r.URL.Query().Get("path"); raw != "" {
@@ -224,7 +265,7 @@ func (s *Server) handleSidebarPartial(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := components.Sidebar(treeViewFor(tree, s.primary().prefix, current), recentFiles, indexReady, s.primary().caps).Render(r.Context(), w); err != nil {
+	if err := components.Sidebar(expandTo(view, current), recentFiles, indexReady, s.primary().caps).Render(r.Context(), w); err != nil {
 		logger.Log.Error("failed to render sidebar partial", "error", err)
 	}
 }
@@ -236,11 +277,19 @@ func (s *Server) handleSidebarPartial(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTreePartial(w http.ResponseWriter, r *http.Request) {
 	dirPath := strings.TrimPrefix(r.URL.Path, "/partial/tree/")
 
-	cleaned, ok := canonicalPath(dirPath)
-	if !ok {
-		logger.Log.Warn("invalid tree path", "path", dirPath)
-		http.NotFound(w, r)
-		return
+	// A source's root is named by the empty remainder rather than by ".",
+	// which never survives the trip: the mux cleans a lone "." out of the
+	// request path and redirects before any handler sees it. The tree
+	// knows its root as ".", so that is what the empty remainder becomes.
+	cleaned := "."
+	if dirPath != "" {
+		var pathOK bool
+		cleaned, pathOK = canonicalPath(dirPath)
+		if !pathOK {
+			logger.Log.Warn("invalid tree path", "path", dirPath)
+			http.NotFound(w, r)
+			return
+		}
 	}
 
 	// The directory path alone no longer says which tree it belongs to, so
@@ -347,7 +396,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	isHTMX := isHTMXRequest(r)
 	caps := s.pageCaps(m)
 
-	tree, _, recentFiles, indexReady := s.uiData()
+	view, _, recentFiles, indexReady := s.uiData()
 
 	if info.IsDir() {
 		s.treeMux.RLock()
@@ -370,9 +419,9 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			logger.Log.Debug("rendering full directory page")
 			// A directory page shows its own contents, so the directory
 			// itself joins its ancestors in the expansion.
-			view := treeViewFor(tree, s.primary().prefix, s.expansionFor(m, filePath))
+			view = expandTo(view, s.expansionFor(m, filePath))
 			if m == s.primary() {
-				view.Expanded.Add(filePath)
+				view.Primary.Expanded.Add(filePath)
 			}
 			if renderErr := templates.Directory(title, breadcrumbs, node, m.src.Name(), m.prefix, s.theme, s.themes, view, recentFiles, indexReady, caps).Render(r.Context(), w); renderErr != nil {
 				logger.Log.Error("failed to render directory template", "error", renderErr)
@@ -445,7 +494,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 		s.renderOutlineOOB(w, r, outline)
 	} else {
 		logger.Log.Debug("rendering full page")
-		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), m.src.Name(), relativePath, s.theme, s.themes, treeViewFor(tree, s.primary().prefix, s.expansionFor(m, filePath)), recentFiles, indexReady, fileBacklinks, meta, caps, outline, transcluded).Render(r.Context(), w); renderErr != nil {
+		if renderErr := templates.Markdown(title, breadcrumbs, string(html), string(content), m.src.Name(), relativePath, s.theme, s.themes, expandTo(view, s.expansionFor(m, filePath)), recentFiles, indexReady, fileBacklinks, meta, caps, outline, transcluded).Render(r.Context(), w); renderErr != nil {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}

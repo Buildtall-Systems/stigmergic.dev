@@ -2,18 +2,61 @@ package components
 
 import "github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 
-templ Sidebar(view models.TreeView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
+// Sidebar is the left panel, split: the primary source's tree on top, the
+// mounted vaults below it, and the recently updated list at the foot. The
+// two trees are separate landmarks because they are browsed separately,
+// each row linking through its own mount, and a reader with no vault
+// mounted sees exactly the panel they saw before the lower half existed.
+templ Sidebar(view models.SidebarView, recentFiles []models.SearchableFile, indexReady bool, caps models.UICapabilities) {
 	<nav aria-label="File tree">
 		if !indexReady {
 			<p class="px-3 py-2 text-sm" style="color: var(--comment-color);">Indexing...</p>
-		} else if view.Tree == nil || view.Tree.Root == nil {
+		} else if view.Primary.Tree == nil || view.Primary.Tree.Root == nil {
 			<p class="px-3 py-2 text-sm" style="color: var(--comment-color);">No markdown files found.</p>
 		} else {
-			@Tree(view.Tree.Root, view.Expanded, view.Mount)
+			@Tree(view.Primary.Tree.Root, view.Primary.Expanded, view.Primary.Mount)
 		}
 	</nav>
+	@VaultPanel(view.Vaults)
 	<div id="recent">
 		@SidebarRecent(recentFiles, caps)
+	</div>
+}
+
+// VaultPanel is the sidebar's lower half: one row per mounted vault, each
+// collapsed until it is opened, at which point its rows arrive from the
+// same tree partial the local tree's directories use, pointed at that
+// vault's own mount. Nothing renders when no vault is mounted, so an empty
+// panel is an absent panel rather than a message about one.
+templ VaultPanel(vaults []models.VaultEntry) {
+	if len(vaults) > 0 {
+		<nav aria-label="Vaults" class="mt-6 pt-4" style="border-top: 1px solid var(--border-color);">
+			<h3 class="px-3 mb-2 text-xs font-semibold uppercase tracking-wider" style="color: var(--comment-color);">Vaults</h3>
+			for _, v := range vaults {
+				@vaultRow(v)
+			}
+		</nav>
+	}
+}
+
+// vaultRow is a vault's root drawn as a directory row. The container below
+// it names the vault's root by the path its own tree calls it, ".", and the
+// mount it belongs to, which is all nav.js needs to fill it from the tree
+// partial on first expand. The whole npub sits in the title attribute; the
+// label carries the shortened form.
+templ vaultRow(v models.VaultEntry) {
+	<div class="flex flex-col">
+		<div class="flex items-center cursor-pointer" data-expanded="false" onclick="toggleDirectory(this)" title={ v.Owner }>
+			<div class="chevron-btn p-1 mr-1">
+				<svg class={ chevronClass(false) }><use href="#tree-icon-chevron"></use></svg>
+			</div>
+			<div class="tree-item group flex-1 min-w-0">
+				<svg class="tree-item-icon"><use href="#tree-icon-folder"></use></svg>
+				<span class="tree-item-text tree-item-folder truncate">{ v.Name }</span>
+				<span class="text-xs truncate" style="color: var(--comment-color);">{ v.ShortOwner() }</span>
+			</div>
+		</div>
+		<div class="directory-children" data-children-path="." data-mount={ v.Mount } data-loaded="false" style="display: none;"></div>
 	</div>
 }
 
