@@ -2,6 +2,44 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-08-20
+
+### vault reader Phase 5: the split panel
+
+The left panel splits on `feature/vault-reader`. The primary source's
+tree keeps the top half; the mounted vaults sit below it, labeled by
+name and shortened npub, expanding through the existing tree partial
+pointed at each vault's own mount.
+
+- `internal/models/sidebar.go`: `SidebarView` carries both halves
+  through the layout, replacing the bare `TreeView` every page render
+  used to take. `VaultEntry` is one row (name, whole npub, route
+  prefix) and `ShortNpub` is its label form, the whole value riding the
+  row's `title` attribute.
+- `internal/server/handlers.go`: `vaultEntries` sorts by name then
+  owner so rows do not rearrange as relays answer; `uiData` returns the
+  panel whole; `expandTo` replaces `treeViewFor`, opening the local
+  tree to the document on screen and leaving the vault rows collapsed.
+- The tree partial serves a source's root at its bare route. A lone "."
+  never survives the trip: the mux cleans it out of the request path
+  and redirects before any handler sees it, so the empty remainder
+  names the root and becomes the tree's own ".". The client drops the
+  "." rather than bouncing through two redirects.
+- A tree row now carries `data-mount` beside `data-path`, and `nav.js`
+  matches the current document on the whole route rather than the path
+  alone, because two sources can hold the same path and only one of
+  them is on screen. `revealPath` walks one mount, starting at that
+  source's root, which is how a vault document's row is revealed after
+  a swap.
+- Tests: the Phase 4 boundary test is flipped
+  (`TestSidebarShowsBothHalves`), joined by the empty-config case, the
+  ordering case over real npubs derived at run time, the vault root
+  expansion walk, and the tree partial's new root route.
+
+Battery green in the worktree (`make lint`, `make test` with `-race`,
+`make build`). Commit 18b33e4. Halt: Phase 5 awaits review, and the
+final verification and live acceptance follow it.
+
 ## 2026-08-19
 
 ### vault reader Phase 4: the multi-source server
