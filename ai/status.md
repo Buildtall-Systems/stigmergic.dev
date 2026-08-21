@@ -4,6 +4,35 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-08-21
 
+### vault reader: dangling CommonMark links render unresolved
+
+The operator's ruling from live acceptance step 2 is implemented, on
+authorization: a relative CommonMark destination the vault declares
+absent renders as the `wikilink-unresolved` span instead of an anchor
+the browser would resolve into a 404. Commit 1a2f3b2.
+
+- `markdown.AbsenceReporter` is the authority seam. Only a source whose
+  index covers assets implements it: `vault.Resolver.RouteAbsent`
+  answers from its own `ResolveRoute`, the corpus `TreeResolver` stays
+  silent, so every working local asset link is untouched. `Chain`
+  forwards to its first reporting member.
+- The route transformer marks the declined link node with an AST
+  attribute; `LinkRenderer` emits the span. Links only: images are
+  never marked, and absolute or scheme'd destinations are never judged.
+- New coverage: `TestAbsentRelativeDestinationsRenderUnresolved`,
+  `TestChainForwardsAbsenceToItsFirstReporter`,
+  `TestAdapterDeclaresAbsenceOnlyForWhatItDoesNotHold`.
+- Both batteries re-run green under `nix develop`: stigmergic `make
+  lint`/`test`/`build` at the new head, the monorepo
+  `lint`/`test`/`build-all` at 1999f06, and `nix build .#default`
+  still produces stigmergic-0.6.1 with `vendorHash = null`. Criterion 6
+  re-verified through the vault render tests plus the new three.
+
+Next: live acceptance re-check of the 401k PDF document, whose link
+must now render as an unresolved span. Integration waits on its own
+instruction.
+
+
 ### vault reader: Phase 5 approved, Final Verification walked
 
 Phase 5 approved by the operator after a local run of the split panel.
