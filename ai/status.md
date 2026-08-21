@@ -2,6 +2,48 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-08-21
+
+### vault reader: Phase 5 approved, Final Verification walked
+
+Phase 5 approved by the operator after a local run of the split panel.
+The plan's nine technical acceptance criteria are walked and all hold.
+Nothing is integrated; both branches stand where they were.
+
+- Batteries green under `nix develop`: the monorepo at 1999f06 (`make
+  lint` zero findings, `make test` with `-race -failfast`, `make
+  build-all`) and stigmergic at 8b19982 (`make lint`, `make test`,
+  `make build`).
+- The Nix package builds with `vendorHash = null`, the one criterion no
+  test covers. `nix build .#default` produces stigmergic-0.6.1.
+- The okf-server fixpoint is `TestReconcileRoundTripsTheServerStatement`
+  in btk/okf: the root sidecar states the server, the plan carries it
+  onto the root event, and a re-reconcile against the published state
+  emits zero events. `TestExportVaultCarriesTheServerIntoTheRootSidecar`
+  proves the inverse direction.
+- Vault render is covered by `TestVaultDocumentRendersFromItsOwnMount`
+  and `TestBundleToRenderWalk`, the second asserting that wikilink hrefs
+  land inside the mount and a dangling target renders as
+  `wikilink-unresolved`. CommonMark destinations, fragments, and images
+  each carry their own adapter test; transclusion reads through the fs
+  in `TestEmbedSourceReadsNotesThroughTheFS`.
+- Search and backlinks cross the local-vault boundary in
+  `TestSearchSpansEverySourceAndSaysWhere`, `TestBacklinksCrossMounts`,
+  and `TestBacklinkIndexSpansMounts`.
+- Affordances gate on the source serving the page,
+  `TestPageCapsGateOnTheSourceServingThePage`: a vault page offers no
+  copy-path and no follow mode, while the gitignore toggle and the
+  recent list stay with the primary source.
+
+Integration correction found during verification: the monorepo's develop
+has advanced 15 commits past feature/okf-server's base, so that branch
+no longer fast-forwards. It needs a rebase onto 8d4bbd8 first, and the
+rebase rewrites 1999f06, the commit stigmergic's go.mod pins. None of
+the 15 commits touch btk/okf or btk/nostr.
+
+Halt: the four live acceptance steps are operator-driven and unstarted.
+Integration awaits a separate instruction naming it.
+
 ## 2026-08-20
 
 ### vault reader Phase 5: the split panel
