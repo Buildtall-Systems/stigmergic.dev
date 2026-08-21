@@ -44,6 +44,30 @@ the 15 commits touch btk/okf or btk/nostr.
 Halt: the four live acceptance steps are operator-driven and unstarted.
 Integration awaits a separate instruction naming it.
 
+### vault reader live acceptance step 1: memex states its store
+
+The memex root on ithaca now carries the `okf-server` tag. The plan named
+the production Blossom store; the standing ruling keeps memex on ithaca
+and local stores only, and the publish config already recorded that in
+its own comments, so the tag names `http://127.0.0.1:3000`.
+
+- The tag went on the root sidecar of
+  `scratch/vault-publish/bundles/vault-memex/.okf.yaml` as a `nostr_tags`
+  entry. Of the three memex bundles under scratch that one is the only
+  publishable candidate; the other two are `format_version: 1`, which the
+  publisher refuses outright rather than erase tags it cannot state.
+- Publish reported `1 events, 0 deletions, 0 uploads, 2326 unchanged`.
+  One event, the kind 30101 root. No uploads, so every referenced
+  attachment already sat in the local store.
+- The confirming dry run reports `0 events, 0 deletions, 0 uploads, 2327
+  unchanged`. The root moved from changed to unchanged, which is the
+  fixpoint the okf-server arc exists to hold, now proven on the wire and
+  not only in `TestReconcileRoundTripsTheServerStatement`.
+
+Steps 2 through 4 remain: serve with ithaca configured and sign in, open a
+wikilink-dense memex document and confirm an attachment image resolves
+from the stated store, then search a term living in both sources.
+
 ## 2026-08-20
 
 ### vault reader Phase 5: the split panel
