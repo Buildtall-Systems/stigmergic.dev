@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/a-h/templ v0.3.1020
 	github.com/alecthomas/chroma/v2 v2.23.1
-	github.com/buildtall-systems/buildtall v0.0.0-20260819133600-1999f06ede4b
+	github.com/buildtall-systems/buildtall v0.0.0-20260821175037-f1065a40e0bf
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/github-tijlxyz/goldmark-nostr v0.2.0
 	github.com/nbd-wtf/go-nostr v0.52.3

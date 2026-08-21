@@ -39,8 +39,8 @@ github.com/btcsuite/snappy-go v0.0.0-20151229074030-0bdef8d06723/go.mod h1:8woku
 github.com/btcsuite/snappy-go v1.0.0/go.mod h1:8woku9dyThutzjeg+3xrA5iCpBRH8XEEg3lh6TiUghc=
 github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792/go.mod h1:ghJtEyQwv5/p4Mg4C0fgbePVuGr935/5ddU9Z3TmDRY=
 github.com/btcsuite/winsvc v1.0.0/go.mod h1:jsenWakMcC0zFBFurPLEAyrnc/teJEM1O46fmI40EZs=
-github.com/buildtall-systems/buildtall v0.0.0-20260819133600-1999f06ede4b h1:BZOikUkn7+re80PtOUTXwRIlWxjur7GAdePfKBvqGWk=
-github.com/buildtall-systems/buildtall v0.0.0-20260819133600-1999f06ede4b/go.mod h1:3WFGRXFsvJQ9iMgSjeGCBQzj6QseKLtV/tYC+/GwLzY=
+github.com/buildtall-systems/buildtall v0.0.0-20260821175037-f1065a40e0bf h1:4IlNYok0YIRxgGyeKLZa//R8yg1QmL75QiMmLfiI20s=
+github.com/buildtall-systems/buildtall v0.0.0-20260821175037-f1065a40e0bf/go.mod h1:3WFGRXFsvJQ9iMgSjeGCBQzj6QseKLtV/tYC+/GwLzY=
 github.com/bytedance/sonic v1.13.2 h1:8/H1FempDZqC4VqjptGo14QQlJx8VdZJegxs6wwfqpQ=
 github.com/bytedance/sonic v1.13.2/go.mod h1:o68xyaF9u2gvVBuGHPlUVCy+ZfmNNO5ETf1+KgkJhz4=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=
