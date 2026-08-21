@@ -4,6 +4,23 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-08-21
 
+### v0.7.0 released
+
+VERSION bumped to 0.7.0 on `feature/version-0.7.0` (af17e68), battery
+green after the recorded fresh-worktree init and a lint cache clean
+(the removed vault-reader worktree was still in the cache, the known
+recurrence), `nix build` stamping stigmergic-0.7.0. Integrated ff-only,
+then `make release` from the root checkout: tag v0.7.0 at af17e68,
+pushed to the forge, goreleaser publishing five platform archives and
+checksums to GitHub.
+
+One misfire caught by verification: goreleaser's API call created
+GitHub's tag at c7ff66b because af17e68 was not yet reachable there;
+the annotated tag was force-pushed over it and both remotes now peel
+v0.7.0 to af17e68. Next release, push the release commit to GitHub
+before goreleaser runs.
+
+
 ### master advanced to c7ff66b and pushed
 
 On instruction, master fast-forwarded `8494597..c7ff66b`, publishing the
