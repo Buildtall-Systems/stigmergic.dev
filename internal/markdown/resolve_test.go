@@ -12,6 +12,7 @@ import (
 const (
 	vaultTestMount = "/vault/npub1example/notes/"
 	noteFile       = "note.md"
+	heldDoc        = "docs/target.md"
 )
 
 // entriesFor names one source's documents the way the server does before
@@ -126,7 +127,7 @@ func TestCommonMarkDestinationsResolveThroughTheSeam(t *testing.T) {
 	t.Parallel()
 
 	resolver := NewRouteResolver([]RouteEntry{
-		{Path: "docs/target.md", Route: FileMount + "docs/target.md"},
+		{Path: heldDoc, Route: FileMount + heldDoc},
 		{Path: "media/photo.png", Route: FileMount + "media/photo.png"},
 	})
 
@@ -195,5 +196,78 @@ func TestRelativeDestination(t *testing.T) {
 		if got := relativeDestination(tt.target); got != tt.want {
 			t.Errorf("relativeDestination(%q) = %v, want %v", tt.target, got, tt.want)
 		}
+	}
+}
+
+// reportingResolver gives a route resolver the vault's absence authority:
+// whatever it cannot resolve it declares absent.
+type reportingResolver struct {
+	*TreeResolver
+}
+
+func (r reportingResolver) RouteAbsent(target string) bool {
+	_, ok := r.ResolveRoute(target)
+	return !ok
+}
+
+// TestAbsentRelativeDestinationsRenderUnresolved is the operator's ruling:
+// an unclaimed relative CommonMark destination the source declares absent is
+// a dead link, shown the way a dangling wikilink is shown, never an anchor
+// the browser would resolve into a 404. Everything the reporter has no
+// authority over stays exactly as written: absolute paths, scheme'd URLs,
+// and images.
+func TestAbsentRelativeDestinationsRenderUnresolved(t *testing.T) {
+	t.Parallel()
+
+	resolver := reportingResolver{NewRouteResolver([]RouteEntry{
+		{Path: heldDoc, Route: FileMount + heldDoc},
+	})}
+
+	body := "[held](docs/target.md) [gone](docs/nowhere.md) ![absent](media/nothing.png)\n\n" +
+		"[rooted](/rooted.md) [away](https://example.com/gone.md)\n"
+
+	html, _, err := Parse([]byte(body), resolver, nil)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	page := string(html)
+
+	if !strings.Contains(page, `<span class="wikilink-unresolved">gone</span>`) {
+		t.Errorf("an absent relative link must render as the dead-link span\npage: %s", page)
+	}
+	if strings.Contains(page, `href="docs/nowhere.md"`) {
+		t.Errorf("an absent relative link must not render as an anchor\npage: %s", page)
+	}
+	for _, want := range []string{
+		`href="` + FileMount + `docs/target.md"`,
+		`src="media/nothing.png"`,
+		`href="/rooted.md"`,
+		`href="https://example.com/gone.md"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the rendered page lacks %s\npage: %s", want, page)
+		}
+	}
+}
+
+// TestChainForwardsAbsenceToItsFirstReporter pins where absence authority
+// lives: with the first member able to speak, and nowhere in a chain whose
+// members index documents alone.
+func TestChainForwardsAbsenceToItsFirstReporter(t *testing.T) {
+	t.Parallel()
+
+	held := NewRouteResolver([]RouteEntry{{Path: noteFile, Route: vaultTestMount + noteFile}})
+
+	silent := Chain{held}
+	if silent.RouteAbsent("nowhere.md") {
+		t.Error("a chain with no reporting member has no authority to declare absence")
+	}
+
+	speaking := Chain{reportingResolver{held}, NewRouteResolver(nil)}
+	if !speaking.RouteAbsent("nowhere.md") {
+		t.Error("the reporting member's absence verdict must carry through the chain")
+	}
+	if speaking.RouteAbsent(noteFile) {
+		t.Errorf("%s is held and must not be declared absent", noteFile)
 	}
 }

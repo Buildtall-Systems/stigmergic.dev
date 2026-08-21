@@ -20,6 +20,15 @@ type RouteResolver interface {
 	ResolveRoute(target string) (string, bool)
 }
 
+// AbsenceReporter declares a target absent from what a source holds. Only a
+// source whose index covers assets as well as documents may implement it:
+// the corpus-wide tree resolver indexes .md files alone, so a destination it
+// declines may still name a file the server serves, and it stays silent
+// rather than break every working relative asset link.
+type AbsenceReporter interface {
+	RouteAbsent(target string) bool
+}
+
 // Chain resolves through its members in order, taking the first destination
 // offered. It is what lets a document link out of its own source: the source
 // answers first, so a name it holds always wins, and the corpus-wide
@@ -29,6 +38,7 @@ type Chain []wikilink.Resolver
 var (
 	_ wikilink.Resolver = Chain(nil)
 	_ RouteResolver     = Chain(nil)
+	_ AbsenceReporter   = Chain(nil)
 )
 
 // ResolveWikilink answers with the first member that offers a destination. A
@@ -67,6 +77,25 @@ func (c Chain) ResolveRoute(target string) (string, bool) {
 	return "", false
 }
 
+// RouteAbsent forwards to the first member able to declare absence, which
+// mirrors resolution order: the source serving the document speaks first. A
+// chain with no reporting member has no authority to declare anything absent
+// and reports false, leaving the destination verbatim.
+func (c Chain) RouteAbsent(target string) bool {
+	for _, r := range c {
+		if reporter, ok := r.(AbsenceReporter); ok {
+			return reporter.RouteAbsent(target)
+		}
+	}
+	return false
+}
+
+// unresolvedAttr marks a link node whose relative destination the serving
+// source declared absent. The link renderer reads the mark and emits the
+// span wikilinks already use for a dangling target, instead of an anchor the
+// browser would resolve against the page URL into a 404.
+const unresolvedAttr = "okf-unresolved"
+
 // routeTransformer rewrites relative CommonMark link and image destinations
 // to the routes the corpus serves them at.
 //
@@ -79,7 +108,10 @@ type routeTransformer struct {
 }
 
 // Transform rewrites every destination the resolver claims. A destination it
-// does not claim is left exactly as the author wrote it.
+// does not claim is left exactly as the author wrote it, with one exception:
+// a relative link destination the resolver declares absent is marked
+// unresolved. Images are never marked: a broken image already fails visibly,
+// and replacing <img> would take a custom image renderer.
 func (t *routeTransformer) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
 	if err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
@@ -89,6 +121,8 @@ func (t *routeTransformer) Transform(doc *ast.Document, _ text.Reader, _ parser.
 		case *ast.Link:
 			if route, ok := t.resolve(node.Destination); ok {
 				node.Destination = route
+			} else if t.absent(node.Destination) {
+				node.SetAttributeString(unresolvedAttr, true)
 			}
 		case *ast.Image:
 			if route, ok := t.resolve(node.Destination); ok {
@@ -114,6 +148,22 @@ func (t *routeTransformer) resolve(destination []byte) ([]byte, bool) {
 		return nil, false
 	}
 	return []byte(route), true
+}
+
+// absent reports whether a declined destination names something the serving
+// source has declared it does not hold. Only a relative destination can be
+// judged: an absolute path, a scheme'd URL, and a bare fragment all name
+// their target without the corpus's help and are never marked.
+func (t *routeTransformer) absent(destination []byte) bool {
+	target := string(destination)
+	if !relativeDestination(target) {
+		return false
+	}
+	reporter, ok := t.routes.(AbsenceReporter)
+	if !ok {
+		return false
+	}
+	return reporter.RouteAbsent(target)
 }
 
 // relativeDestination reports whether a destination is a corpus-relative

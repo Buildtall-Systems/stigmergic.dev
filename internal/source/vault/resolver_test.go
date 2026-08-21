@@ -266,3 +266,19 @@ func TestVaultDomainMatchesTheFixture(t *testing.T) {
 		t.Errorf("leaf kind = %d, want %d", domain.LeafKind, lists.KindCurationSet)
 	}
 }
+
+// TestAdapterDeclaresAbsenceOnlyForWhatItDoesNotHold is the vault's side of
+// the absence seam: its index covers attachments beside documents, so a name
+// resolving to nothing names nothing the vault holds.
+func TestAdapterDeclaresAbsenceOnlyForWhatItDoesNotHold(t *testing.T) {
+	r, _, _ := testAdapter(t, "")
+	if r.RouteAbsent(cidSecond + conceptExt) {
+		t.Errorf("%s is a held document and must not be declared absent", cidSecond+conceptExt)
+	}
+	if r.RouteAbsent(nameArt) {
+		t.Errorf("%s is a held attachment and must not be declared absent", nameArt)
+	}
+	if !r.RouteAbsent("nowhere.md") {
+		t.Error("a target the vault does not hold must be declared absent")
+	}
+}

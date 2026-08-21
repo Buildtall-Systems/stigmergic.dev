@@ -25,8 +25,9 @@ type Resolver struct {
 }
 
 var (
-	_ wikilink.Resolver      = (*Resolver)(nil)
-	_ markdown.RouteResolver = (*Resolver)(nil)
+	_ wikilink.Resolver        = (*Resolver)(nil)
+	_ markdown.RouteResolver   = (*Resolver)(nil)
+	_ markdown.AbsenceReporter = (*Resolver)(nil)
 )
 
 // NewResolver builds the adapter for one render: the mount is the source's
@@ -70,6 +71,15 @@ func (r *Resolver) ResolveRoute(target string) (string, bool) {
 		Fragment: pathUnescaped(fragment),
 		Syntax:   okf.SyntaxLink,
 	})
+}
+
+// RouteAbsent declares a target the vault does not hold. The vault may say
+// so where the local corpus cannot: its index carries okf-attachment
+// statements beside the member documents, so a name that resolves to nothing
+// names nothing the vault holds.
+func (r *Resolver) RouteAbsent(target string) bool {
+	_, ok := r.ResolveRoute(target)
+	return !ok
 }
 
 // route resolves one reference and forms the in-mount route for what it

@@ -10,7 +10,9 @@ import (
 
 // LinkRenderer adds target="_blank" and rel="noopener noreferrer"
 // to external links (http:// and https://) in rendered markdown.
-// Internal and relative links render without these attributes.
+// Internal and relative links render without these attributes. A link the
+// route transformer marked unresolved renders as the dead-link span
+// wikilinks use, never as an anchor.
 type LinkRenderer struct{}
 
 // RegisterFuncs registers the renderer for link and autolink nodes.
@@ -32,7 +34,20 @@ func (r *LinkRenderer) renderLink(
 		return ast.WalkContinue, nil
 	}
 	if !entering {
+		if _, marked := n.AttributeString(unresolvedAttr); marked {
+			if _, err := w.WriteString("</span>"); err != nil {
+				return ast.WalkStop, err
+			}
+			return ast.WalkContinue, nil
+		}
 		if _, err := w.WriteString("</a>"); err != nil {
+			return ast.WalkStop, err
+		}
+		return ast.WalkContinue, nil
+	}
+
+	if _, marked := n.AttributeString(unresolvedAttr); marked {
+		if _, err := w.WriteString(`<span class="wikilink-unresolved">`); err != nil {
 			return ast.WalkStop, err
 		}
 		return ast.WalkContinue, nil
