@@ -4,6 +4,28 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-08-21
 
+### vault reader: integrated to develop
+
+The stigmergic vault reader arc closes. develop fast-forwarded
+`8494597..2b649db`: five phases, the dangling CommonMark link ruling,
+and the btk pin bump, eleven commits in all.
+
+- Live acceptance held on all three steps. The ruled behavior verified
+  against ithaca: the 401k PDF document's dangling link renders as the
+  `wikilink-unresolved` span, confirmed in the browser by the operator.
+- The monorepo side integrated first: `feature/okf-server` rebased onto
+  develop and fast-forwarded, monorepo develop at `f1065a4`. The pin
+  bump names it (`v0.0.0-20260821175037-f1065a40e0bf`); no vendor
+  source moved, the rebase being byte-identical for btk.
+- Full battery green at the head under `nix develop`: `make lint` zero
+  findings, `make test`, `make build`, and `nix build .#default`.
+- One hazard found and left open: a `result` symlink from `nix build`
+  in the tree pollutes `make css`, because Tailwind v4 auto-detection
+  scans the store binary's embedded strings and emits extra rules.
+  `result` is untracked and not gitignored. The polluted regeneration
+  was discarded; ignoring `result` is a candidate follow-up.
+
+
 ### vault reader: dangling CommonMark links render unresolved
 
 The operator's ruling from live acceptance step 2 is implemented, on
