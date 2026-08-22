@@ -2,6 +2,26 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-08-22
+
+### master advanced to v0.7.0, deployed on smallmind, vault reader accepted
+
+On instruction, master fast-forwarded `c7ff66b..5e8c302` (the 0.7.0 version
+bump and its release log) and was pushed to the forge and GitHub. The
+smallmind estate's stigmergic input repointed `c7ff66b` to `5e8c302`; the
+package build verified clean as stigmergic-0.7.0 before the operator's
+switch (vendorHash holds across the btk pin bump), and the unit restarted
+on 0.7.0.
+
+Vault reader live acceptance complete: discovery against ithaca mounts
+attachrehearsal and memex for the operator npub; the Vaults panel lists
+both; documents serve under /vault/; the memex root's okf-server tag
+resolves to the inflorescence store on 127.0.0.1:3000 and attachment bytes
+stream through the mount (valley-of-fire.png, 200 image/png, 1.8MB). The
+operator confirmed the image renders in writing/journal/daily writings.md.
+One reader note: a vault root URL is deliberately not a page; entry is the
+panel or a document path.
+
 ## 2026-08-21
 
 ### v0.7.0 released
