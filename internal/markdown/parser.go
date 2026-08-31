@@ -26,6 +26,7 @@ import (
 func Parse(source []byte, resolver wikilink.Resolver, embeds *EmbedContext) ([]byte, map[string]any, error) {
 	extensions := []goldmark.Extender{
 		extension.GFM,
+		extension.Footnote,
 		NewWiremdExtension(),
 		highlighting.NewHighlighting(
 			highlighting.WithFormatOptions(

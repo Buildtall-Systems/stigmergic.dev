@@ -2,6 +2,18 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-08-31
+
+### Footnote rendering enabled
+
+`extension.Footnote` added to the goldmark extension list in
+`internal/markdown.Parse` on `feature/goldmark-footnotes`. Footnote
+syntax (`[^1]` references, `[^1]:` definitions) previously passed
+through as literal text because goldmark's GFM composite excludes the
+footnote extension. `TestParseFootnote` covers reference, definition
+list, and consumption of the literal syntax. Lint and tests green
+after the fresh-worktree `make generate`.
+
 ## 2026-08-22
 
 ### master advanced to v0.7.0, deployed on smallmind, vault reader accepted

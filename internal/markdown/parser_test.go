@@ -374,6 +374,37 @@ func TestParseGFMTaskList(t *testing.T) {
 	}
 }
 
+func TestParseFootnote(t *testing.T) {
+	t.Parallel()
+
+	input := `A cited claim.[^1]
+
+[^1]: The source of the claim.`
+
+	result, _, err := Parse([]byte(input), nil, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	output := string(result)
+	expectations := []string{
+		"fnref:1",
+		"href=\"#fn:1\"",
+		"class=\"footnotes\"",
+		"The source of the claim.",
+	}
+
+	for _, expected := range expectations {
+		if !strings.Contains(output, expected) {
+			t.Errorf("Expected output to contain %q\nGot:\n%s", expected, output)
+		}
+	}
+
+	if strings.Contains(output, "[^1]") {
+		t.Errorf("Expected footnote syntax to be consumed, not rendered literally\nGot:\n%s", output)
+	}
+}
+
 func TestParseGFMLinkify(t *testing.T) {
 	t.Parallel()
 
