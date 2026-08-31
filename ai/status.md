@@ -4,6 +4,27 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-08-31
 
+### v0.8.0 deployed to buildtall-prod
+
+The operator's `make deploy-prod` first failed building the pinned
+deploy-rs CLI: crates.io's API download endpoint 403s non-browser
+user agents (Firefox UA gets 200; the nixpkgs fetchurl UA and plain
+curl get 403), and 154 of 158 crate fixed-output derivations were
+missing after garbage collection. NIX_CURL_FLAGS does not reach the
+sandbox through the daemon. Remedy: monorepo
+scratch/crates-io-403/fetch-missing-crates.py fetched each crate from
+static.crates.io, sha256-verified against the derivation outputHash,
+inserted via nix-store --add-fixed (154/154, zero failures), and
+deploy-rs built clean. Open: the deploy-rs closure has no gcroot, so
+GC can resurface this.
+
+The redeploy succeeded: tag deploy/prod/2026-08-31T16-53-45Z on
+605ef61b (the v0.8.0 pin). Verified live:
+https://stigmergic.dev/file/demo.md renders the Footnotes section as
+superscript references with the collected definition list; literal
+footnote syntax appears only in the page's embedded raw-markdown
+string, as expected.
+
 ### v0.8.0 released
 
 develop (c5f7d0e) pushed to GitHub and the forge; the forge fan-out
