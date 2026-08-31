@@ -4,6 +4,23 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-08-31
 
+### v0.8.0 released
+
+develop (c5f7d0e) pushed to GitHub and the forge; the forge fan-out
+reached relay.ngit.dev, gitnostr.com, and git.buildtall.systems, with
+one listing failure reported verbatim against the personal-npub path
+over unauthenticated https before the brand-npub push succeeded.
+`make release` cut annotated v0.8.0 at c5f7d0e, pushed it to the
+forge, and goreleaser published five platform archives and checksums.
+
+The v0.7.0 tag misfire recurred in sharper form: GitHub's API-created
+tag landed on 5e8c302 (master's head) even though c5f7d0e was already
+reachable on GitHub's develop. Pushing the release commit is not
+sufficient; the tag itself must reach GitHub before goreleaser. The
+annotated tag was force-pushed over it; both remotes now peel v0.8.0
+to c5f7d0e. Next release, push the tag to GitHub between `git tag`
+and goreleaser, or amend the release target to do so.
+
 ### v0.8.0 bump and site footnote example
 
 VERSION bumped 0.7.0 to 0.8.0 on `feature/version-0.8.0` for the
