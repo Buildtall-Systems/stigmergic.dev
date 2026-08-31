@@ -4,6 +4,17 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-08-31
 
+### v0.8.0 bump and site footnote example
+
+VERSION bumped 0.7.0 to 0.8.0 on `feature/version-0.8.0` for the
+footnote feature. The public site's demo.md gains a Footnotes section
+(references, shared definition, collected list) and a feature-matrix
+row; features.md lists the capability under Markdown Rendering. The
+site command renders through `internal/markdown.Parse` (confirmed at
+`internal/server/handlers.go` before adding the example), so the
+embedded content exercises the new extension. Battery green after the
+fresh-worktree `make generate`.
+
 ### Footnote rendering enabled
 
 `extension.Footnote` added to the goldmark extension list in
