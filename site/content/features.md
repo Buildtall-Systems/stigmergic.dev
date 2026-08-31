@@ -20,6 +20,7 @@ Full [CommonMark](https://commonmark.org/) compliance plus [GitHub Flavored Mark
 - **Task lists** — `- [x]` and `- [ ]` render as checkboxes
 - **Strikethrough** — `~~deleted text~~` renders as ~~deleted text~~
 - **Autolinks** — URLs automatically become clickable
+- **Footnotes**: `[^1]` references and `[^1]:` definitions render as linked footnotes collected at the end of the page
 
 ## Syntax Highlighting
 

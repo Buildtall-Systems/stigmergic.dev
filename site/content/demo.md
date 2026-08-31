@@ -93,6 +93,7 @@ The following table shows browser compatibility:
 | Syntax Highlighting | ✓ | ✓ | ✓ | Stable |
 | Math Rendering | ✓ | ✓ | ✓ | Beta |
 | Mermaid Diagrams | ✓ | ✓ | ✓ | Beta |
+| Footnotes | ✓ | ✓ | ✓ | Stable |
 | Live Reload | ✓ | ✓ | ✓ | Stable |
 
 ## Project Roadmap
@@ -115,6 +116,13 @@ $$\text{latency} = t_{\text{detect}} + t_{\text{process}} + t_{\text{render}}$$
 Where performance targets require $t_{\text{total}} < 200\text{ms}$ for optimal user experience.
 
 Inline math works too: $E = mc^2$ demonstrates energy-mass equivalence.
+
+## Footnotes
+
+Footnotes attach sources to claims without interrupting the reading flow.[^1] A definition can be referenced more than once,[^2] and every definition renders in a collected list at the end of the page.[^1]
+
+[^1]: References render as superscript links; each definition links back to its references.
+[^2]: Definitions may sit anywhere in the source document. Rendering gathers them.
 
 ## System Architecture Diagram
 
