@@ -2,6 +2,25 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-09-01
+
+### v0.8.0 verified on smallmind
+
+The staged smallmind switch shipped: the machine rebooted after the
+prod deploy, and the stigmergic unit now executes
+/nix/store/d2mblwyw7bxvbb052f7839z24jdzdz7c-stigmergic-0.8.0/bin/stigmergic.
+Footnote rendering verified end to end against the document that
+prompted the feature: localhost:9010/file/ai/wot/web-of-trust-survey-research-2026-08-31.md
+returns 200 with one class="footnotes" definition list and 22 fnref:1
+backreferences.
+
+Route correction for future probes: the smallmind instance runs
+`stigmergic serve` over the buildtall home, not the embedded site, so
+/file/demo.md 404s there. demo.md is a buildtall-prod route only.
+Probe smallmind with a real path under the served tree.
+
+This closes the footnotes work. Both deploy legs are verified.
+
 ## 2026-08-31
 
 ### v0.8.0 deployed to buildtall-prod
