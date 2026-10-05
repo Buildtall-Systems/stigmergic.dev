@@ -1,0 +1,132 @@
+package login
+
+// LoginPanel offers the three ways in. The extension path checks for
+// window.nostr when the button is clicked rather than when the page loads,
+// because extensions inject asynchronously. redirectTo is where the extension
+// path lands. The other two paths carry it as next, and the status handler
+// redirects there.
+templ LoginPanel(serviceName, redirectTo string) {
+	@LoginPanelAt(DefaultPaths(), serviceName, redirectTo)
+}
+
+// LoginPanelAt is LoginPanel for a site whose auth routes are at paths.
+templ LoginPanelAt(paths Paths, serviceName, redirectTo string) {
+	<div id="btk-login-panel" class="mx-auto w-full max-w-md space-y-6">
+		<div class="text-center">
+			<h1 class="text-2xl font-semibold text-fg mb-1">Sign in to { serviceName }</h1>
+			<p class="text-sm text-fg-subtle mb-0">Sign with a browser extension, or connect a remote signer.</p>
+		</div>
+		<div class="bg-bg-subtle border border-fg-muted rounded-lg p-4 space-y-3">
+			<h2 class="text-sm font-semibold text-fg mb-0">Browser extension</h2>
+			<p class="text-xs text-fg-muted mb-0">Uses a NIP-07 signer such as Alby or nos2x.</p>
+			<button
+				type="button"
+				id="btk-login-extension"
+				data-redirect={ redirectTo }
+				onclick="btkLoginWithExtension(this)"
+				class="w-full inline-flex items-center justify-center px-4 py-2 bg-primary text-bg font-medium rounded-md shadow-sm hover:bg-secondary transition-colors duration-300 text-sm"
+			>
+				Sign in with extension
+			</button>
+			<p id="btk-login-extension-missing" class="hidden text-xs text-danger mb-0">
+				No extension detected. Use one of the remote signer options below.
+			</p>
+		</div>
+		<div class="bg-bg-subtle border border-fg-muted rounded-lg p-4 space-y-3">
+			<h2 class="text-sm font-semibold text-fg mb-0">Paste a bunker link</h2>
+			<p class="text-xs text-fg-muted mb-0">From a signer that issues a <code>bunker://</code> URI.</p>
+			<form hx-post={ paths.Start } hx-target="#btk-login-panel" hx-select="unset" hx-swap="outerHTML" class="space-y-3">
+				<input type="hidden" name={ NextParam } value={ redirectTo }/>
+				<input
+					type="text"
+					name="bunker_uri"
+					required
+					autocomplete="off"
+					spellcheck="false"
+					placeholder="bunker://"
+					class="w-full bg-bg border border-fg-muted rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-muted outline-none focus:border-primary transition-colors"
+				/>
+				<button
+					type="submit"
+					class="w-full inline-flex items-center justify-center px-4 py-2 bg-primary text-bg font-medium rounded-md shadow-sm hover:bg-secondary transition-colors duration-300 text-sm"
+				>
+					Connect
+				</button>
+			</form>
+		</div>
+		<div class="bg-bg-subtle border border-fg-muted rounded-lg p-4 space-y-3">
+			<h2 class="text-sm font-semibold text-fg mb-0">Scan a QR code</h2>
+			<p class="text-xs text-fg-muted mb-0">For a mobile signer such as Amber.</p>
+			<button
+				type="button"
+				hx-post={ paths.Start }
+				hx-vals={ nostrConnectVals(redirectTo) }
+				hx-target="#btk-login-panel"
+				hx-select="unset"
+				hx-swap="outerHTML"
+				class="w-full inline-flex items-center justify-center px-4 py-2 bg-primary text-bg font-medium rounded-md shadow-sm hover:bg-secondary transition-colors duration-300 text-sm"
+			>
+				Show QR code
+			</button>
+		</div>
+	</div>
+}
+
+// Every request element sets hx-select="unset": a page whose main carries
+// hx-select="main", as drss's does, would otherwise select nothing from the
+// fragment and swap the panel away.
+//
+// PendingFragment replaces the panel once a login is in flight. It polls only
+// while the login can still progress; a failed login renders without the
+// polling attributes, which stops the browser asking.
+templ PendingFragment(p Pending) {
+	<div
+		id="btk-login-panel"
+		class="mx-auto w-full max-w-md space-y-4"
+		if p.Polling() {
+			hx-get={ p.StatusURL() }
+			hx-trigger={ PollTrigger }
+			hx-select="unset"
+			hx-swap="outerHTML"
+		}
+	>
+		if p.ShowQR {
+			<div class="bg-bg-subtle border border-fg-muted rounded-lg p-4 text-center space-y-3">
+				<img
+					src={ p.QRURL() }
+					alt="Scan this code with your signer"
+					width="256"
+					height="256"
+					class="mx-auto rounded bg-white p-2"
+				/>
+				<p class="text-xs text-fg-muted mb-0">Scan with your mobile signer.</p>
+			</div>
+		}
+		switch p.State {
+			case StateAuthRequired:
+				<div class="bg-bg-subtle border border-fg-muted rounded-lg p-4 space-y-2">
+					<p class="text-sm text-fg mb-0">Your signer wants you to approve this login.</p>
+					<a
+						href={ templ.URL(p.AuthURL) }
+						target="_blank"
+						rel="noopener noreferrer"
+						class="inline-flex items-center justify-center px-4 py-2 bg-primary text-bg font-medium rounded-md shadow-sm hover:bg-secondary transition-colors duration-300 text-sm"
+					>
+						Open your signer
+					</a>
+					<p class="text-xs text-fg-muted mb-0">If that button does nothing, open this address yourself:</p>
+					<code class="block text-xs text-fg-subtle break-all">{ p.AuthURL }</code>
+				</div>
+			case StateFailed, StateRefused:
+				<div class="bg-bg-subtle border border-fg-muted rounded-lg p-4 space-y-2">
+					<p class="text-sm text-danger mb-0">{ p.Reason }</p>
+					<a href={ templ.URL(p.RestartURL()) } class="text-sm text-primary hover:text-secondary transition-colors">Start again</a>
+				</div>
+			default:
+				<div class="bg-bg-subtle border border-fg-muted rounded-lg p-4 flex items-center justify-center gap-3">
+					<div class="h-5 w-5 rounded-full border-2 border-fg-muted border-t-primary animate-spin"></div>
+					<p class="text-sm text-fg-subtle mb-0">Waiting for your signer…</p>
+				</div>
+		}
+	</div>
+}

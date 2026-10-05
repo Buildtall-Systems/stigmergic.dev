@@ -225,7 +225,7 @@ func (r *reconciler) reconcileDocument(c *Concept, dTag string) error {
 		return err
 	}
 
-	if live != nil && tagsEqual(live.Tags, tags) && bodyAsWritten(live.Content) == bodyAsWritten(c.Body) {
+	if live != nil && lists.TagsEqual(live.Tags, tags) && bodyAsWritten(live.Content) == bodyAsWritten(c.Body) {
 		r.plan.Unchanged = append(r.plan.Unchanged, dTag)
 		return nil
 	}
@@ -358,7 +358,7 @@ func (r *reconciler) reconcileComposed(live *nostr.Event, kind int, dTag string,
 	slices.Sort(coords)
 	tags := composedTags(node, dTag, coords, attachments)
 
-	if live != nil && tagsEqual(live.Tags, tags) && live.Content == node.Content {
+	if live != nil && lists.TagsEqual(live.Tags, tags) && live.Content == node.Content {
 		r.plan.Unchanged = append(r.plan.Unchanged, dTag)
 		return
 	}
@@ -376,7 +376,7 @@ func (r *reconciler) reconcileComposed(live *nostr.Event, kind int, dTag string,
 // the members the tree derives, which arrive sorted so that the same bundle
 // always yields the same event, then one okf-attachment statement per file
 // the directory holds, name then hash, in the model's sorted order. The
-// attachment position is as fixed as every other: tagsEqual compares whole
+// attachment position is as fixed as every other: lists.TagsEqual compares whole
 // ordered sequences, so a position that varied between runs would republish
 // every attachment-bearing set on each of them.
 func composedTags(node NodeMetadata, dTag string, coords []string, attachments []Attachment) nostr.Tags {
@@ -499,14 +499,6 @@ func (r *reconciler) owns(coord string, kind int) bool {
 		return false
 	}
 	return gotKind == kind && pubkeyHex == r.ownerHex && r.domain.ClassifyDTag(dTag) == lists.DTagMember
-}
-
-// tagsEqual compares two tag lists as ordered sequences, which is what makes a
-// tag the bundle stopped stating visible at all: a comparison per name can only
-// ever see the names it was taught, and the names it was not taught are exactly
-// the ones a vault loses.
-func tagsEqual(a, b nostr.Tags) bool {
-	return slices.EqualFunc(a, b, func(x, y nostr.Tag) bool { return slices.Equal(x, y) })
 }
 
 // bodyAsWritten is what a body looks like once it has been through a file.

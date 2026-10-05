@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Buildtall-Systems/stigmergic.dev/internal/auth"
+	"github.com/buildtall-systems/buildtall/btk/auth/session"
+
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/embed"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/logger"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
@@ -34,13 +35,6 @@ func (s *Server) setupRoutes() {
 	}
 	fs := http.FileServer(http.FS(staticFS))
 	s.mux.Handle("/static/", http.StripPrefix("/static/", fs))
-
-	if s.config.Auth.Enabled {
-		s.mux.HandleFunc(auth.LoginPath, auth.LoginHandler(s.serverURL, s.theme, s.themes))
-		s.mux.HandleFunc("/auth/verify", auth.VerifyHandler(s.sessionManager, s.allowedPubkeys, s.serverURL))
-		s.mux.HandleFunc("/auth/logout", auth.LogoutHandler(s.sessionManager))
-		logger.Log.Info("auth routes registered")
-	}
 
 	s.mux.HandleFunc("/", s.handleHome)
 	s.mux.HandleFunc(markdown.FileMount, s.handleMarkdown)
@@ -69,8 +63,14 @@ func (s *Server) setupRoutes() {
 // pattern the mux needs for all of them.
 const vaultRoutePrefix = "/vault/"
 
+// viewer is the npub a request reads as: the session's, or empty for an
+// anonymous reader. It decides which private mounts the request may see.
+func viewer(r *http.Request) string {
+	return session.PubkeyFromContext(r.Context())
+}
+
 // uiData gathers what a page render needs for the left panel: the primary
-// source's tree and the vaults mounted beneath it, how many documents the
+// source's tree and the vaults beneath it that viewer may read, how many documents the
 // primary holds, its recently updated documents, and whether the background
 // scan has finished. The corpus-wide caches are read where they are used
 // rather than here, because only search and backlinks span every source.
@@ -78,7 +78,7 @@ const vaultRoutePrefix = "/vault/"
 // The panel comes back fully collapsed. A caller showing a document opens
 // it to that document with expandTo, which is the one thing that differs
 // between one page render and the next.
-func (s *Server) uiData() (models.SidebarView, int, []models.SearchableFile, bool) {
+func (s *Server) uiData(viewer string) (models.SidebarView, int, []models.SearchableFile, bool) {
 	primary := s.primary()
 
 	s.treeMux.RLock()
@@ -96,21 +96,21 @@ func (s *Server) uiData() (models.SidebarView, int, []models.SearchableFile, boo
 
 	view := models.SidebarView{
 		Primary: models.TreeView{Tree: tree, Mount: primary.prefix},
-		Vaults:  s.vaultEntries(),
+		Vaults:  s.vaultEntries(viewer),
 	}
 
 	return view, len(files), recentFiles, s.IsIndexReady()
 }
 
-// vaultEntries names the mounted vaults for the panel's lower half, in an
-// order the reader can rely on. Discovery mounts a vault as its relays
+// vaultEntries names the mounted vaults viewer may read for the panel's
+// lower half, in an order the reader can rely on. Discovery mounts a vault as its relays
 // answer, which is an order no one should have to watch rearrange, so the
 // rows sort by name and then by owner: two owners publishing the same vault
 // name sit together, and neither one moves when the other arrives.
-func (s *Server) vaultEntries() []models.VaultEntry {
+func (s *Server) vaultEntries(viewer string) []models.VaultEntry {
 	var entries []models.VaultEntry
 	for _, m := range s.mountList() {
-		if m.vault == nil {
+		if m.vault == nil || !m.visibleTo(viewer) {
 			continue
 		}
 		entries = append(entries, models.VaultEntry{
@@ -132,7 +132,7 @@ func (s *Server) vaultEntries() []models.VaultEntry {
 // acting on the document on screen belong to the source serving it, while
 // the sidebar's own belong to the primary source whatever is being read. A
 // vault document therefore offers no path to copy and no changes to follow,
-// while the tree beside it keeps both.
+// while the tree beside it keeps both. The login belongs to the server.
 func (s *Server) pageCaps(m *mount) models.UICapabilities {
 	primary := s.primary().caps
 	return models.UICapabilities{
@@ -140,6 +140,7 @@ func (s *Server) pageCaps(m *mount) models.UICapabilities {
 		GitignoreToggle: primary.GitignoreToggle,
 		CopyPath:        m.caps.CopyPath,
 		FollowMode:      m.caps.FollowMode,
+		Login:           s.site != nil,
 	}
 }
 
@@ -205,7 +206,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view, fileCount, recentFiles, indexReady := s.uiData()
+	view, fileCount, recentFiles, indexReady := s.uiData(viewer(r))
 
 	var dirCount int
 	if view.Primary.Tree != nil {
@@ -213,16 +214,17 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	primary := s.primary()
+	caps := s.pageCaps(primary)
 
 	if isHTMXRequest(r) {
 		logger.Log.Debug("rendering HTMX home partial")
-		if err := templates.HomeContent(primary.src.Name(), recentFiles, fileCount, dirCount, indexReady, primary.caps).Render(r.Context(), w); err != nil {
+		if err := templates.HomeContent(primary.src.Name(), recentFiles, fileCount, dirCount, indexReady, caps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home content template", "error", err)
 		}
 		s.renderOutlineOOB(w, r, nil)
 	} else {
 		logger.Log.Debug("rendering full home page")
-		if err := templates.Home(view, primary.src.Name(), s.theme, s.themes, recentFiles, fileCount, dirCount, indexReady, primary.caps).Render(r.Context(), w); err != nil {
+		if err := templates.Home(view, primary.src.Name(), s.theme, s.themes, recentFiles, fileCount, dirCount, indexReady, caps).Render(r.Context(), w); err != nil {
 			logger.Log.Error("failed to render home template", "error", err)
 		}
 	}
@@ -241,7 +243,7 @@ func (s *Server) renderOutlineOOB(w http.ResponseWriter, r *http.Request, outlin
 // not, which is the overwhelmingly common case and costs a few hundred bytes
 // instead of the whole tree.
 func (s *Server) handleRecentPartial(w http.ResponseWriter, r *http.Request) {
-	_, _, recentFiles, _ := s.uiData()
+	_, _, recentFiles, _ := s.uiData(viewer(r))
 	if err := components.SidebarRecent(recentFiles, s.primary().caps).Render(r.Context(), w); err != nil {
 		logger.Log.Error("failed to render recent partial", "error", err)
 	}
@@ -253,7 +255,7 @@ func (s *Server) handleRecentPartial(w http.ResponseWriter, r *http.Request) {
 // filesystem, so a non-canonical one is dropped and the tree renders collapsed
 // rather than the request failing.
 func (s *Server) handleSidebarPartial(w http.ResponseWriter, r *http.Request) {
-	view, _, recentFiles, indexReady := s.uiData()
+	view, _, recentFiles, indexReady := s.uiData(viewer(r))
 
 	var current string
 	if raw := r.URL.Query().Get("path"); raw != "" {
@@ -295,7 +297,7 @@ func (s *Server) handleTreePartial(w http.ResponseWriter, r *http.Request) {
 	// The directory path alone no longer says which tree it belongs to, so
 	// the row that asked names its own source; naming none means the
 	// primary, which is what every row the sidebar ships today names.
-	m, ok := s.mountAt(r.URL.Query().Get("mount"))
+	m, ok := s.mountAt(r.URL.Query().Get("mount"), viewer(r))
 	if !ok {
 		logger.Log.Warn("tree partial named no mounted source", "mount", r.URL.Query().Get("mount"))
 		http.NotFound(w, r)
@@ -322,13 +324,13 @@ func (s *Server) handleTreePartial(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// mountAt finds a mounted source by its route prefix, answering with the
-// primary when none is named.
-func (s *Server) mountAt(prefix string) (*mount, bool) {
+// mountAt finds a mounted source viewer may read by its route prefix,
+// answering with the primary when none is named.
+func (s *Server) mountAt(prefix, viewer string) (*mount, bool) {
 	if prefix == "" {
 		return s.primary(), true
 	}
-	for _, m := range s.mountList() {
+	for _, m := range visibleMounts(s.mountList(), viewer) {
 		if m.prefix == prefix {
 			return m, true
 		}
@@ -358,7 +360,9 @@ func (s *Server) computeRecentFiles(files []models.SearchableFile) []models.Sear
 func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	s.observeSession(r)
 
-	m, filePath, mounted := mountOf(s.mountList(), r.URL.Path)
+	// A mount the reader may not see answers exactly as one never mounted.
+	reader := viewer(r)
+	m, filePath, mounted := mountOf(visibleMounts(s.mountList(), reader), r.URL.Path)
 	if !mounted {
 		logger.Log.Warn("no source mounted for route", "route", r.URL.Path)
 		http.NotFound(w, r)
@@ -396,7 +400,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	isHTMX := isHTMXRequest(r)
 	caps := s.pageCaps(m)
 
-	view, _, recentFiles, indexReady := s.uiData()
+	view, _, recentFiles, indexReady := s.uiData(reader)
 
 	if info.IsDir() {
 		s.treeMux.RLock()
@@ -452,10 +456,10 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	// per request because rendering mutates its depth and visited set.
 	//
 	// The source holding the document answers its links first and the
-	// corpus-wide resolver stands behind it, so a name the source holds
+	// corpus its owner sees stands behind it, so a name the source holds
 	// always wins and a link reaching into another source still resolves.
 	own, embedSource := m.renderSeams(filePath, s.config.AttachmentRoot)
-	resolver := markdown.Chain{own, s.corpusRoutes()}
+	resolver := markdown.Chain{own, s.corpusRoutes().forOwner(m.owner)}
 	embeds := markdown.NewEmbedContext(m.prefix, embedSource)
 	html, meta, err := markdown.Parse(content, resolver, embeds)
 	if err != nil {
@@ -473,7 +477,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.cachedBacklinks.Load().(models.BacklinkIndex); ok {
 		backlinks = v
 	}
-	fileBacklinks := backlinks[m.prefix+filePath]
+	fileBacklinks := visibleBacklinks(backlinks[m.prefix+filePath], hiddenPrefixes(s.mountList(), reader))
 
 	var relativePath string
 	if rooted, ok := m.src.(source.Rooted); ok {
@@ -498,6 +502,17 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 			logger.Log.Error("failed to render markdown template", "error", renderErr)
 		}
 	}
+}
+
+// visibleBacklinks drops the backlinks whose source document lies under a
+// hidden prefix. The backlink index is built once for every reader.
+func visibleBacklinks(entries []models.BacklinkEntry, hidden []string) []models.BacklinkEntry {
+	if len(hidden) == 0 {
+		return entries
+	}
+	return slices.DeleteFunc(slices.Clone(entries), func(e models.BacklinkEntry) bool {
+		return routeHidden(hidden, e.SourcePath)
+	})
 }
 
 func computeBuildtallRelativePath(watchPath, filePath string) string {
@@ -588,7 +603,7 @@ func (s *Server) handleSearchAPI(w http.ResponseWriter, r *http.Request) {
 		idx = v
 	}
 
-	resp := idx.search(r.URL.Query().Get("q"), searchResultLimit)
+	resp := idx.search(r.URL.Query().Get("q"), searchResultLimit, hiddenPrefixes(s.mountList(), viewer(r)))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -600,6 +615,12 @@ func (s *Server) handleFilesAPI(w http.ResponseWriter, r *http.Request) {
 	var files []models.SearchableFile
 	if v, ok := s.cachedFiles.Load().([]models.SearchableFile); ok {
 		files = v
+	}
+
+	if hidden := hiddenPrefixes(s.mountList(), viewer(r)); len(hidden) > 0 {
+		files = slices.DeleteFunc(slices.Clone(files), func(f models.SearchableFile) bool {
+			return routeHidden(hidden, f.Path)
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")

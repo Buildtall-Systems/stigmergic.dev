@@ -11,7 +11,7 @@ import (
 )
 
 // This file implements the read side of the ratified read/write preference
-// concept (operations repo, concepts/read-and-write-lists.md): one kind
+// concept (operations repo, nuds/read-and-write-lists.md): one kind
 // 30078 event through which an owner designates the list they read and the
 // list their deposits land in. drss, btcli, and Android are peer readers of
 // this one parse.
@@ -31,12 +31,45 @@ const (
 	roleMarkerWrite = "write"
 )
 
-// ListRoles carries the two designated list coordinates. An empty role means
+// ListRoles carries the two designated list coordinates and, per role, the
+// relay hint from the winning reference's third position. An empty role means
 // the event designated nothing valid for it and the reader falls back to the
-// domain's zero-config default (CanonicalRootCoord).
+// domain's zero-config default (CanonicalRootCoord). An empty hint means the
+// reference carried none and the client stays on its bootstrap relay set, per
+// the concept doc's Relay Posture section.
 type ListRoles struct {
-	Read  string
-	Write string
+	Read           string
+	ReadRelayHint  string
+	Write          string
+	WriteRelayHint string
+}
+
+// DesignatedRole names the role the preference assigns to the coordinate:
+// "read", "write", or "read and write" when one list serves both, and the
+// empty string when the coordinate holds neither. A gesture that would
+// remove a designated list refuses with the role, so btcli and drss state
+// the same reason.
+func (r ListRoles) DesignatedRole(coord string) string {
+	switch {
+	case coord == "":
+		return ""
+	case r.Read == coord && r.Write == coord:
+		return roleMarkerRead + " and " + roleMarkerWrite
+	case r.Read == coord:
+		return roleMarkerRead
+	case r.Write == coord:
+		return roleMarkerWrite
+	default:
+		return ""
+	}
+}
+
+// roleRef pairs a reference's coordinate with its relay hint while roles are
+// still being counted; the pair survives into ListRoles only when its role
+// resolves to exactly one reference.
+type roleRef struct {
+	coord string
+	relay string
 }
 
 // ParseRolePreference reads a read/write preference event per the ratified
@@ -46,13 +79,15 @@ type ListRoles struct {
 // reference is discarded for both roles when its coordinate does not parse,
 // names a kind outside 30101 and the NIP-51 set kinds, or names a pubkey
 // other than the signer. A nil event, a wrong kind, or a wrong d-tag yields
-// the zero value: both roles fall back.
+// the zero value: both roles fall back. A resolving reference's relay hint is
+// captured alongside its coordinate; the concept doc's Relay Posture section
+// gives that hint connection-directive force.
 func ParseRolePreference(ev *nostr.Event) ListRoles {
 	if ev == nil || ev.Kind != KindApplicationData || GetDTag(ev) != DTagReadWriteLists {
 		return ListRoles{}
 	}
 
-	var reads, writes []string
+	var reads, writes []roleRef
 	for _, tag := range ev.Tags {
 		if len(tag) < 2 || tag[0] != "a" {
 			continue
@@ -61,23 +96,26 @@ func ParseRolePreference(ev *nostr.Event) ListRoles {
 		if err != nil || pubkeyHex != ev.PubKey || !AllowedCompositionKind(kind) {
 			continue
 		}
+		ref := roleRef{coord: tag[1], relay: relayHint(tag)}
 		switch roleMarker(tag) {
 		case roleMarkerRead:
-			reads = append(reads, tag[1])
+			reads = append(reads, ref)
 		case roleMarkerWrite:
-			writes = append(writes, tag[1])
+			writes = append(writes, ref)
 		default:
-			reads = append(reads, tag[1])
-			writes = append(writes, tag[1])
+			reads = append(reads, ref)
+			writes = append(writes, ref)
 		}
 	}
 
 	var roles ListRoles
 	if len(reads) == 1 {
-		roles.Read = reads[0]
+		roles.Read = reads[0].coord
+		roles.ReadRelayHint = reads[0].relay
 	}
 	if len(writes) == 1 {
-		roles.Write = writes[0]
+		roles.Write = writes[0].coord
+		roles.WriteRelayHint = writes[0].relay
 	}
 	return roles
 }
@@ -85,8 +123,8 @@ func ParseRolePreference(ev *nostr.Event) ListRoles {
 // NewRolePreferenceEvent builds the unsigned read/write preference event
 // designating one read list and one write list, per the ratified concept
 // doc. Equal designations emit one unmarked reference, which serves both
-// roles. The owner's npub decodes to hex here — the protocol boundary
-// minting the event — and the result passes ValidatePreference before it is
+// roles. The owner's npub decodes to hex here, the protocol boundary where
+// the event is created, and the result passes ValidatePreference before it is
 // returned, so a caller never holds an event readers would fall back from.
 func NewRolePreferenceEvent(ownerNpub, readCoord, writeCoord, relayHint string) (*nostr.Event, error) {
 	ownerHex, err := btknostr.NpubToHex(ownerNpub)
@@ -194,4 +232,15 @@ func roleMarker(tag nostr.Tag) string {
 		}
 	}
 	return ""
+}
+
+// relayHint reads the reference's optional relay hint from the third
+// position. A marker may occupy that position when the hint is absent (the
+// grammar roleMarker accommodates), so a recognized marker there reads as no
+// hint.
+func relayHint(tag nostr.Tag) string {
+	if len(tag) < 3 || tag[2] == roleMarkerRead || tag[2] == roleMarkerWrite {
+		return ""
+	}
+	return tag[2]
 }

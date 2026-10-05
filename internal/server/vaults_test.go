@@ -130,8 +130,9 @@ func serverWithVault(t *testing.T) (*Server, *vaultsrc.Vault) {
 		RecentFilesCount: 5,
 	}
 	cfg.Vault.Npubs = []string{v.Owner}
+	cfg.Auth.SessionMaxAge = testSessionMaxAge
 
-	srv := NewServerWithVaults(cfg, src, func(context.Context, string) ([]*vaultsrc.Vault, error) {
+	srv := NewServerWithVaults(cfg, src, func(context.Context, string, nostr.Signer) ([]*vaultsrc.Vault, error) {
 		return []*vaultsrc.Vault{v}, nil
 	})
 
@@ -433,7 +434,7 @@ func TestVaultEntriesSortByNameThenOwner(t *testing.T) {
 		{vault: vaultDescribed("notes", first), prefix: vaultMount(first, "notes")},
 	}}
 
-	entries := srv.vaultEntries()
+	entries := srv.vaultEntries("")
 	got := make([]string, 0, len(entries))
 	for _, e := range entries {
 		got = append(got, e.Name+" "+e.Owner)
@@ -451,7 +452,7 @@ func TestVaultEntriesLeaveThePrimaryOut(t *testing.T) {
 
 	srv := &Server{mounts: []*mount{{prefix: markdown.FileMount}}}
 
-	if entries := srv.vaultEntries(); len(entries) != 0 {
+	if entries := srv.vaultEntries(""); len(entries) != 0 {
 		t.Errorf("expected no vault rows for a server with only its primary source, got %v", entries)
 	}
 }
@@ -462,12 +463,13 @@ func TestObserveQueuesAnOwnerOnce(t *testing.T) {
 	t.Parallel()
 
 	srv := &Server{
-		owners:   make(chan string, 2),
+		owners:   make(chan ownerRequest, 2),
 		observed: map[string]bool{},
+		signers:  map[string]*latestSigner{},
 	}
 
-	srv.observe(testOwnerNpub)
-	srv.observe(testOwnerNpub)
+	srv.observe(testOwnerNpub, keySigner(t))
+	srv.observe(testOwnerNpub, keySigner(t))
 
 	if got := len(srv.owners); got != 1 {
 		t.Errorf("queued %d times, want 1", got)
@@ -481,19 +483,20 @@ func TestObserveLeavesAFullQueueUnrecorded(t *testing.T) {
 	t.Parallel()
 
 	srv := &Server{
-		owners:   make(chan string, 1),
+		owners:   make(chan ownerRequest, 1),
 		observed: map[string]bool{},
+		signers:  map[string]*latestSigner{},
 	}
 
-	srv.observe(testOwnerNpub)
-	srv.observe("npub1other")
+	srv.observe(testOwnerNpub, keySigner(t))
+	srv.observe("npub1other", keySigner(t))
 
 	if srv.observed["npub1other"] {
 		t.Error("an owner that did not fit the queue was recorded as observed")
 	}
 
 	<-srv.owners
-	srv.observe("npub1other")
+	srv.observe("npub1other", keySigner(t))
 	if !srv.observed["npub1other"] {
 		t.Error("the next request did not queue the deferred owner")
 	}

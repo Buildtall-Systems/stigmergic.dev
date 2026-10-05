@@ -3,11 +3,21 @@ module.exports = {
     "./web/templates/**/*.templ",
     "./web/templates/**/*.go",
     "./internal/embed/web/static/js/**/*.js",
+    "./vendor/github.com/buildtall-systems/buildtall/btk/views/**/*.go",
   ],
   theme: {
     extend: {
       colors: {
         selection: 'var(--selection-color)',
+        // The btk login views name these roles; map them onto the theme.
+        primary: 'var(--cyan-color)',
+        secondary: 'var(--blue-color)',
+        bg: 'var(--bg-color)',
+        'bg-subtle': 'var(--bg-alt-color)',
+        fg: 'var(--fg-color)',
+        'fg-subtle': 'var(--comment-color)',
+        'fg-muted': 'var(--comment-color)',
+        danger: 'var(--red-color)',
       },
       typography: {
         DEFAULT: {

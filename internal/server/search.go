@@ -89,8 +89,9 @@ func orderSearchIndex(docs searchDocs, files []models.SearchableFile) searchInde
 
 // search scans every document for the first case-insensitive occurrence of
 // query, returning at most limit matches, each with a context snippet and
-// the match offsets within it. An empty or whitespace query matches nothing.
-func (idx searchIndex) search(query string, limit int) searchResponse {
+// the match offsets within it. Documents under a hidden prefix are skipped
+// before the limit counts them. An empty or whitespace query matches nothing.
+func (idx searchIndex) search(query string, limit int, hidden []string) searchResponse {
 	resp := searchResponse{Query: query, Results: []searchMatch{}}
 	q := strings.ToLower(strings.TrimSpace(query))
 	if q == "" {
@@ -98,6 +99,9 @@ func (idx searchIndex) search(query string, limit int) searchResponse {
 	}
 
 	for _, doc := range idx {
+		if routeHidden(hidden, doc.Path) {
+			continue
+		}
 		pos := strings.Index(doc.Lower, q)
 		if pos < 0 {
 			continue

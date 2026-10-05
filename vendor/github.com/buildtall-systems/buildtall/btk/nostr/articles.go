@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nbd-wtf/go-nostr"
@@ -32,8 +35,10 @@ type Article struct {
 	Summary        string
 	Content        string
 	PublishedAt    *time.Time
+	Audio          *AudioRef
 	EventCreatedAt time.Time
 	ImageURL       string
+	WebAddress     string
 	Tags           []string
 }
 
@@ -118,12 +123,17 @@ func EventToArticle(ev *nostr.Event) *Article {
 			}
 		case TagTopic:
 			a.Tags = append(a.Tags, tag[1])
+		case TagWebAddress:
+			if a.WebAddress == "" {
+				a.WebAddress = tag[1]
+			}
 		}
 	}
 
 	if a.DTag == "" {
 		return nil
 	}
+	a.Audio = ParseAudio(ev.Tags)
 	a.ID = fmt.Sprintf("%d:%s:%s", KindLongForm, a.Pubkey, a.DTag)
 	return a
 }
@@ -192,6 +202,103 @@ func FetchArticlesByAddress(ctx context.Context, pool *nostr.SimplePool, relays 
 		}
 	}
 	return articles, nil
+}
+
+// articlesByAuthorsSinceFilters builds one filter per chunk of AuthorChunkMax
+// authors, each opting into the relay's publication-order extension so the
+// since bound selects on published_at rather than created_at.
+//
+// No filter carries a limit, an until, or an until id. That absence is the
+// whole reason the sweep is total: the relay answers an unbounded filter with
+// its entire matching set, so there is no page to walk and no page boundary for
+// an article to fall across. Each filter owns its own since pointer, because
+// the pool rewrites the bound on a filter it reconnects.
+func articlesByAuthorsSinceFilters(authorsHex []string, since nostr.Timestamp) []nostr.Filter {
+	var filters []nostr.Filter
+	for chunk := range slices.Chunk(authorsHex, AuthorChunkMax) {
+		bound := since
+		filters = append(filters, nostr.Filter{
+			Kinds:   []int{KindLongForm},
+			Authors: chunk,
+			Since:   &bound,
+			Order:   OrderPublishedAt,
+		})
+	}
+	return filters
+}
+
+// fetchArticlesByAuthorsSince drains each chunk filter to EOSE and projects
+// what comes back. The first relay failure ends the sweep and returns no
+// articles at all: a caller that rendered the chunks that did answer would
+// present an incomplete window as a whole one, which is the failure
+// FetchUntilEOSE exists to make visible.
+//
+// FetchUntilEOSE removes duplicate event ids, which two revisions of one
+// article never share, so the coordinate dedupe happens here. The revision
+// carrying the later EventCreatedAt is the one that survives.
+func fetchArticlesByAuthorsSince(ctx context.Context, subscribe subscribeFunc, relays []string, authorsHex []string, since nostr.Timestamp, log *slog.Logger) ([]Article, error) {
+	byCoord := make(map[string]Article)
+	for _, filter := range articlesByAuthorsSinceFilters(authorsHex, since) {
+		events, err := fetchUntilEOSE(ctx, subscribe, relays, filter, log)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ev := range events {
+			article := EventToArticle(ev)
+			if article == nil {
+				log.Warn("dropping event the article projection cannot represent", "id", ev.ID, "kind", ev.Kind)
+				continue
+			}
+			if prior, seen := byCoord[article.ID]; seen && !article.EventCreatedAt.After(prior.EventCreatedAt) {
+				continue
+			}
+			byCoord[article.ID] = *article
+		}
+	}
+
+	articles := slices.Collect(maps.Values(byCoord))
+	slices.SortFunc(articles, compareArticlesByPublication)
+	return articles, nil
+}
+
+// FetchArticlesByAuthorsSince returns every long-form article the given hex
+// authors published at or after since, sorted ascending on the publication
+// axis. It is the author-keyed sibling of FetchArticlesByAddress: a corpus
+// sweep rather than a lookup of a known set.
+//
+// Its coverage is total for the window, and the since bound includes the
+// boundary second. It fails loud in the terms FetchUntilEOSE states: one relay
+// that fails before EOSE fails the whole sweep, and the caller gets no articles
+// and that error. There is no partial result, because a caller cannot tell a
+// partial corpus from a whole one.
+//
+// The caller owns any watermark between runs, and owns de-duplication across
+// windows. Reads go through pool, so a caller that authenticated it keeps that
+// session, and the caller owns the pool's lifetime. log must be non-nil.
+func FetchArticlesByAuthorsSince(ctx context.Context, pool *nostr.SimplePool, relays []string, authorsHex []string, since nostr.Timestamp, log *slog.Logger) ([]Article, error) {
+	return fetchArticlesByAuthorsSince(ctx, poolSubscribe(pool), relays, authorsHex, since, log)
+}
+
+// articlePublicationTime is the sort key of the publication axis: the
+// published_at the author stated, or the event's created_at when the event
+// carries no such tag.
+func articlePublicationTime(a Article) time.Time {
+	if a.PublishedAt != nil {
+		return *a.PublishedAt
+	}
+	return a.EventCreatedAt
+}
+
+// compareArticlesByPublication orders ascending on the publication axis, which
+// is what the relay returns for one chunk and what a reader moves through. Ties
+// break on the coordinate, so a result merged from several chunks is
+// deterministic.
+func compareArticlesByPublication(x, y Article) int {
+	if c := articlePublicationTime(x).Compare(articlePublicationTime(y)); c != 0 {
+		return c
+	}
+	return strings.Compare(x.ID, y.ID)
 }
 
 // authorLabel renders a hex pubkey as an npub for logs, falling back to the hex

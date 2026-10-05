@@ -3,6 +3,7 @@ package nostr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -29,6 +30,10 @@ const (
 // rather than declaring their own.
 const MaxWriteRelaysPerAuthor = 5
 
+// errQueryEndedWithoutEOSE reports a subscription that ended, typically with
+// its connection, before the relay sent EOSE.
+var errQueryEndedWithoutEOSE = errors.New("subscription ended before EOSE")
+
 // RelayListAggregators are the relays buildtall queries to discover an author's
 // kind-10002 relay list (NIP-65) when it is absent from both the home and the
 // fallback relays — tier-2 of the outbox resolution ladder. Declared once here
@@ -47,6 +52,9 @@ type relayBatch struct {
 	profiles   map[string]*Profile
 	relayLists map[string]*nostr.Event
 	contacts   map[string]*nostr.Event
+	// err is set when the relay never answered the query with EOSE, so an
+	// author absent from the batch may still exist there.
+	err error
 }
 
 type Profile struct {
@@ -253,11 +261,13 @@ func (r *ProfileResolver) Resolve(ctx context.Context, npub string) (*Profile, e
 		return nil, fmt.Errorf("decoding npub: %w", err)
 	}
 
-	p, contacts := r.resolveOne(ctx, npub, hexPubkey)
+	p, contacts, confirmed := r.resolveOne(ctx, npub, hexPubkey)
 
-	r.mu.Lock()
-	r.cache[npub] = profileCacheEntry{profile: p, contacts: contacts, expiry: r.entryExpiry()}
-	r.mu.Unlock()
+	if confirmed {
+		r.mu.Lock()
+		r.cache[npub] = profileCacheEntry{profile: p, contacts: contacts, expiry: r.entryExpiry()}
+		r.mu.Unlock()
+	}
 
 	return p, nil
 }
@@ -298,13 +308,16 @@ func (r *ProfileResolver) ResolveMany(ctx context.Context, npubs []string) (map[
 	}
 
 	harvest := r.harvestMap(nil)
-	profiles := r.batchResolve(ctx, uncachedHex, hexToNpub, nil, harvest)
+	profiles, unconfirmed := r.batchResolve(ctx, uncachedHex, hexToNpub, nil, harvest)
 
 	r.mu.Lock()
 	expiry := r.entryExpiry()
 	for npub, p := range profiles {
-		r.cache[npub] = profileCacheEntry{profile: p, contacts: harvest[npub], expiry: expiry}
 		result[npub] = p
+		if unconfirmed[npub] {
+			continue
+		}
+		r.cache[npub] = profileCacheEntry{profile: p, contacts: harvest[npub], expiry: expiry}
 	}
 	r.mu.Unlock()
 
@@ -385,13 +398,16 @@ func (r *ProfileResolver) resolveManyStream(ctx context.Context, npubs []string,
 		defer close(ch)
 
 		harvest := r.harvestMap(contactsOut)
-		profiles := r.batchResolve(ctx, uncachedHex, hexToNpub, func(p *Profile) {
+		profiles, unconfirmed := r.batchResolve(ctx, uncachedHex, hexToNpub, func(p *Profile) {
 			ch <- p
 		}, harvest)
 
 		r.mu.Lock()
 		expiry := r.entryExpiry()
 		for npub, p := range profiles {
+			if unconfirmed[npub] {
+				continue
+			}
 			r.cache[npub] = profileCacheEntry{profile: p, contacts: harvest[npub], expiry: expiry}
 		}
 		r.mu.Unlock()
@@ -423,7 +439,11 @@ func (r *ProfileResolver) InvalidateAll() {
 // contactsOut is non-nil and the resolver harvests contacts, it receives every
 // discovered kind-3 follow list keyed by author npub, merged newest-wins
 // across the same waves.
-func (r *ProfileResolver) batchResolve(ctx context.Context, hexPubkeys []string, hexToNpub map[string]string, emit func(*Profile), contactsOut map[string]*nostr.Event) map[string]*Profile {
+//
+// The second result names the npubs whose placeholder is unconfirmed: the home
+// relay, where every profile found elsewhere is written back, failed to answer,
+// so their absence proves nothing and callers must not cache it.
+func (r *ProfileResolver) batchResolve(ctx context.Context, hexPubkeys []string, hexToNpub map[string]string, emit func(*Profile), contactsOut map[string]*nostr.Event) (map[string]*Profile, map[string]bool) {
 	// The write-back runs after the waves, so it must not inherit the shared
 	// deadline — by then it is spent. It gets the caller's context instead
 	// (bounded internally by r.timeout).
@@ -437,6 +457,11 @@ func (r *ProfileResolver) batchResolve(ctx context.Context, hexPubkeys []string,
 	result := make(map[string]*Profile, len(hexPubkeys))
 
 	homeBatch := r.queryBatch(ctx, r.homeRelay, hexPubkeys, true)
+	homeFailed := r.homeRelay != "" && homeBatch.err != nil
+	if homeFailed {
+		r.logger.Warn("home relay did not answer a profile query; unresolved profiles stay uncached",
+			"relay", r.homeRelay, "authors", len(hexPubkeys), "error", homeBatch.err)
+	}
 
 	// An author is done at a rung only when everything the resolver was asked
 	// for has landed: the kind-0, and the kind-3 as well when contacts are
@@ -466,7 +491,7 @@ func (r *ProfileResolver) batchResolve(ctx context.Context, hexPubkeys []string,
 
 	if len(remaining) == 0 {
 		r.exportContacts(contactsOut, allContacts, hexToNpub)
-		return result
+		return result, nil
 	}
 
 	var onFound func(map[string]*Profile)
@@ -566,11 +591,18 @@ func (r *ProfileResolver) batchResolve(ctx context.Context, hexPubkeys []string,
 		}
 	}
 
+	var unconfirmed map[string]bool
 	for _, pk := range remaining {
 		npub := hexToNpub[pk]
 		if _, ok := result[npub]; !ok {
 			placeholder := fallbackProfile(npub)
 			result[npub] = placeholder
+			if homeFailed {
+				if unconfirmed == nil {
+					unconfirmed = make(map[string]bool)
+				}
+				unconfirmed[npub] = true
+			}
 			if emit != nil {
 				emit(placeholder)
 			}
@@ -590,7 +622,7 @@ func (r *ProfileResolver) batchResolve(ctx context.Context, hexPubkeys []string,
 	}
 
 	r.exportContacts(contactsOut, allContacts, hexToNpub)
-	return result
+	return result, unconfirmed
 }
 
 // externalEvents gathers every event obtained below the home rung during a
@@ -641,15 +673,17 @@ func (r *ProfileResolver) exportContacts(contactsOut, harvested map[string]*nost
 	}
 }
 
-func (r *ProfileResolver) resolveOne(ctx context.Context, npub string, hexPubkey string) (*Profile, *nostr.Event) {
+// resolveOne resolves a single author. The bool is false when the profile is a
+// placeholder the caller must not cache.
+func (r *ProfileResolver) resolveOne(ctx context.Context, npub string, hexPubkey string) (*Profile, *nostr.Event, bool) {
 	hexToNpub := map[string]string{hexPubkey: npub}
 	harvest := r.harvestMap(nil)
-	profiles := r.batchResolve(ctx, []string{hexPubkey}, hexToNpub, nil, harvest)
+	profiles, unconfirmed := r.batchResolve(ctx, []string{hexPubkey}, hexToNpub, nil, harvest)
 	p, ok := profiles[npub]
 	if !ok {
 		p = fallbackProfile(npub)
 	}
-	return p, harvest[npub]
+	return p, harvest[npub], !unconfirmed[npub]
 }
 
 // WriteRelaysFor fetches npub's kind-10002 relay list across the home, fallback,
@@ -740,20 +774,52 @@ func (r *ProfileResolver) queryRelayBatch(ctx context.Context, relayURL string, 
 	relay, release, err := r.acquireRelay(queryCtx, relayURL)
 	if err != nil {
 		r.logger.Debug("relay connect failed", "relay", relayURL, "error", err)
+		batch.err = fmt.Errorf("connecting to %s: %w", relayURL, err)
 		return batch
 	}
 	defer release()
 
-	events, err := relay.QuerySync(queryCtx, nostr.Filter{
+	events, err := queryUntilEOSE(queryCtx, relay, nostr.Filter{
 		Kinds:   r.queryKinds(includeRelayLists),
 		Authors: pubkeys,
 	})
+	batch = demuxProfileBatch(events)
 	if err != nil {
 		r.logger.Debug("batch query failed", "relay", relayURL, "error", err)
-		return batch
+		batch.err = fmt.Errorf("querying %s: %w", relayURL, err)
 	}
 
-	return demuxProfileBatch(events)
+	return batch
+}
+
+// queryUntilEOSE collects the events a relay returns for filter and reports
+// whether the relay finished the query. QuerySync ends the same way on EOSE, a
+// CLOSED refusal, a dead connection, and a spent deadline, so an empty result
+// from it cannot tell "no such event" from "no answer". Here only EOSE is a
+// success; events that arrived before any other ending are still returned.
+func queryUntilEOSE(ctx context.Context, relay *nostr.Relay, filter nostr.Filter) ([]*nostr.Event, error) {
+	sub, err := relay.Subscribe(ctx, nostr.Filters{filter})
+	if err != nil {
+		return nil, fmt.Errorf("subscribing: %w", err)
+	}
+	defer sub.Unsub()
+
+	var events []*nostr.Event
+	for {
+		select {
+		case evt, ok := <-sub.Events:
+			if !ok {
+				return events, errQueryEndedWithoutEOSE
+			}
+			events = append(events, evt)
+		case <-sub.EndOfStoredEvents:
+			return events, nil
+		case reason := <-sub.ClosedReason:
+			return events, fmt.Errorf("relay closed the query: %s", reason)
+		case <-ctx.Done():
+			return events, fmt.Errorf("no EOSE before the deadline: %w", context.Cause(ctx))
+		}
+	}
 }
 
 // queryRelayKinds runs one scoped query against a single relay: only the

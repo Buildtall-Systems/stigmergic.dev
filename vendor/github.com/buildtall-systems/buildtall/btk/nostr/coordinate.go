@@ -46,3 +46,19 @@ func DecodeNaddr(naddr string) (nostr.EntityPointer, error) {
 	}
 	return pointer, nil
 }
+
+// ErrNoDTag is an event offered as addressable that carries no d tag.
+var ErrNoDTag = fmt.Errorf("the event carries no d tag, so it has no address")
+
+// EventNaddr is the address of an addressable event as an naddr: its kind,
+// its author and its d tag, with the relay hints given. It is the write
+// direction of DecodeNaddr for an event in hand rather than a coordinate
+// string, and it refuses an event with no d tag, since the decoder treats
+// an empty identifier as an incomplete naddr.
+func EventNaddr(ev *nostr.Event, relays []string) (string, error) {
+	d := ev.Tags.GetD()
+	if d == "" {
+		return "", ErrNoDTag
+	}
+	return nip19.EncodeEntity(ev.PubKey, ev.Kind, d, relays)
+}

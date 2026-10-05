@@ -51,54 +51,87 @@ func (m *Manager) CookieName() string {
 	return m.cookieName
 }
 
-func (m *Manager) CreateSession(pubkey string) (string, time.Time) {
+func (m *Manager) CreateSession(pubkey string) (string, string, time.Time) {
 	expiry := time.Now().Add(m.maxAge)
 	expiryStr := strconv.FormatInt(expiry.UnixMilli(), 10)
+	sid := rand.Text()
 
-	payload := pubkey + "." + expiryStr
+	payload := pubkey + "." + expiryStr + "." + sid
 	sig := m.sign(payload)
 
 	cookieValue := base64.RawURLEncoding.EncodeToString([]byte(payload + "." + sig))
-	return cookieValue, expiry
+	return cookieValue, sid, expiry
+}
+
+type claims struct {
+	npub string
+	sid  string
 }
 
 func (m *Manager) ValidateSession(cookieValue string) (string, error) {
+	c, err := m.validate(cookieValue)
+	if err != nil {
+		return "", err
+	}
+	return c.npub, nil
+}
+
+func (m *Manager) ValidateSessionWithID(cookieValue string) (string, string, error) {
+	c, err := m.validate(cookieValue)
+	if err != nil {
+		return "", "", err
+	}
+	return c.npub, c.sid, nil
+}
+
+// Cookies minted before the session id claim existed have three parts and
+// must keep validating through rollout; they carry an empty sid.
+func (m *Manager) validate(cookieValue string) (claims, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(cookieValue)
 	if err != nil {
-		return "", fmt.Errorf("invalid session cookie encoding")
+		return claims{}, fmt.Errorf("invalid session cookie encoding")
 	}
 
-	parts := strings.SplitN(string(decoded), ".", 3)
-	if len(parts) != 3 {
-		return "", fmt.Errorf("malformed session cookie")
+	parts := strings.Split(string(decoded), ".")
+
+	var c claims
+	var expiryStr, sig string
+	switch len(parts) {
+	case 3:
+		c.npub = parts[0]
+		expiryStr = parts[1]
+		sig = parts[2]
+	case 4:
+		c.npub = parts[0]
+		expiryStr = parts[1]
+		c.sid = parts[2]
+		sig = parts[3]
+	default:
+		return claims{}, fmt.Errorf("malformed session cookie")
 	}
 
-	pubkey := parts[0]
-	expiryStr := parts[1]
-	sig := parts[2]
-
-	payload := pubkey + "." + expiryStr
+	payload := strings.Join(parts[:len(parts)-1], ".")
 	expectedSig := m.sign(payload)
 	if !hmac.Equal([]byte(sig), []byte(expectedSig)) {
-		return "", fmt.Errorf("invalid session signature")
+		return claims{}, fmt.Errorf("invalid session signature")
 	}
 
 	expiryMillis, err := strconv.ParseInt(expiryStr, 10, 64)
 	if err != nil {
-		return "", fmt.Errorf("invalid expiry timestamp")
+		return claims{}, fmt.Errorf("invalid expiry timestamp")
 	}
 
 	if time.Now().UnixMilli() > expiryMillis {
-		return "", fmt.Errorf("session expired")
+		return claims{}, fmt.Errorf("session expired")
 	}
 
-	return pubkey, nil
+	return c, nil
 }
 
 // Secure is always set: browsers exempt localhost from the https
 // requirement for Secure cookies, so local dev over http keeps working.
-func (m *Manager) SetSessionCookie(w http.ResponseWriter, pubkey string) {
-	value, expiry := m.CreateSession(pubkey)
+func (m *Manager) SetSessionCookie(w http.ResponseWriter, pubkey string) string {
+	value, sid, expiry := m.CreateSession(pubkey)
 	cookie := &http.Cookie{
 		Name:     m.cookieName,
 		Value:    value,
@@ -109,6 +142,7 @@ func (m *Manager) SetSessionCookie(w http.ResponseWriter, pubkey string) {
 		Secure:   true,
 	}
 	http.SetCookie(w, cookie)
+	return sid
 }
 
 func (m *Manager) ClearSessionCookie(w http.ResponseWriter) {

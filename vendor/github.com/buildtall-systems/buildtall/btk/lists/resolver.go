@@ -11,13 +11,51 @@ import (
 )
 
 const (
-	ResolveCoordCeiling = 50
-	resolveTimeout      = 5 * time.Second
+	// DefaultResolveCoordCeiling caps how many foreign coordinates one
+	// traversal fetches. It is a budget guard rather than a rule of the
+	// ontology: it was chosen for a web page rendering a tree, where a partial
+	// view with placeholders beats a slow page. A caller that needs total
+	// coverage raises it or removes it through ResolvePolicy.
+	DefaultResolveCoordCeiling = 50
+	// DefaultResolveTimeout bounds one whole traversal, and exists for the
+	// same reason and with the same escape.
+	DefaultResolveTimeout = 5 * time.Second
 
 	ReasonNotFound  = "not found"
 	ReasonTimedOut  = "timed out"
 	ReasonTruncated = "truncated"
 )
+
+// ResolvePolicy carries the three bounds on a cross-author traversal. Every
+// field is optional: a zero takes the declared default, so a caller states
+// only what it means to change.
+//
+// A negative CoordCeiling removes the ceiling and a negative Timeout removes
+// the deadline, leaving the caller's own context as the only bound. Depth has
+// no such escape, because the list-of-lists NUD mandates that a depth limit exist; NormalizeDepth
+// clamps it to DepthCeiling.
+//
+// The bounds are a policy rather than a constant because btk serves consumers
+// with opposite needs: a web page wants a fast partial answer, and a headless
+// corpus pull wants a complete one at whatever cost.
+type ResolvePolicy struct {
+	Timeout      time.Duration
+	MaxDepth     int
+	CoordCeiling int
+}
+
+// Normalize resolves the policy against the declared defaults, leaving any
+// negative escape intact for the caller that asked for it.
+func (p ResolvePolicy) Normalize() ResolvePolicy {
+	p.MaxDepth = NormalizeDepth(p.MaxDepth)
+	if p.CoordCeiling == 0 {
+		p.CoordCeiling = DefaultResolveCoordCeiling
+	}
+	if p.Timeout == 0 {
+		p.Timeout = DefaultResolveTimeout
+	}
+	return p
+}
 
 type CoordQuerier interface {
 	QueryBlocking(ctx context.Context, filter nostr.Filter, relays []string) ([]*nostr.Event, error)
@@ -30,17 +68,22 @@ type coordRef struct {
 	kind   int
 }
 
-func ResolveForeign(ctx context.Context, q CoordQuerier, seed []*nostr.Event, relays []string) ([]*nostr.Event, map[string]string) {
-	return ResolveForeignDepth(ctx, q, seed, relays, DefaultMaxDepth)
-}
+// ResolveForeign fetches the foreign list coordinates seed references, and
+// recurses into what it fetches, under the bounds policy states. A zero policy
+// takes the declared defaults; see ResolvePolicy for the escapes.
+//
+// It returns the events it resolved and the census of every reference it did
+// not, keyed by coordinate with the reason. Nothing is dropped silently: a
+// reference the bounds cut is stamped ReasonTruncated.
+func ResolveForeign(ctx context.Context, q CoordQuerier, seed []*nostr.Event, relays []string, policy ResolvePolicy) ([]*nostr.Event, map[string]string) {
+	policy = policy.Normalize()
 
-// ResolveForeignDepth is ResolveForeign with a configured traversal depth,
-// normalized against the declared policy.
-func ResolveForeignDepth(ctx context.Context, q CoordQuerier, seed []*nostr.Event, relays []string, maxDepth int) ([]*nostr.Event, map[string]string) {
-	maxDepth = NormalizeDepth(maxDepth)
-
-	rctx, cancel := context.WithTimeout(ctx, resolveTimeout)
-	defer cancel()
+	rctx := ctx
+	if policy.Timeout > 0 {
+		var cancel context.CancelFunc
+		rctx, cancel = context.WithTimeout(ctx, policy.Timeout)
+		defer cancel()
+	}
 
 	known := make(map[string]bool, len(seed))
 	for _, ev := range seed {
@@ -53,14 +96,14 @@ func ResolveForeignDepth(ctx context.Context, q CoordQuerier, seed []*nostr.Even
 	var resolved []*nostr.Event
 	attempted := 0
 
-	for depth := 1; depth <= maxDepth && len(frontier) > 0; depth++ {
-		if attempted+len(frontier) > ResolveCoordCeiling {
-			allowed := max(ResolveCoordCeiling-attempted, 0)
+	for depth := 1; depth <= policy.MaxDepth && len(frontier) > 0; depth++ {
+		if policy.CoordCeiling > 0 && attempted+len(frontier) > policy.CoordCeiling {
+			allowed := max(policy.CoordCeiling-attempted, 0)
 			for _, ref := range frontier[allowed:] {
 				unresolved[ref.coord] = ReasonTruncated
 			}
 			slog.Warn("resolve: coordinate ceiling reached, truncating",
-				"ceiling", ResolveCoordCeiling, "dropped", len(frontier)-allowed)
+				"ceiling", policy.CoordCeiling, "dropped", len(frontier)-allowed)
 			frontier = frontier[:allowed]
 			if len(frontier) == 0 {
 				break
@@ -90,7 +133,7 @@ func ResolveForeignDepth(ctx context.Context, q CoordQuerier, seed []*nostr.Even
 			unresolved[ref.coord] = ReasonTruncated
 		}
 		slog.Warn("resolve: depth limit reached, truncating",
-			"depth", maxDepth, "dropped", len(frontier))
+			"depth", policy.MaxDepth, "dropped", len(frontier))
 	}
 
 	return resolved, unresolved

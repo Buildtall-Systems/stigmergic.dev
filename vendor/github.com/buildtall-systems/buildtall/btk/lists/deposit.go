@@ -348,13 +348,48 @@ func removeReferenceUnder(existing []*nostr.Event, userHex, writeCoord string, k
 // writing a second list over it.
 var ErrCollectionExists = errors.New("a list already holds that name")
 
+// The organizer's refusals. Each names one rule the ontology or the domain
+// imposes on a gesture, so btcli and drss state the same reason for the same
+// refusal and a caller can tell a refusal from a fault with errors.Is.
+var (
+	// ErrListExists reports a mint whose d-tag is already held on any kind.
+	ErrListExists = errors.New("a list or folder already holds that name")
+	// ErrRootImmutable reports a gesture aimed at the canonical root, which
+	// only receives children.
+	ErrRootImmutable = errors.New("the root list is never renamed, moved, merged, or deleted")
+	// ErrCycle reports a move whose destination is the subject or lies inside
+	// the subject's own subtree.
+	ErrCycle = errors.New("a list cannot be moved into itself or its own subtree")
+	// ErrDepthExceeded reports a placement that would put a list deeper than
+	// the declared traversal limit.
+	ErrDepthExceeded = errors.New("the move would exceed the depth limit")
+	// ErrFolderNotEmpty reports a delete or merge of a folder still holding
+	// children other than its companion.
+	ErrFolderNotEmpty = errors.New("a folder holding other lists cannot be deleted or merged")
+	// ErrKindMismatch reports a subject or target whose kind the gesture does
+	// not take.
+	ErrKindMismatch = errors.New("the list kind does not fit the gesture")
+	// ErrRoleDesignated reports a delete or merge-away of a list the read/write
+	// preference designates.
+	ErrRoleDesignated = errors.New("the list is designated by the read/write preference")
+	// ErrTitleUnchanged reports a rename to the title the list already carries,
+	// which would publish a pure created_at bump.
+	ErrTitleUnchanged = errors.New("the list already carries that title")
+	// ErrListNotFound reports a subject or target the owner's forest does not
+	// hold.
+	ErrListNotFound = errors.New("list not found")
+)
+
 // Collection is the identity a minted collection carries: the three NIP-51
-// set metadata fields. The image is optional and the title is not, because
-// the title is also the name the d-tag is minted from.
+// set metadata fields and the feed language. The image is optional and the
+// title is not, because the title is also the name the d-tag is minted from.
+// A blank language writes no tag; one that is not a language code is
+// refused.
 type Collection struct {
 	Title       string
 	Description string
 	Image       string
+	Language    string
 }
 
 // BuildSaveEvents produces the unsigned events for one article save into the
@@ -428,6 +463,9 @@ func BuildNewCollectionEvents(domain Domain, existing []*nostr.Event, userNpub s
 	if err != nil {
 		return nil, fmt.Errorf("building the collection: %w", err)
 	}
+	if err = setLanguage(set, collection.Language); err != nil {
+		return nil, err
+	}
 	attachments, err := attachCollection(domain, existing, userNpub, userHex, CoordinateFromEvent(set), listsRelayHint, writeCoord)
 	if err != nil {
 		return nil, err
@@ -483,14 +521,26 @@ func ownCollectionCoord(userHex, targetCoord string) error {
 }
 
 // collectionDTag renders the d-tag a titled collection takes in the domain:
-// the domain prefix and the title's slug. A name ending in the companion
-// suffix is refused, because the follow ceremony derives that name from a
-// node of its own and would collide with it.
+// a member minted directly under the root.
 func collectionDTag(domain Domain, title string) (string, error) {
+	return memberDTag(domain, domain.RootDTag, title)
+}
+
+// memberDTag renders the d-tag a titled list takes under a parent: the
+// domain prefix, the parent's path (its d-tag with the prefix stripped, empty
+// for the root), and the title's slug, joined by hyphens the way the OPML
+// mapper mints folder d-tags. A name ending in the companion suffix is
+// refused, because the follow ceremony derives that name from a node of its
+// own and would collide with it.
+func memberDTag(domain Domain, parentDTag, title string) (string, error) {
 	if strings.TrimSpace(title) == "" {
-		return "", errors.New("a collection needs a title")
+		return "", errors.New("a list needs a title")
 	}
-	dTag := domain.DTagPrefix + Slug(title)
+	path := ""
+	if parentDTag != domain.RootDTag {
+		path = strings.TrimPrefix(parentDTag, domain.DTagPrefix) + "-"
+	}
+	dTag := domain.DTagPrefix + path + Slug(title)
 	if domain.CompanionSuffix != "" && strings.HasSuffix(dTag, domain.CompanionSuffix) {
 		return "", fmt.Errorf("%q mints %q, which names a follow leaf the deposit ceremony owns", title, dTag)
 	}
@@ -554,6 +604,27 @@ func ownDTagHolder(events []*nostr.Event, userHex, dTag string) *nostr.Event {
 		}
 	}
 	return nil
+}
+
+// ownReferencers returns every own-author list carrying an "a" reference to
+// the coordinate, across the whole forest rather than under one write list:
+// a list detached or deleted must leave every parent, not only the ones the
+// write subtree reaches.
+func ownReferencers(events []*nostr.Event, userHex, coord string) []*nostr.Event {
+	var referencers []*nostr.Event
+	for _, ev := range events {
+		if ev.PubKey != userHex {
+			continue
+		}
+		list, err := ParseList(ev)
+		if err != nil {
+			continue
+		}
+		if nodeReferences(list, coord) {
+			referencers = append(referencers, ev)
+		}
+	}
+	return referencers
 }
 
 // FindForestSubtree locates the node bearing the target coordinate across a

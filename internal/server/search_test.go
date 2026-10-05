@@ -98,7 +98,7 @@ func TestUpdateSearchDocsMatchesColdBuild(t *testing.T) {
 func TestSearchMatchesAndSnippets(t *testing.T) {
 	t.Parallel()
 
-	resp := testSearchIndex().search("freshness protocol", 20)
+	resp := testSearchIndex().search("freshness protocol", 20, nil)
 
 	if len(resp.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d: %+v", len(resp.Results), resp.Results)
@@ -125,7 +125,7 @@ func TestSearchMatchesAndSnippets(t *testing.T) {
 func TestSearchCaseInsensitive(t *testing.T) {
 	t.Parallel()
 
-	resp := testSearchIndex().search("Freshness", 20)
+	resp := testSearchIndex().search("Freshness", 20, nil)
 
 	if len(resp.Results) != 2 {
 		t.Fatalf("expected 2 results across cases, got %d", len(resp.Results))
@@ -140,7 +140,7 @@ func TestSearchSnippetAtDocumentBoundaries(t *testing.T) {
 	}
 	files := []models.SearchableFile{{Path: markdown.FileMount + "tiny.md", Name: "tiny.md"}}
 
-	resp := coldSearchIndex(contents, files).search("edge", 20)
+	resp := coldSearchIndex(contents, files).search("edge", 20, nil)
 
 	if len(resp.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(resp.Results))
@@ -166,7 +166,7 @@ func TestSearchResultCapAndTruncation(t *testing.T) {
 		files = append(files, models.SearchableFile{Path: route, Name: name})
 	}
 
-	resp := coldSearchIndex(contents, files).search("target", 20)
+	resp := coldSearchIndex(contents, files).search("target", 20, nil)
 
 	if len(resp.Results) != 20 {
 		t.Errorf("expected results capped at 20, got %d", len(resp.Results))
@@ -182,13 +182,13 @@ func TestSearchEmptyQueryAndNoMatch(t *testing.T) {
 	idx := testSearchIndex()
 
 	for _, q := range []string{"", "   "} {
-		resp := idx.search(q, 20)
+		resp := idx.search(q, 20, nil)
 		if len(resp.Results) != 0 || resp.Truncated {
 			t.Errorf("query %q: expected empty results, got %+v", q, resp)
 		}
 	}
 
-	resp := idx.search("zxqv-not-present", 20)
+	resp := idx.search("zxqv-not-present", 20, nil)
 	if len(resp.Results) != 0 {
 		t.Errorf("expected no matches, got %d", len(resp.Results))
 	}

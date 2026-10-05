@@ -36,9 +36,9 @@ type Subject struct {
 // The tiers are passed rather than read from configuration, so this package
 // stays clear of how any one caller spells its settings.
 func Resolve(name, ownerNpub string, configured, hinted []string) (Subject, error) {
-	domain, err := lists.VaultDomain(name)
+	domain, err := documentDomain(name)
 	if err != nil {
-		return Subject{}, fmt.Errorf("vault name: %w", err)
+		return Subject{}, err
 	}
 	ownerHex, err := btknostr.NpubToHex(ownerNpub)
 	if err != nil {
@@ -50,6 +50,21 @@ func Resolve(name, ownerNpub string, configured, hinted []string) (Subject, erro
 		OwnerHex: ownerHex,
 		Relays:   readTiers(configured, hinted),
 	}, nil
+}
+
+// documentDomain resolves a vault whose sets hold documents. Every verb in
+// this package reads and writes kind 30023 documents in curation sets, so a
+// vault that declares another leaf kind is refused before any relay is
+// touched.
+func documentDomain(name string) (lists.Domain, error) {
+	domain, err := lists.VaultDomain(name)
+	if err != nil {
+		return lists.Domain{}, fmt.Errorf("vault name: %w", err)
+	}
+	if domain.LeafKind != lists.KindCurationSet {
+		return lists.Domain{}, fmt.Errorf("vault %q holds %s events, not documents", name, lists.KindName(domain.LeafKind))
+	}
+	return domain, nil
 }
 
 // readTiers puts the configured tiers first and appends whatever relays the

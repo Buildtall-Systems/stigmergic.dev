@@ -3,6 +3,8 @@ package lists
 import (
 	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/nbd-wtf/go-nostr"
 
@@ -10,16 +12,20 @@ import (
 )
 
 const (
-	KindFollowSet    = 30000
-	KindPeopleList   = 30001
-	KindRelaySet     = 30002
-	KindBookmarkSet  = 30003
-	KindCurationSet  = 30004
-	KindInterestSet  = 30015
-	KindEmojiSet     = 30030
-	KindListSet      = 30101
-	KindLongFormNote = btknostr.KindLongForm
-	KindTextNote     = 1
+	KindFollowSet     = 30000
+	KindPeopleList    = 30001
+	KindRelaySet      = 30002
+	KindBookmarkSet   = 30003
+	KindCurationSet   = 30004
+	KindInterestSet   = 30015
+	KindEmojiSet      = 30030
+	KindListSet       = 30101
+	KindFileSet       = 30102
+	KindSiteSet       = btknostr.KindSiteSet
+	KindProvenanceSet = btknostr.KindProvenanceSet
+	KindFileMetadata  = 1063
+	KindLongFormNote  = btknostr.KindLongForm
+	KindTextNote      = 1
 )
 
 var ListKinds = []int{
@@ -31,6 +37,9 @@ var ListKinds = []int{
 	KindInterestSet,
 	KindEmojiSet,
 	KindListSet,
+	KindFileSet,
+	KindSiteSet,
+	KindProvenanceSet,
 }
 
 func ValidateEvent(event *nostr.Event) error {
@@ -139,13 +148,13 @@ func ValidateItemForKind(item *Item, kind int) error {
 
 	// The kit refuses to write what it would refuse to read: parseSavedAt
 	// discards a non-positive save time, and it reads the fourth position of
-	// an "a" tag alone. A save time anywhere else would be written and never
-	// recovered.
+	// "a" and "e" tags alone. A save time anywhere else would be written and
+	// never recovered.
 	if item.SavedAt < 0 {
 		return fmt.Errorf("save time %d is negative", item.SavedAt)
 	}
-	if item.SavedAt > 0 && !item.IsAddressable() {
-		return fmt.Errorf("only an addressable item carries a save time, got type %q", item.Type)
+	if item.SavedAt > 0 && !item.hasSaveTimePosition() {
+		return fmt.Errorf("only an addressable or event item carries a save time, got type %q", item.Type)
 	}
 
 	allowed := AllowedTagsForKind(kind)
@@ -170,7 +179,69 @@ func ValidateItemForKind(item *Item, kind int) error {
 		if item.SourceKind != 0 && !AllowedCompositionKind(item.SourceKind) {
 			return fmt.Errorf("list sets only accept other set kinds, got kind %d", item.SourceKind)
 		}
+
+	case KindFileSet:
+		if item.SourceKind != 0 && item.SourceKind != KindFileMetadata {
+			return fmt.Errorf("file sets only accept file metadata events (kind %d), got kind %d", KindFileMetadata, item.SourceKind)
+		}
+		if item.Identifier != "" {
+			return fmt.Errorf("a file item carries no identifier: positions three and four are the relay hint and the save time")
+		}
+
+	case KindSiteSet:
+		if item.SourceKind != 0 && item.SourceKind != btknostr.KindNsiteNamed {
+			return fmt.Errorf("site sets only accept named sites (kind %d), got kind %d", btknostr.KindNsiteNamed, item.SourceKind)
+		}
+		kind, dTag, ok := splitCoordinate(item.Value)
+		if !ok || kind != btknostr.KindNsiteNamed {
+			return fmt.Errorf("site sets only accept named sites (kind %d), got coordinate %q", btknostr.KindNsiteNamed, item.Value)
+		}
+		if dTag == "" {
+			return fmt.Errorf("a site set item is labeled by its d tag, and a root site has none: %q", item.Value)
+		}
+
+	case KindProvenanceSet:
+		if item.SourceKind != 0 && item.SourceKind != btknostr.KindProvenance {
+			return fmt.Errorf("provenance sets only accept provenance records (kind %d), got kind %d", btknostr.KindProvenance, item.SourceKind)
+		}
+		kind, dTag, ok := splitCoordinate(item.Value)
+		if !ok || kind != btknostr.KindProvenance || dTag == "" {
+			return fmt.Errorf("provenance sets only accept provenance records (kind %d), got coordinate %q", btknostr.KindProvenance, item.Value)
+		}
 	}
 
+	return nil
+}
+
+// splitCoordinate reads the kind and d tag out of a kind:pubkey:d coordinate.
+func splitCoordinate(value string) (kind int, dTag string, ok bool) {
+	parts := strings.SplitN(value, ":", 3)
+	if len(parts) != 3 {
+		return 0, "", false
+	}
+	kind, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, "", false
+	}
+	return kind, parts[2], true
+}
+
+// ValidateItemsForKind validates a complete item set as one statement: each
+// item under ValidateItemForKind, plus the rules only a whole set can state.
+// A file set refuses the same id written twice, which no single item can see.
+func ValidateItemsForKind(items []Item, kind int) error {
+	seen := make(map[string]bool, len(items))
+	for i := range items {
+		if err := ValidateItemForKind(&items[i], kind); err != nil {
+			return err
+		}
+		if kind != KindFileSet {
+			continue
+		}
+		if seen[items[i].Value] {
+			return fmt.Errorf("file set writes id %s twice", items[i].Value)
+		}
+		seen[items[i].Value] = true
+	}
 	return nil
 }

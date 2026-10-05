@@ -2,6 +2,43 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-10-05
+
+### btk login and per-npub relay AUTH for private vaults
+
+The NIP-98 login is replaced by the btk site login (NIP-07, pasted
+bunker link, NIP-46 QR) at btk 33959797, with the sign bridge on so an
+extension reader can answer a relay's challenge through the open page.
+The login mounts when auth is on or vault relays are configured. The
+auth whitelist takes npubs or hex and is enforced at login through
+site.Options.Admit; an empty whitelist under --auth admits no one.
+
+The vault loader now takes the reader's signer. A read without one
+rides a shared anonymous pool that refuses every challenge; a read with
+one rides a pool of that owner's own that answers through the signer,
+so no connection carries two readers. A challenge that goes unanswered
+returns server.ErrAuthRequired beside whatever the other relays gave,
+and the owner is retried on their next request. This is what reading
+from an author-only relay such as relay.plantimals.org needs.
+
+A vault first read with a signer is private to its owner: hidden from
+other readers in the tree, search, files API, vault panel and
+backlinks, 404 on its pages. Link resolution is per owner, so a public
+document never resolves into a private vault. A vault already mounted
+publicly stays public.
+
+Deviations: the session manager is built only when the login mounts,
+so a config without a session lifetime still serves anonymously. The
+vendored btk static package carries 20 KaTeX woff2 fonts (approved by
+name; byte-identical to the fonts already tracked), and .gitignore now
+admits vendored *_templ.go, without which the nix build lost
+btk/views/auth. The live check against a real author-only relay waits
+for relay.plantimals.org; tests cover the same exchange against a fake
+relay that challenges, closes unauthenticated REQs, and verifies AUTH.
+
+Verified: make lint (0 issues), make test (race), make build, nix
+build .#default.
+
 ## 2026-09-01
 
 ### v0.8.0 verified on smallmind

@@ -4,6 +4,9 @@ import (
 	"strconv"
 	"strings"
 
+	btkauth "github.com/buildtall-systems/buildtall/btk/views/auth"
+	"github.com/buildtall-systems/buildtall/btk/views/login"
+
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 )
@@ -327,6 +330,11 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, sidebar mode
 			<script src="/static/js/htmx.min.js"></script>
 			<script src="/static/js/sse.js"></script>
 			<script src="/static/js/fuse.min.js"></script>
+			if caps.Login {
+				<script src="/static/btk/js/btk-components.js"></script>
+				<script src="/static/btk/js/nostr.js"></script>
+				@btkauth.XCloakStyle()
+			}
 			<script src="/static/js/alpine-focus.min.js" defer></script>
 			<script src="/static/js/alpine.min.js" defer></script>
 			<script src="/static/js/app/render.js"></script>
@@ -335,7 +343,7 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, sidebar mode
 			<script src="/static/js/app/follow.js"></script>
 			<script src="/static/js/app/ui.js"></script>
 		</head>
-		<body class="h-screen overflow-hidden flex flex-col" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) } x-data="{ sidebarOpen: true }">
+		<body class="h-screen overflow-hidden flex flex-col" hx-ext="sse" sse-connect="/events" hx-trigger="sse:message" style="background-color: var(--bg-color); color: var(--fg-color);" data-index-ready={ strconv.FormatBool(indexReady) } data-gitignore-enabled={ strconv.FormatBool(caps.GitignoreToggle) } data-btk-sign-bridge?={ caps.Login } x-data="{ sidebarOpen: true }">
 			@IconSprite()
 			<div x-data="scrollProgress()" class="fixed top-0 left-0 w-full h-1 z-50" style="background-color: var(--bg-alt-color);">
 				<div class="h-full transition-all duration-75" :style="{ backgroundColor: 'var(--green-color)', width: progress + '%' }"></div>
@@ -410,6 +418,9 @@ templ Layout(title string, thm *theme.Theme, themes []*theme.Theme, sidebar mode
 						>Reader</button>
 						<button @click="cycleTheme()" title="Cycle theme (T)" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">Theme</button>
 						<button @click="$dispatch('toggle-help')" title="Keyboard shortcuts" class="px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer" style="background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--comment-color);">?</button>
+						if caps.Login {
+							@btkauth.NavAuthLoadingAt(login.DefaultPaths().Me, nil, nil)
+						}
 					</div>
 				</div>
 			</header>

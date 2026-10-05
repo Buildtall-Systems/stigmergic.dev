@@ -10,8 +10,20 @@ type contextKey string
 
 const pubkeyContextKey contextKey = "session_pubkey"
 
+const sessionIDContextKey contextKey = "session_id"
+
 func PubkeyFromContext(ctx context.Context) string {
 	v, ok := ctx.Value(pubkeyContextKey).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+// SessionIDFromContext returns the per-login session id, or "" for requests
+// authenticated by a legacy three-part cookie or not authenticated at all.
+func SessionIDFromContext(ctx context.Context) string {
+	v, ok := ctx.Value(sessionIDContextKey).(string)
 	if !ok {
 		return ""
 	}
@@ -25,6 +37,11 @@ func ContextWithPubkey(ctx context.Context, npub string) context.Context {
 	return context.WithValue(ctx, pubkeyContextKey, npub)
 }
 
+// ContextWithSessionID is the session id counterpart of ContextWithPubkey.
+func ContextWithSessionID(ctx context.Context, sid string) context.Context {
+	return context.WithValue(ctx, sessionIDContextKey, sid)
+}
+
 func ExtractSession(sm *Manager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +51,7 @@ func ExtractSession(sm *Manager) func(http.Handler) http.Handler {
 				return
 			}
 
-			pubkey, err := sm.ValidateSession(cookie.Value)
+			pubkey, sid, err := sm.ValidateSessionWithID(cookie.Value)
 			if err != nil {
 				sm.ClearSessionCookie(w)
 				next.ServeHTTP(w, r)
@@ -42,15 +59,35 @@ func ExtractSession(sm *Manager) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), pubkeyContextKey, pubkey)
+			ctx = context.WithValue(ctx, sessionIDContextKey, sid)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func RequireAuth(sm *Manager) func(http.Handler) http.Handler {
+// RequireAuthOption adjusts which paths RequireAuth leaves open.
+type RequireAuthOption func(*requireAuthConfig)
+
+type requireAuthConfig struct {
+	publicPrefixes []string
+}
+
+// WithPublicPrefix leaves every path under prefix open, for a site whose
+// auth routes live somewhere other than /api/auth.
+func WithPublicPrefix(prefix string) RequireAuthOption {
+	return func(c *requireAuthConfig) {
+		c.publicPrefixes = append(c.publicPrefixes, prefix)
+	}
+}
+
+func RequireAuth(sm *Manager, opts ...RequireAuthOption) func(http.Handler) http.Handler {
+	cfg := requireAuthConfig{publicPrefixes: []string{"/api/auth/", "/static/"}}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isPublicPath(r.URL.Path) {
+			if cfg.isPublic(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -66,12 +103,11 @@ func RequireAuth(sm *Manager) func(http.Handler) http.Handler {
 	}
 }
 
-func isPublicPath(path string) bool {
-	if strings.HasPrefix(path, "/api/auth/") {
-		return true
-	}
-	if strings.HasPrefix(path, "/static/") {
-		return true
+func (c requireAuthConfig) isPublic(path string) bool {
+	for _, prefix := range c.publicPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
 	}
 	return false
 }

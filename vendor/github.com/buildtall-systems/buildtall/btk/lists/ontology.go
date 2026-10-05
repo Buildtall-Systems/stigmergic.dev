@@ -11,12 +11,12 @@ import (
 )
 
 // This file is the declarative model of the personal ontology: the ratified
-// specification (operations repo, concepts/nip-101.md) rendered as data.
+// specification (operations repo, nuds/list-of-lists.md) rendered as data.
 // Validation and traversal derive their rules from these declarations.
 
 const (
 	// DefaultMaxDepth is buildtall's declared traversal depth limit. The root
-	// is at depth 0; nodes deeper than the limit are pruned. nip-101 mandates
+	// is at depth 0; nodes deeper than the limit are pruned. The list-of-lists NUD mandates
 	// that a limit exist but leaves the value to the implementation, so this
 	// constant is the declaration rather than a restatement of the spec. It is
 	// 7 to accommodate the leaf-list hop three-tier composition requires.
@@ -42,13 +42,16 @@ func NormalizeDepth(depth int) int {
 // the NIP-51 set kinds plus 30101 itself. 30101 events compose, leaves
 // contain — application content is never referenced directly.
 var compositionKinds = map[int]bool{
-	KindFollowSet:   true,
-	KindRelaySet:    true,
-	KindBookmarkSet: true,
-	KindCurationSet: true,
-	KindInterestSet: true,
-	KindEmojiSet:    true,
-	KindListSet:     true,
+	KindFollowSet:     true,
+	KindRelaySet:      true,
+	KindBookmarkSet:   true,
+	KindCurationSet:   true,
+	KindInterestSet:   true,
+	KindEmojiSet:      true,
+	KindListSet:       true,
+	KindFileSet:       true,
+	KindSiteSet:       true,
+	KindProvenanceSet: true,
 }
 
 // AllowedCompositionKind reports whether a kind 30101 "a" tag may reference
@@ -99,6 +102,14 @@ var kindAllowedTags = map[int][]string{
 	KindInterestSet: {"t"},
 	KindEmojiSet:    {tagEmoji},
 	KindListSet:     {"a"},
+	// A file set's items are ids of kind 1063 events, which are regular
+	// events: no addressable coordinate exists for them, so only "e" applies.
+	KindFileSet: {"e"},
+	// A site set's items are kind 35128 coordinates: a named site is
+	// addressable, so "a" is its only form.
+	KindSiteSet: {"a"},
+	// A provenance set's items are kind 31985 coordinates.
+	KindProvenanceSet: {"a"},
 }
 
 // Domain declares the convention set under which an application writes into
@@ -204,6 +215,22 @@ func validateMemberPath(path, separator string) error {
 	return nil
 }
 
+// ValidateFlatDTag checks a d-tag that names a domain-less set, one written
+// verbatim from a human name under no declared prefix or structure. It must
+// name something, and it may not carry the colon, which delimits the fields
+// of the addressable coordinate every reference to the set is built from.
+// Case, spaces, and non-ASCII characters pass untouched: a flat d-tag is the
+// name as given, never a slug.
+func ValidateFlatDTag(dTag string) error {
+	if dTag == "" {
+		return errors.New("d-tag is empty")
+	}
+	if strings.Contains(dTag, ":") {
+		return fmt.Errorf(`d-tag %q contains ":", which delimits coordinate fields`, dTag)
+	}
+	return nil
+}
+
 var (
 	slugNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 	slugRepeat   = regexp.MustCompile(`-+`)
@@ -277,10 +304,26 @@ const (
 	VaultRootSetTitle = "Root"
 )
 
+// ProvenanceVault is the vault instance that holds provenance records
+// (nuds/provenance.md).
+const ProvenanceVault = "provenance"
+
+// vaultLeafKinds declares the vault instances whose leaf kind is not the
+// family's curation set (list-of-lists.md, Declared Domain Family: vault).
+// The declaration is keyed by instance name so every reader derives the same
+// leaf kind from the name alone.
+var vaultLeafKinds = map[string]int{
+	ProvenanceVault: KindProvenanceSet,
+}
+
 // VaultDomain constructs the declared domain for the named vault.
 func VaultDomain(name string) (Domain, error) {
 	if err := ValidateVaultName(name); err != nil {
 		return Domain{}, err
+	}
+	leafKind, declared := vaultLeafKinds[name]
+	if !declared {
+		leafKind = KindCurationSet
 	}
 	root := VaultFamilyPrefix + name
 	return Domain{
@@ -289,7 +332,7 @@ func VaultDomain(name string) (Domain, error) {
 		DTagPrefix:      root + VaultPathSeparator,
 		CompanionSuffix: VaultPathSeparator + VaultRootSegment,
 		CompanionTitle:  VaultRootSetTitle,
-		LeafKind:        KindCurationSet,
+		LeafKind:        leafKind,
 		PathSeparator:   VaultPathSeparator,
 	}, nil
 }

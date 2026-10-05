@@ -253,3 +253,30 @@ func BuildHierarchyForOwner(events []*nostr.Event, unresolved map[string]string,
 	builder := NewHierarchyBuilderWithUnresolved(lists, unresolved)
 	return builder.Build()
 }
+
+// OwnedListsOfKind walks the forest depth-first and returns every resolved,
+// non-foreign list of kind once, by coordinate, in first-visit order.
+// Placeholders are skipped; foreign lists are skipped but their children
+// are still walked, since an owned list may sit beneath one. This is the
+// candidate set a picker offers for that kind.
+func OwnedListsOfKind(roots []*TreeNode, kind int) []*List {
+	var out []*List
+	seen := make(map[string]bool)
+	var walk func(n *TreeNode)
+	walk = func(n *TreeNode) {
+		if n.Unresolved != nil {
+			return
+		}
+		if n.List != nil && n.List.Kind == kind && !n.List.Foreign && !seen[n.List.Coord] {
+			seen[n.List.Coord] = true
+			out = append(out, n.List)
+		}
+		for _, child := range n.Children {
+			walk(child)
+		}
+	}
+	for _, root := range roots {
+		walk(root)
+	}
+	return out
+}

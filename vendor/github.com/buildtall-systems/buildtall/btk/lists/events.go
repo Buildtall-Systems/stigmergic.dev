@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nbd-wtf/go-nostr"
 
+	"github.com/buildtall-systems/buildtall/btk/feedlang"
 	btknostr "github.com/buildtall-systems/buildtall/btk/nostr"
 )
 
@@ -15,6 +17,10 @@ const (
 	tagTitle       = "title"
 	tagDescription = "description"
 	tagImage       = "image"
+	// tagLanguage is the feed language a list declares, a bare tag beside
+	// the NIP-51 set metadata. NIP-32's language namespace is two-letter
+	// ISO-639-1 and cannot carry a region such as en-us.
+	tagLanguage = "language"
 )
 
 // ErrItemAlreadyPresent reports an add whose (type, value) pair is already in
@@ -62,11 +68,16 @@ func tagValue(item Item) (string, error) {
 
 // itemTag renders one item as its wire tag. A save time occupies the fourth
 // position, so position three is padded with an empty relay hint when the
-// item carries none. Only an addressable item carries a save time.
+// item carries none. Only an addressable or event item carries a save time,
+// and never beside an identifier: the two compete for position four, so an
+// item carrying both is unwritable rather than silently mangled.
 func itemTag(item Item) (nostr.Tag, error) {
 	value, err := tagValue(item)
 	if err != nil {
 		return nil, err
+	}
+	if item.SavedAt > 0 && item.Identifier != "" {
+		return nil, fmt.Errorf("item %s carries both an identifier and a save time, which compete for position four", value)
 	}
 	tag := nostr.Tag{item.Type, value}
 	if item.RelayHint != "" {
@@ -78,7 +89,7 @@ func itemTag(item Item) (nostr.Tag, error) {
 		}
 		tag = append(tag, item.Identifier)
 	}
-	if item.SavedAt > 0 && item.IsAddressable() {
+	if item.SavedAt > 0 && item.hasSaveTimePosition() {
 		for len(tag) < 3 {
 			tag = append(tag, "")
 		}
@@ -127,6 +138,44 @@ func NewListEvent(kind int, npub string, dTag string, title string, description 
 		Tags:      tags,
 		Content:   "",
 	}, nil
+}
+
+// setLanguage writes the declared feed language onto an unsigned list event,
+// normalized: one language tag, replacing any present, placed after the set
+// metadata so the items stay last. A blank value writes nothing, and a
+// value that is not a language code is refused with feedlang.ErrInvalid.
+func setLanguage(event *nostr.Event, language string) error {
+	if strings.TrimSpace(language) == "" {
+		return nil
+	}
+	code, ok := feedlang.Normalize(language)
+	if !ok {
+		return fmt.Errorf("%w: %q", feedlang.ErrInvalid, language)
+	}
+	tags := make(nostr.Tags, 0, len(event.Tags)+1)
+	at := 0
+	for _, tag := range event.Tags {
+		if len(tag) >= 1 && tag[0] == tagLanguage {
+			continue
+		}
+		tags = append(tags, tag)
+		if len(tag) >= 1 && at == len(tags)-1 && isSetMetadata(tag[0]) {
+			at = len(tags)
+		}
+	}
+	tags = append(tags[:at], append(nostr.Tags{{tagLanguage, code}}, tags[at:]...)...)
+	event.Tags = tags
+	return nil
+}
+
+// isSetMetadata reports whether a tag name heads the metadata block a list
+// event opens with.
+func isSetMetadata(name string) bool {
+	switch name {
+	case "d", tagTitle, tagDescription, tagImage:
+		return true
+	}
+	return false
 }
 
 func UpdateListTitle(event *nostr.Event, newTitle string) *nostr.Event {

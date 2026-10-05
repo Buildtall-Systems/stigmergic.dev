@@ -38,7 +38,7 @@ func findAvailablePort(host string, startPort int, maxAttempts int) (int, error)
 var enableAuth bool
 
 func init() {
-	serveCmd.Flags().BoolVar(&enableAuth, "auth", false, "enable Nostr authentication (requires allowed_npubs in config)")
+	serveCmd.Flags().BoolVar(&enableAuth, "auth", false, "require a Nostr login for every page (only npubs in allowed_npubs may sign in)")
 }
 
 var serveCmd = &cobra.Command{

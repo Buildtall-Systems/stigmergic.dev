@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildtall-systems/buildtall/btk/views/login"
+
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
 )
@@ -462,11 +464,13 @@ func TestLayoutEmitsThemeSwitchingScaffolding(t *testing.T) {
 	}
 }
 
-func TestLoginPageUsesThemeVariables(t *testing.T) {
+func TestLoginPageServesTheBtkPanelInTheTheme(t *testing.T) {
 	t.Parallel()
 
+	paths := login.DefaultPaths()
+
 	var sb strings.Builder
-	err := Login("http://localhost:8080", testTheme(), testThemes()).Render(context.Background(), &sb)
+	err := Login(paths, "/file/notes.md", testTheme(), testThemes()).Render(context.Background(), &sb)
 	if err != nil {
 		t.Fatalf("failed to render: %v", err)
 	}
@@ -476,8 +480,11 @@ func TestLoginPageUsesThemeVariables(t *testing.T) {
 		":root {",
 		`[data-theme="test-light"] {`,
 		"localStorage.getItem('stigmergic-theme')",
-		"border: 1px solid var(--cyan-color)",
-		"color: var(--red-color)",
+		"/static/styles/output.css",
+		"/static/btk/js/btk-components.js",
+		"/static/btk/js/nostr.js",
+		paths.Start,
+		"notes.md",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("expected login page to contain %q", want)

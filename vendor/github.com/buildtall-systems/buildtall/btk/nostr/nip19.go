@@ -68,3 +68,26 @@ func NsecToNpub(nsec string) (string, error) {
 func HexToNevent(eventID string, relays []string) (string, error) {
 	return nip19.EncodeEvent(eventID, relays, "")
 }
+
+// HexToNote encodes an event id as a note, the bare NIP-19 form with no relay
+// hints. It is the identifier an event carries outside the wire when the
+// relay is already known, as it is for a job on the control plane.
+func HexToNote(eventID string) (string, error) {
+	return nip19.EncodeNote(eventID)
+}
+
+// NoteToHex decodes a note back to the hex id a filter or tag needs.
+func NoteToHex(note string) (string, error) {
+	prefix, v, err := nip19.Decode(note)
+	if err != nil {
+		return "", fmt.Errorf("invalid note: %w", err)
+	}
+	if prefix != "note" {
+		return "", fmt.Errorf("expected note prefix, got %s", prefix)
+	}
+	eventID, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected data type for note")
+	}
+	return eventID, nil
+}

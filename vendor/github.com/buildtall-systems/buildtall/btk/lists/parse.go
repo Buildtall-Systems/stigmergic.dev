@@ -21,6 +21,7 @@ func ParseList(event *nostr.Event) (*List, error) {
 		Title:       GetTitle(event),
 		Description: GetDescription(event),
 		Image:       GetImage(event),
+		Language:    GetLanguage(event),
 		CreatedAt:   int64(event.CreatedAt),
 		Items:       GetItems(event),
 	}
@@ -62,9 +63,16 @@ func GetImage(event *nostr.Event) string {
 	return firstTagValue(event, tagImage)
 }
 
-// parseSavedAt reads the drss save time from the fourth position of an "a"
-// tag. A value that is not a positive integer of seconds is a fact about a
-// foreign writer, not a parse failure, so it reads as absent.
+// GetLanguage reads the declared feed language, raw: resolution and the
+// en-us fallback belong to the reader.
+func GetLanguage(event *nostr.Event) string {
+	return firstTagValue(event, tagLanguage)
+}
+
+// parseSavedAt reads the save time from the fourth position of an "a" tag
+// (the drss convention) or an "e" tag (the file set). A value that is not a
+// positive integer of seconds is a fact about a foreign writer, not a parse
+// failure, so it reads as absent.
 func parseSavedAt(tag nostr.Tag) int64 {
 	if len(tag) < 4 {
 		return 0
@@ -97,7 +105,7 @@ func GetItems(event *nostr.Event) []Item {
 			items = append(items, item)
 
 		case "e":
-			item := Item{Type: "e", Value: tag[1]}
+			item := Item{Type: "e", Value: tag[1], SavedAt: parseSavedAt(tag)}
 			if len(tag) >= 3 {
 				item.RelayHint = tag[2]
 			}
@@ -120,6 +128,20 @@ func GetItems(event *nostr.Event) []Item {
 			}
 			items = append(items, item)
 
+		case itemTypeRelay:
+			// itemTag pads position two with an empty relay hint when an
+			// identifier follows, so the identifier is whichever trailing
+			// position carries a value. Without this case a relay set this
+			// kit wrote reads back as no items at all.
+			item := Item{Type: itemTypeRelay, Value: tag[1]}
+			if len(tag) >= 3 && tag[2] != "" {
+				item.Identifier = tag[2]
+			}
+			if len(tag) >= 4 && tag[3] != "" {
+				item.Identifier = tag[3]
+			}
+			items = append(items, item)
+
 		case tagEmoji:
 			if len(tag) >= 3 {
 				items = append(items, Item{Type: tagEmoji, Value: tag[1], Identifier: tag[2]})
@@ -133,6 +155,11 @@ func GetItems(event *nostr.Event) []Item {
 func CoordinateFromEvent(event *nostr.Event) string {
 	return FormatCoordinate(event.Kind, event.PubKey, GetDTag(event))
 }
+
+const (
+	siteSetName       = "Site Set"
+	provenanceSetName = "Provenance Set"
+)
 
 func KindName(kind int) string {
 	switch kind {
@@ -152,6 +179,12 @@ func KindName(kind int) string {
 		return "Emoji Set"
 	case KindListSet:
 		return "List Set"
+	case KindFileSet:
+		return "File Set"
+	case KindSiteSet:
+		return siteSetName
+	case KindProvenanceSet:
+		return provenanceSetName
 	default:
 		return fmt.Sprintf("Kind %d", kind)
 	}

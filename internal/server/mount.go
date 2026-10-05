@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync/atomic"
 
+	"github.com/nbd-wtf/go-nostr"
 	"go.abhg.dev/goldmark/wikilink"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/markdown"
@@ -14,12 +16,22 @@ import (
 )
 
 // VaultLoader discovers and loads every vault one owner publishes. The
-// server calls it for each configured npub at startup and, when auth is on,
-// once for each npub that signs in. It is injected rather than built here so
-// the server owns no relay connection of its own: the command that knows the
-// relays owns the pool, and a test supplies synthetic vaults with no network
-// at all.
-type VaultLoader func(ctx context.Context, owner string) ([]*vaultsrc.Vault, error)
+// server calls it for each configured npub at startup with no signer, and
+// once for each npub that signs in with a signer acting as that npub, which
+// answers a relay's NIP-42 challenge so the owner's private vaults are read.
+// It is injected rather than built here so the server owns no relay
+// connection of its own: the command that knows the relays owns the pools,
+// and a test supplies synthetic vaults with no network at all.
+//
+// A loader that met a challenge it could not answer returns the vaults it
+// did read together with ErrAuthRequired.
+type VaultLoader func(ctx context.Context, owner string, signer nostr.Signer) ([]*vaultsrc.Vault, error)
+
+// ErrAuthRequired reports that a relay withheld events behind a NIP-42
+// challenge the loader could not answer: there was no signer, or the signer
+// refused or did not answer in time. The vaults read alongside it are
+// complete for every relay that did answer.
+var ErrAuthRequired = errors.New("a vault relay requires authentication the loader could not give")
 
 // mount is one content source at the route prefix it answers under,
 // together with everything derived from its shape: the tree the sidebar
@@ -36,8 +48,11 @@ type mount struct {
 	// needs the resolver its own scan produced, and never the lock. It
 	// leads the strings and slices for field alignment, which keeps the
 	// GC's pointer-scan region off the end of the struct.
-	resolver  atomic.Pointer[markdown.TreeResolver]
-	prefix    string
+	resolver atomic.Pointer[markdown.TreeResolver]
+	prefix   string
+	// owner is the npub a private mount belongs to: a vault read with that
+	// npub's signer, which no other reader may see. Empty means public.
+	owner     string
 	signature string
 	files     []models.SearchableFile
 	ignore    []string
@@ -97,6 +112,46 @@ func vaultMount(owner, name string) string {
 func routable(owner, name string) bool {
 	return owner != "" && name != "" &&
 		!strings.Contains(owner, "/") && !strings.Contains(name, "/")
+}
+
+// visibleTo reports whether viewer, a session npub or empty for an anonymous
+// reader, may read this mount.
+func (m *mount) visibleTo(viewer string) bool {
+	return m.owner == "" || m.owner == viewer
+}
+
+// visibleMounts is the part of mounts viewer may read, in the same order.
+func visibleMounts(mounts []*mount, viewer string) []*mount {
+	visible := make([]*mount, 0, len(mounts))
+	for _, m := range mounts {
+		if m.visibleTo(viewer) {
+			visible = append(visible, m)
+		}
+	}
+	return visible
+}
+
+// hiddenPrefixes names the route prefixes of every mount viewer may not
+// read. The corpus-wide caches are built once for every reader, so a reader's
+// view of them is the cache with these prefixes taken out.
+func hiddenPrefixes(mounts []*mount, viewer string) []string {
+	var hidden []string
+	for _, m := range mounts {
+		if !m.visibleTo(viewer) {
+			hidden = append(hidden, m.prefix)
+		}
+	}
+	return hidden
+}
+
+// routeHidden reports whether route lies under one of the hidden prefixes.
+func routeHidden(hidden []string, route string) bool {
+	for _, prefix := range hidden {
+		if strings.HasPrefix(route, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // mutable reports whether a rescan can produce a different tree. A watched

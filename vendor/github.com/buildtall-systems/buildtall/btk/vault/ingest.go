@@ -98,9 +98,9 @@ type Census struct {
 // the whole tree in scope. The returned bundle passes the publish gates
 // unmodified, and the census accounts for every entry the walk saw.
 func Ingest(source, name, owner, nsecSource string, include []string) (*okf.Bundle, *Census, error) {
-	domain, err := lists.VaultDomain(name)
+	domain, err := documentDomain(name)
 	if err != nil {
-		return nil, nil, fmt.Errorf("vault name: %w", err)
+		return nil, nil, err
 	}
 	cfg := &okf.VaultConfig{Owner: owner, NsecSource: nsecSource}
 	if err = cfg.Validate(); err != nil {

@@ -130,6 +130,29 @@ export STIGMERGIC_LOGLEVEL=DEBUG
 stigmergic serve ./docs
 ```
 
+### Sign-in and Private Vaults
+
+Stigmergic signs readers in with Nostr through the btk login at `/login`. A reader signs with a NIP-07 browser extension, a pasted `bunker://` link, or a NIP-46 QR code. The server never asks for a secret key.
+
+The login is mounted in two cases:
+
+- `--auth` (or `auth.enabled = true`) is set. Every page then requires a login. Only the npubs in `auth.allowed_npubs` can sign in. An empty whitelist admits no one.
+- Vault relays are configured. A reader can then sign in to read their own private vaults. A non-empty `auth.allowed_npubs` limits who can sign in.
+
+```toml
+[vault]
+relays = ["wss://relay.example.org/"]
+npubs = []
+
+[auth]
+allowed_npubs = ["npub1..."]
+session_max_age = "24h"
+```
+
+Vaults are read from the `vault.relays`. The vaults of each npub in `vault.npubs` are read without a login and are public. When a reader signs in, the server also reads that reader's own vaults. If a relay asks for NIP-42 authentication, the server signs the AUTH event through the reader's signer. A reader who signed in with an extension answers through the open page.
+
+A vault read with the reader's signer is private to that reader. Other readers cannot see it in the tree, search, the files list, the vault panel, or backlinks, and its pages return 404 to them. A public document never links into a private vault. If a relay asks for authentication and no signer answers, the server tries again on the reader's next request.
+
 ## Themes
 
 ### Built-in Themes

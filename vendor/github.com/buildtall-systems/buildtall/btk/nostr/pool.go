@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/keyer"
 
 	"github.com/buildtall-systems/buildtall/btk/retry"
 )
@@ -24,28 +25,44 @@ func NewPoolWithAuth(ctx context.Context, authHandler nostr.WithAuthHandler) *no
 // to a relay that gates only writes: such relays never send CLOSED
 // auth-required on reads, so reactive auth never fires and publishes are
 // rejected. Proactive auth stalls EnsureRelay briefly on relays that never
-// send AUTH, so pools that only read should keep NewPoolWithAuth.
-func NewPoolWithProactiveAuth(ctx context.Context, authHandler nostr.WithAuthHandler) *nostr.SimplePool {
-	return nostr.NewSimplePool(ctx, nostr.WithProactiveAuth(authHandler))
+// send AUTH, so pools that only read should keep NewPoolWithAuth. Further
+// options apply after the auth option, so a caller can give every relay a
+// hardened HTTP client or request headers through nostr.WithRelayOptions.
+func NewPoolWithProactiveAuth(ctx context.Context, authHandler nostr.WithAuthHandler, opts ...nostr.PoolOption) *nostr.SimplePool {
+	return nostr.NewSimplePool(ctx, append([]nostr.PoolOption{nostr.WithProactiveAuth(authHandler)}, opts...)...)
 }
 
-// NsecAuthHandler returns a NIP-42 auth handler that signs each relay auth challenge
-// with the key derived from nsec, logging the outcome. It composes with NewPoolWithAuth
-// (or NewSimplePool) as a PoolOption, replacing the hand-rolled nsec→hex→sign closure
-// every buildtall NIP-42 service otherwise duplicates.
-func NsecAuthHandler(nsec string, log *slog.Logger) nostr.WithAuthHandler {
-	return func(_ context.Context, authEvent nostr.RelayEvent) error {
-		secHex, err := NsecToHex(nsec)
-		if err != nil {
-			log.Error("NIP-42 nsec conversion failed", "relay", authEvent.Relay.URL, "error", err)
-			return fmt.Errorf("converting nsec: %w", err)
-		}
-		if err := authEvent.Sign(secHex); err != nil {
+// SignerAuthHandler returns a NIP-42 auth handler that signs each relay
+// auth challenge through signer, logging the outcome. It composes with
+// NewPoolWithAuth (or NewSimplePool) as a PoolOption, so a local key and a
+// remote bunker answer a relay the same way.
+func SignerAuthHandler(signer nostr.Signer, log *slog.Logger) nostr.WithAuthHandler {
+	return func(ctx context.Context, authEvent nostr.RelayEvent) error {
+		if err := signer.SignEvent(ctx, authEvent.Event); err != nil {
 			log.Error("NIP-42 auth sign failed", "relay", authEvent.Relay.URL, "error", err)
 			return fmt.Errorf("signing auth event: %w", err)
 		}
 		log.Debug("NIP-42 auth success", "relay", authEvent.Relay.URL)
 		return nil
+	}
+}
+
+// NsecAuthHandler is SignerAuthHandler for a service that holds its key as
+// an nsec. The key is decoded at challenge time, as it always was, so a
+// malformed nsec fails the auth rather than the pool's construction.
+func NsecAuthHandler(nsec string, log *slog.Logger) nostr.WithAuthHandler {
+	return func(ctx context.Context, authEvent nostr.RelayEvent) error {
+		secHex, err := NsecToHex(nsec)
+		if err != nil {
+			log.Error("NIP-42 nsec conversion failed", "relay", authEvent.Relay.URL, "error", err)
+			return fmt.Errorf("converting nsec: %w", err)
+		}
+		signer, err := keyer.NewPlainKeySigner(secHex)
+		if err != nil {
+			log.Error("NIP-42 signer construction failed", "relay", authEvent.Relay.URL, "error", err)
+			return fmt.Errorf("constructing signer: %w", err)
+		}
+		return SignerAuthHandler(signer, log)(ctx, authEvent)
 	}
 }
 

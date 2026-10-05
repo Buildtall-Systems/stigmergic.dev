@@ -1,6 +1,8 @@
 tmp/
 /stigmergic
 *_templ.go
+# A vendored module ships its generated templ code; nothing here regenerates it.
+!vendor/**/*_templ.go
 *.log
 node_modules/
 dist/

@@ -1,5 +1,7 @@
 package lists
 
+import "slices"
+
 // Harvest is the deduplicated membership of a list subtree: the npubs its
 // leaves follow and the addressable content its leaves contain. The river
 // reads Npubs as its author set; wave C reads Addresses as article
@@ -10,7 +12,13 @@ type Harvest struct {
 	// address a foreign writer or a pre-convention writer wrote. A diamond
 	// that reaches one address twice keeps the later save, so the value does
 	// not depend on the order the walk happens to take.
-	SavedAt   map[string]int64
+	SavedAt map[string]int64
+	// Relays maps a member value (npub or address) to the distinct non-empty
+	// relay hints its items carried, in walk order. A member whose items
+	// carried no hint is absent. The hints are the raw tag values: btk never
+	// connects from them, so it does not normalize them; a client that
+	// connects normalizes on its own side (buildtall android does).
+	Relays    map[string][]string
 	Npubs     []string
 	Addresses []string
 }
@@ -27,7 +35,7 @@ func HarvestSubtree(root *TreeNode, target string) (Harvest, bool) {
 	if node == nil {
 		return Harvest{}, false
 	}
-	h := Harvest{SavedAt: make(map[string]int64)}
+	h := Harvest{SavedAt: make(map[string]int64), Relays: make(map[string][]string)}
 	harvestNode(node, &h, make(map[string]bool), make(map[string]bool))
 	return h, true
 }
@@ -59,6 +67,7 @@ func harvestNode(node *TreeNode, h *Harvest, seenNpub, seenAddr map[string]bool)
 					seenNpub[item.Value] = true
 					h.Npubs = append(h.Npubs, item.Value)
 				}
+				h.retainHint(item.Value, item.RelayHint)
 			case item.IsAddressable() && node.List.Kind != KindListSet:
 				if !seenAddr[item.Value] {
 					seenAddr[item.Value] = true
@@ -67,10 +76,18 @@ func harvestNode(node *TreeNode, h *Harvest, seenNpub, seenAddr map[string]bool)
 				if item.SavedAt > h.SavedAt[item.Value] {
 					h.SavedAt[item.Value] = item.SavedAt
 				}
+				h.retainHint(item.Value, item.RelayHint)
 			}
 		}
 	}
 	for _, child := range node.Children {
 		harvestNode(child, h, seenNpub, seenAddr)
 	}
+}
+
+func (h *Harvest) retainHint(member, hint string) {
+	if hint == "" || slices.Contains(h.Relays[member], hint) {
+		return
+	}
+	h.Relays[member] = append(h.Relays[member], hint)
 }

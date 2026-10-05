@@ -43,7 +43,7 @@ func DTagForConcept(domain lists.Domain, c *Concept) (string, error) {
 // contract of DTagForConcept is right for reading an event back and wrong for
 // emitting one: it validates an explicit "d" value against ":" alone, so a
 // hand-written "d: drss-tech" resolves cleanly into another application's
-// namespace, and nip-101 requires that a writer emit only d-tags belonging to
+// namespace, and the list-of-lists NUD requires that a writer emit only d-tags belonging to
 // the domain it declared. The domain's own root is refused for the same
 // reason a concept is not the vault that holds it.
 func MemberDTagForConcept(domain lists.Domain, c *Concept) (string, error) {

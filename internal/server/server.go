@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -15,8 +16,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildtall-systems/buildtall/btk/auth/nip98"
+	"github.com/a-h/templ"
+
+	"github.com/buildtall-systems/buildtall/btk/auth/identity"
 	"github.com/buildtall-systems/buildtall/btk/auth/session"
+	"github.com/buildtall-systems/buildtall/btk/auth/site"
+	btknostr "github.com/buildtall-systems/buildtall/btk/nostr"
+	btkstatic "github.com/buildtall-systems/buildtall/btk/static"
+	"github.com/buildtall-systems/buildtall/btk/views/login"
 
 	"go.abhg.dev/goldmark/wikilink"
 
@@ -27,6 +34,7 @@ import (
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/models"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/source"
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/theme"
+	"github.com/Buildtall-Systems/stigmergic.dev/web/templates"
 )
 
 type Server struct {
@@ -42,14 +50,13 @@ type Server struct {
 	clients         map[chan string]bool
 	ctx             context.Context
 	cancel          context.CancelFunc
-	sessionManager  *session.Manager
+	site            *site.Site
 	loadVaults      VaultLoader
-	owners          chan string
+	owners          chan ownerRequest
 	observed        map[string]bool
+	signers         map[string]*latestSigner
 	primaryMount    *mount
 	index           contentIndex
-	serverURL       string
-	allowedPubkeys  []string
 	mounts          []*mount
 	treeMux         sync.RWMutex
 	clientsMux      sync.RWMutex
@@ -88,41 +95,34 @@ func NewServer(cfg *config.Config, src source.ContentSource) *Server {
 }
 
 // NewServerWithVaults serves the primary source at /file/ and mounts every
-// vault the loader finds: at startup for each configured npub and, when auth
-// is on, for each npub that signs in. A nil loader mounts no vaults, which
-// is the whole of today's behavior.
+// vault the loader finds: at startup for each configured npub, and for each
+// npub that signs in, with that reader's signer. A nil loader mounts no
+// vaults, which is the whole of today's behavior.
+//
+// The login is mounted when auth is on, so readers can sign in to pass the
+// gate, and when a loader is set, so a reader can sign in to read their own
+// private vaults even where no gate stands.
 func NewServerWithVaults(cfg *config.Config, src source.ContentSource, load VaultLoader) *Server {
 	mux := http.NewServeMux()
 
-	handler := loggingMiddleware(mux)
-	handler = recoveryMiddleware(handler)
-	handler = securityMiddleware(handler)
-
 	var sm *session.Manager
-	var allowedPubkeys []string
-	var serverURL string
-
-	if cfg.Auth.Enabled {
+	if cfg.Auth.Enabled || load != nil {
 		var err error
-		allowedPubkeys, err = nip98.NormalizePubkeys(cfg.Auth.AllowedNpubs)
-		if err != nil {
-			logger.Log.Error("invalid pubkey in allowlist", "error", err)
-			panic(fmt.Sprintf("invalid pubkey in auth allowlist: %v", err))
-		}
-
-		sm, err = session.NewManager("stigmergic_session", cfg.Auth.SessionSecret, cfg.Auth.SessionMaxAge)
+		sm, err = session.NewManager(sessionCookie, cfg.Auth.SessionSecret, cfg.Auth.SessionMaxAge)
 		if err != nil {
 			logger.Log.Error("failed to create session manager", "error", err)
 			panic(fmt.Sprintf("failed to create session manager: %v", err))
 		}
+	}
 
-		if cfg.BaseURL != "" {
-			serverURL = cfg.BaseURL
-		} else {
-			serverURL = fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
-		}
-		handler = auth.Middleware(sm)(handler)
-		logger.Log.Info("auth enabled", "allowed_pubkeys", len(allowedPubkeys))
+	handler := loggingMiddleware(mux)
+	handler = recoveryMiddleware(handler)
+	handler = securityMiddleware(handler)
+	if cfg.Auth.Enabled {
+		handler = auth.Gate(handler)
+	}
+	if sm != nil {
+		handler = session.ExtractSession(sm)(handler)
 	}
 
 	srv := &http.Server{
@@ -156,33 +156,41 @@ func NewServerWithVaults(cfg *config.Config, src source.ContentSource, load Vaul
 		themes = append([]*theme.Theme{thm}, themes...)
 	}
 
+	var loginSite *site.Site
+	if sm != nil {
+		loginSite, err = mountLogin(mux, cfg, sm, thm, themes)
+		if err != nil {
+			logger.Log.Error("failed to mount login", "error", err)
+			panic(fmt.Sprintf("failed to mount login: %v", err))
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	primary := newMount(markdown.FileMount, src, cfg.IgnorePatterns)
 
 	s := &Server{
-		httpServer:     srv,
-		config:         cfg,
-		mux:            mux,
-		primaryMount:   primary,
-		mounts:         []*mount{primary},
-		theme:          thm,
-		themes:         themes,
-		clients:        make(map[chan string]bool),
-		ctx:            ctx,
-		cancel:         cancel,
-		sessionManager: sm,
-		loadVaults:     load,
-		owners:         make(chan string, ownerQueue),
-		observed:       make(map[string]bool),
-		allowedPubkeys: allowedPubkeys,
-		serverURL:      serverURL,
+		httpServer:   srv,
+		config:       cfg,
+		mux:          mux,
+		primaryMount: primary,
+		mounts:       []*mount{primary},
+		theme:        thm,
+		themes:       themes,
+		clients:      make(map[chan string]bool),
+		ctx:          ctx,
+		cancel:       cancel,
+		site:         loginSite,
+		loadVaults:   load,
+		owners:       make(chan ownerRequest, ownerQueue),
+		observed:     make(map[string]bool),
+		signers:      make(map[string]*latestSigner),
 	}
 
 	s.cachedFiles.Store([]models.SearchableFile{})
 	s.cachedBacklinks.Store(models.BacklinkIndex{})
 	s.cachedContent.Store(searchIndex{})
-	s.cachedRoutes.Store(markdown.NewRouteResolver(nil))
+	s.cachedRoutes.Store(newRouteSet(nil, nil))
 
 	s.wg.Add(1)
 	go s.initialScan()
@@ -257,6 +265,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 
 	s.wg.Wait()
+
+	if s.site != nil {
+		s.site.Close()
+	}
 
 	return s.httpServer.Shutdown(ctx)
 }
@@ -529,7 +541,7 @@ func (s *Server) rebuildIndexes() {
 	changed := make(markdown.ChangedRoutes)
 	docs := make(searchDocs, len(prev.docs))
 	files := make([]models.SearchableFile, 0, len(prev.corpus))
-	entries := make([]markdown.RouteEntry, 0, len(prev.corpus))
+	entries := make([][]markdown.RouteEntry, 0, len(mounts))
 
 	for _, m := range mounts {
 		mounted := s.mountFiles(m)
@@ -540,7 +552,7 @@ func (s *Server) rebuildIndexes() {
 		maps.Copy(docs, updateSearchDocs(prev.docs, read, reread, m.src.Name()))
 
 		files = append(files, routedFiles(m.prefix, mounted)...)
-		entries = append(entries, routeEntries(m.prefix, mounted)...)
+		entries = append(entries, routeEntries(m.prefix, mounted))
 	}
 
 	links := markdown.ExtractLinkRefs(prev.links, corpus, changed)
@@ -551,7 +563,7 @@ func (s *Server) rebuildIndexes() {
 	// their order.
 	sort.SliceStable(files, func(i, j int) bool { return files[i].ModTime > files[j].ModTime })
 
-	routes := markdown.NewRouteResolver(entries)
+	routes := newRouteSet(mounts, entries)
 
 	logger.Log.Debug("rebuilt content indexes", "files", len(files), "reread", len(changed), "sources", len(mounts))
 
@@ -570,28 +582,148 @@ func (s *Server) mountFiles(m *mount) []models.SearchableFile {
 
 // linkResolvers answers one document's links exactly as its own page render
 // would: the source holding it answers first, so a name it holds always
-// wins, and the corpus-wide resolver stands behind it so a link reaching
+// wins, and the corpus its owner sees stands behind it so a link reaching
 // into another source resolves rather than dangling. Index and render
 // agreeing on this is what makes a backlink a claim about the page.
-func (s *Server) linkResolvers(mounts []*mount, routes *markdown.TreeResolver) markdown.ResolverFor {
+func (s *Server) linkResolvers(mounts []*mount, routes *routeSet) markdown.ResolverFor {
 	return func(route string) wikilink.Resolver {
 		m, rel, ok := mountOf(mounts, route)
 		if !ok {
-			return routes
+			return routes.public
 		}
 		own, _ := m.renderSeams(rel, s.config.AttachmentRoot)
-		return markdown.Chain{own, routes}
+		return markdown.Chain{own, routes.forOwner(m.owner)}
 	}
 }
 
-// corpusRoutes is the resolver over every mounted source, which a page
+// corpusRoutes is the set of corpus-wide resolvers, one of which a page
 // render chains behind its own source's.
-func (s *Server) corpusRoutes() *markdown.TreeResolver {
-	if v, ok := s.cachedRoutes.Load().(*markdown.TreeResolver); ok {
+func (s *Server) corpusRoutes() *routeSet {
+	if v, ok := s.cachedRoutes.Load().(*routeSet); ok {
 		return v
 	}
-	return markdown.NewRouteResolver(nil)
+	return newRouteSet(nil, nil)
 }
+
+// routeSet resolves a link against the corpus a document's owner can see. A
+// public document resolves only into public sources, whoever reads it, so a
+// page and its backlinks never name a private document. A private document
+// resolves into the public sources and its own owner's private ones.
+type routeSet struct {
+	public *markdown.TreeResolver
+	owners map[string]*markdown.TreeResolver
+}
+
+// newRouteSet builds the resolvers over mounts, where entries holds each
+// mount's route entries at the same index. Every resolver keeps the mounts'
+// order, so a name two sources hold resolves the same way in each.
+func newRouteSet(mounts []*mount, entries [][]markdown.RouteEntry) *routeSet {
+	var public []markdown.RouteEntry
+	owned := make(map[string][]markdown.RouteEntry)
+	for i, m := range mounts {
+		if m.owner == "" {
+			public = append(public, entries[i]...)
+			continue
+		}
+		owned[m.owner] = nil
+	}
+
+	owners := make(map[string]*markdown.TreeResolver, len(owned))
+	for owner := range owned {
+		var seen []markdown.RouteEntry
+		for i, m := range mounts {
+			if m.visibleTo(owner) {
+				seen = append(seen, entries[i]...)
+			}
+		}
+		owners[owner] = markdown.NewRouteResolver(seen)
+	}
+
+	return &routeSet{public: markdown.NewRouteResolver(public), owners: owners}
+}
+
+// forOwner is the resolver for a document owned by owner, empty for public.
+func (rs *routeSet) forOwner(owner string) *markdown.TreeResolver {
+	if r, ok := rs.owners[owner]; ok {
+		return r
+	}
+	return rs.public
+}
+
+// sessionCookie names the cookie the login sets.
+const sessionCookie = "stigmergic_session"
+
+// mountLogin mounts the btk login: the login page, the extension and
+// remote-signer routes, and the sign bridge through which a reader signed
+// in with an extension answers a vault relay's challenge. A non-empty
+// whitelist, or auth on with an empty one, admits only the npubs it names,
+// so an empty whitelist under auth admits no one rather than everyone.
+func mountLogin(mux *http.ServeMux, cfg *config.Config, sm *session.Manager, thm *theme.Theme, themes []*theme.Theme) (*site.Site, error) {
+	opts := site.Options{
+		Sessions: sm,
+		Logger:   logger.Log,
+		Resolve: func(_ context.Context, npub string) *identity.UserInfo {
+			return &identity.UserInfo{Npub: npub}
+		},
+		LoginPage: func(paths login.Paths, next string) templ.Component {
+			return templates.Login(paths, next, thm, themes)
+		},
+		Name:       "stigmergic",
+		BaseURL:    cfg.BaseURL,
+		SignBridge: true,
+	}
+
+	if cfg.Auth.Enabled || len(cfg.Auth.AllowedNpubs) > 0 {
+		whitelist, err := normalizeWhitelist(cfg.Auth.AllowedNpubs)
+		if err != nil {
+			return nil, err
+		}
+		opts.Admit = whitelistAdmit(whitelist)
+		logger.Log.Info("login whitelist active", "npubs", len(whitelist))
+	}
+
+	mux.Handle("GET /static/btk/js/", btkstatic.JSHandler())
+
+	return site.Mount(mux, opts)
+}
+
+// whitelistAdmit admits only the npubs on whitelist.
+func whitelistAdmit(whitelist []string) func(context.Context, string) error {
+	return func(_ context.Context, npub string) error {
+		if !slices.Contains(whitelist, npub) {
+			return errNotWhitelisted
+		}
+		return nil
+	}
+}
+
+// errNotWhitelisted is the text a reader sees when the whitelist refuses
+// their npub.
+var errNotWhitelisted = errors.New("this npub may not sign in here")
+
+// normalizeWhitelist turns the configured whitelist into npubs. An entry may
+// be an npub or a 64-character hex key, which is encoded to its npub.
+func normalizeWhitelist(entries []string) ([]string, error) {
+	whitelist := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if len(entry) == hexKeyLength {
+			npub, err := btknostr.HexToNpub(entry)
+			if err != nil {
+				return nil, fmt.Errorf("whitelist entry %q: %w", entry, err)
+			}
+			whitelist = append(whitelist, npub)
+			continue
+		}
+		if _, err := btknostr.NpubToHex(entry); err != nil {
+			return nil, fmt.Errorf("whitelist entry %q: %w", entry, err)
+		}
+		whitelist = append(whitelist, entry)
+	}
+	return whitelist, nil
+}
+
+// hexKeyLength is the length of a public key written as hex.
+const hexKeyLength = 64
 
 func (s *Server) initialScan() {
 	defer s.wg.Done()
