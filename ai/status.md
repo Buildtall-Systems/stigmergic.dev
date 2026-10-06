@@ -2,6 +2,15 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-10-06
+
+### v0.9.0 bump
+
+VERSION bumped 0.8.0 to 0.9.0 on `feature/version-0.9.0` for the btk
+login and per-npub relay AUTH. The release follows the v0.8.0 order,
+with one change: the tag reaches GitHub before goreleaser runs, which
+stops the misfire that put v0.7.0 and v0.8.0 on the wrong commit.
+
 ## 2026-10-05
 
 ### btk login and per-npub relay AUTH for private vaults
