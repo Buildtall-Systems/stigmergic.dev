@@ -12,9 +12,16 @@ the reader's picture and name. Resolve now reads the reader's kind 0
 profile through btk's ProfileResolver: picture and display name when
 found, the bare npub when the lookup is off, fails, or finds none. The
 relays come from a new `[profiles] relays` list, wss only like the
-vault list, defaulting to relay.damus.io and relay.primal.net. These
-are public relays that serve kind 0 without AUTH, because the server
-has no key to answer a challenge with. An empty list turns the lookup
+vault list, defaulting to purplepag.es, relay.damus.io and
+relay.primal.net. These are public relays that serve kind 0 without
+AUTH, because the server has no key to answer a challenge with.
+Damus and primal alone missed the operator's profile: neither holds
+its kind 0, and the outbox wave queries one write relay per author,
+the alphabetically first, here nos.lol, which lacks it too. The
+resolver queries the first relay alone before the rest, so
+purplepag.es, which indexes kind 0, comes first. A probe against the
+live relays found the picture in 650 ms through the new defaults and
+returned the placeholder through the old two. An empty list turns the lookup
 off. The resolver never writes back to them, bounds a lookup at five
 seconds, and caches a found profile for an hour. Only the me route
 calls Resolve, and htmx loads it after the page, so a slow lookup

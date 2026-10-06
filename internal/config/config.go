@@ -15,8 +15,10 @@ const localhost = "localhost"
 
 // defaultProfileRelays are where the nav looks up a signed-in reader's kind 0
 // profile: public relays that serve it without AUTH, since the server holds
-// no key of its own to answer a challenge with.
-var defaultProfileRelays = []string{"wss://relay.damus.io", "wss://relay.primal.net"}
+// no key of its own to answer a challenge with. The first is queried alone
+// before the rest, so it is purplepag.es, which indexes kind 0 profiles
+// whichever relays their authors write to.
+var defaultProfileRelays = []string{"wss://purplepag.es", "wss://relay.damus.io", "wss://relay.primal.net"}
 
 type AuthConfig struct {
 	SessionSecret string   `mapstructure:"session_secret" json:"-"`
