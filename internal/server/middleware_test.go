@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -105,6 +106,33 @@ func TestLoggingResponseWriter(t *testing.T) {
 
 	if w.statusCode != http.StatusNotFound {
 		t.Errorf("expected statusCode 404, got %d", w.statusCode)
+	}
+}
+
+// TestLoggingMiddlewareClearsWriteDeadline covers the sign bridge stream,
+// which clears its write deadline through http.ResponseController and fails
+// with 500 when the logging writer hides the server's writer.
+func TestLoggingMiddlewareClearsWriteDeadline(t *testing.T) {
+	t.Parallel()
+
+	handler := loggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL) //nolint:gosec,noctx
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("expected status 204, got %d", resp.StatusCode)
 	}
 }
 

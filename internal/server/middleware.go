@@ -59,3 +59,9 @@ func (lrw *loggingResponseWriter) Flush() {
 		flusher.Flush()
 	}
 }
+
+// Unwrap lets http.ResponseController reach the server's writer. Without it a
+// stream cannot clear its write deadline, and the btk sign bridge answers 500.
+func (lrw *loggingResponseWriter) Unwrap() http.ResponseWriter {
+	return lrw.ResponseWriter
+}

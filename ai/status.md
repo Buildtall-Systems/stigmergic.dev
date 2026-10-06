@@ -4,6 +4,18 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-10-06
 
+### Sign bridge stream fix
+
+On smallmind, a signed-in extension reader never mounted the private
+vault. The relay's AUTH waited a minute and failed with "waiting for
+the page to sign". The cause: the logging middleware's writer had no
+Unwrap, so the btk stream could not clear its write deadline, and
+`/api/auth/bridge/requests` answered 500. `loggingResponseWriter` now
+has Unwrap, and a test clears the write deadline through the
+middleware. A headless twin with a throwaway key against the fixed
+binary got the kind 22242 request on the stream, and its answer got
+204.
+
 ### v0.9.0 bump
 
 VERSION bumped 0.8.0 to 0.9.0 on `feature/version-0.9.0` for the btk
