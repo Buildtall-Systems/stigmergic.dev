@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/Buildtall-Systems/stigmergic.dev/internal/testutil"
@@ -278,5 +279,67 @@ func TestAuthConfigAbsentIsNoOp(t *testing.T) {
 
 	if cfg.Port != 9000 {
 		t.Errorf("expected port 9000, got %d", cfg.Port)
+	}
+}
+
+func TestProfileRelaysDefault(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if !slices.Equal(cfg.Profiles.Relays, defaultProfileRelays) {
+		t.Errorf("expected profile relays %v, got %v", defaultProfileRelays, cfg.Profiles.Relays)
+	}
+}
+
+func TestProfileRelaysFromFile(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{
+			name:    "named relays replace the defaults",
+			content: "[profiles]\nrelays = [\"wss://relay.example.com\"]\n",
+			want:    []string{"wss://relay.example.com"},
+		},
+		{
+			name:    "an empty list turns the lookup off",
+			content: "[profiles]\nrelays = []\n",
+			want:    []string{},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := testutil.CreateTempDir(t)
+			testutil.CreateTestFile(t, dir, ".stigmergic.toml", tc.content)
+
+			cfg, err := Load(filepath.Join(dir, ".stigmergic.toml"))
+			if err != nil {
+				t.Fatalf("Load failed: %v", err)
+			}
+
+			if !slices.Equal(cfg.Profiles.Relays, tc.want) {
+				t.Errorf("expected profile relays %v, got %v", tc.want, cfg.Profiles.Relays)
+			}
+		})
+	}
+}
+
+func TestProfileRelaysRefuseNonWSS(t *testing.T) {
+	t.Parallel()
+
+	dir := testutil.CreateTempDir(t)
+	testutil.CreateTestFile(t, dir, ".stigmergic.toml", "[profiles]\nrelays = [\"ws://relay.example.com\"]\n")
+
+	if _, err := Load(filepath.Join(dir, ".stigmergic.toml")); err == nil {
+		t.Error("expected a ws profile relay away from localhost to be refused")
 	}
 }

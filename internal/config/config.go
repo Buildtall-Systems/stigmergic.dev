@@ -13,6 +13,11 @@ import (
 // bind host, and the only host a ws (not wss) vault relay may name.
 const localhost = "localhost"
 
+// defaultProfileRelays are where the nav looks up a signed-in reader's kind 0
+// profile: public relays that serve it without AUTH, since the server holds
+// no key of its own to answer a challenge with.
+var defaultProfileRelays = []string{"wss://relay.damus.io", "wss://relay.primal.net"}
+
 type AuthConfig struct {
 	SessionSecret string   `mapstructure:"session_secret" json:"-"`
 	SessionMaxAge string   `mapstructure:"session_max_age"`
@@ -29,6 +34,13 @@ type VaultConfig struct {
 	Npubs  []string
 }
 
+// ProfilesConfig names the relays the nav reads a signed-in reader's name and
+// picture from. An empty list turns the lookup off, and the nav shows the
+// npub alone.
+type ProfilesConfig struct {
+	Relays []string
+}
+
 type Config struct {
 	Host        string
 	BaseURL     string `mapstructure:"base_url"`
@@ -43,6 +55,7 @@ type Config struct {
 	AttachmentRoot   string `mapstructure:"attachment_root"`
 	IgnorePatterns   []string
 	Vault            VaultConfig
+	Profiles         ProfilesConfig
 	Auth             AuthConfig
 	Port             int
 	RecentFilesCount int
@@ -81,6 +94,8 @@ func Load(cfgFile string) (*Config, error) {
 	v.SetDefault("vault.relays", []string{})
 	v.SetDefault("vault.npubs", []string{})
 
+	v.SetDefault("profiles.relays", defaultProfileRelays)
+
 	v.SetDefault("auth.enabled", false)
 	v.SetDefault("auth.allowed_npubs", []string{})
 	v.SetDefault("auth.session_secret", "")
@@ -117,30 +132,34 @@ func Load(cfgFile string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	if err := checkVaultRelays(cfg.Vault.Relays); err != nil {
+	if err := checkRelays("vault", cfg.Vault.Relays); err != nil {
+		return nil, err
+	}
+	if err := checkRelays("profile", cfg.Profiles.Relays); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
 }
 
-// checkVaultRelays refuses a relay list the reader could not honestly use:
-// every URL must be wss, with ws allowed only toward localhost.
-func checkVaultRelays(relays []string) error {
+// checkRelays refuses a relay list the reader could not honestly use: every
+// URL must be wss, with ws allowed only toward localhost. role names the list
+// in the error.
+func checkRelays(role string, relays []string) error {
 	for _, relay := range relays {
 		u, err := url.Parse(relay)
 		if err != nil {
-			return fmt.Errorf("vault relay %q: %w", relay, err)
+			return fmt.Errorf("%s relay %q: %w", role, relay, err)
 		}
 		switch u.Scheme {
 		case "wss":
 		case "ws":
 			host := u.Hostname()
 			if host != localhost && host != "127.0.0.1" && host != "::1" {
-				return fmt.Errorf("vault relay %q: ws is allowed only toward localhost", relay)
+				return fmt.Errorf("%s relay %q: ws is allowed only toward localhost", role, relay)
 			}
 		default:
-			return fmt.Errorf("vault relay %q: the scheme must be wss", relay)
+			return fmt.Errorf("%s relay %q: the scheme must be wss", role, relay)
 		}
 	}
 	return nil

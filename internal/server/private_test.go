@@ -386,7 +386,7 @@ func TestObserveSessionOffersTheReadersSigner(t *testing.T) {
 	srv := newTestServer(t, &config.Config{Port: 8080, Host: testHost, Theme: testThemeName})
 	srv.loadVaults = func(context.Context, string, nostr.Signer) ([]*vaultsrc.Vault, error) { return nil, nil }
 	if srv.site == nil {
-		mounted, err := mountLogin(http.NewServeMux(), srv.config, mustSessions(t), srv.theme, srv.themes)
+		mounted, err := mountLogin(http.NewServeMux(), srv.config, mustSessions(t), srv.theme, srv.themes, nil)
 		if err != nil {
 			t.Fatalf("mountLogin: %v", err)
 		}

@@ -158,7 +158,7 @@ func NewServerWithVaults(cfg *config.Config, src source.ContentSource, load Vaul
 
 	var loginSite *site.Site
 	if sm != nil {
-		loginSite, err = mountLogin(mux, cfg, sm, thm, themes)
+		loginSite, err = mountLogin(mux, cfg, sm, thm, themes, newProfileSource(cfg.Profiles.Relays))
 		if err != nil {
 			logger.Log.Error("failed to mount login", "error", err)
 			panic(fmt.Sprintf("failed to mount login: %v", err))
@@ -658,13 +658,11 @@ const sessionCookie = "stigmergic_session"
 // in with an extension answers a vault relay's challenge. A non-empty
 // whitelist, or auth on with an empty one, admits only the npubs it names,
 // so an empty whitelist under auth admits no one rather than everyone.
-func mountLogin(mux *http.ServeMux, cfg *config.Config, sm *session.Manager, thm *theme.Theme, themes []*theme.Theme) (*site.Site, error) {
+func mountLogin(mux *http.ServeMux, cfg *config.Config, sm *session.Manager, thm *theme.Theme, themes []*theme.Theme, profiles profileSource) (*site.Site, error) {
 	opts := site.Options{
 		Sessions: sm,
 		Logger:   logger.Log,
-		Resolve: func(_ context.Context, npub string) *identity.UserInfo {
-			return &identity.UserInfo{Npub: npub}
-		},
+		Resolve:  resolveUser(profiles),
 		LoginPage: func(paths login.Paths, next string) templ.Component {
 			return templates.Login(paths, next, thm, themes)
 		},
@@ -685,6 +683,63 @@ func mountLogin(mux *http.ServeMux, cfg *config.Config, sm *session.Manager, thm
 	mux.Handle("GET /static/btk/js/", btkstatic.JSHandler())
 
 	return site.Mount(mux, opts)
+}
+
+// Profile lookup bounds. The me route is the only caller and htmx loads it
+// after the page, so the deadline delays the nav slot and nothing else. A
+// found profile is kept for profileTTL, so a changed picture shows within it.
+const (
+	profileRelayTimeout = 3 * time.Second
+	profileDeadline     = 5 * time.Second
+	profileTTL          = time.Hour
+)
+
+// profileSource looks up an npub's kind 0 profile. btk's ProfileResolver is
+// the production one.
+type profileSource interface {
+	Resolve(ctx context.Context, npub string) (*btknostr.Profile, error)
+}
+
+// newProfileSource reads profiles from relays, the first as home and the rest
+// as fallbacks, or returns nil for an empty list, which turns the lookup off.
+// The resolver never writes back: these are public relays the server does not
+// run, and it has no key to publish with.
+func newProfileSource(relays []string) profileSource {
+	if len(relays) == 0 {
+		return nil
+	}
+	return btknostr.NewProfileResolver(
+		relays[0],
+		relays[1:],
+		btknostr.WithLogger(logger.Log),
+		btknostr.WithCacheToHome(false),
+		btknostr.WithTimeout(profileRelayTimeout),
+		btknostr.WithMaxDuration(profileDeadline),
+		btknostr.WithTTL(profileTTL),
+	)
+}
+
+// resolveUser builds the nav identity btk's avatar dropdown renders: the
+// reader's name and picture from their kind 0 profile, or the npub alone when
+// the lookup is off, fails, or finds no profile.
+func resolveUser(profiles profileSource) func(context.Context, string) *identity.UserInfo {
+	return func(ctx context.Context, npub string) *identity.UserInfo {
+		bare := &identity.UserInfo{Npub: npub}
+		if profiles == nil {
+			return bare
+		}
+		p, err := profiles.Resolve(ctx, npub)
+		if err != nil {
+			logger.Log.Warn("profile lookup failed", "npub", npub, "error", err)
+			return bare
+		}
+		if p == nil || p.Event == nil {
+			return bare
+		}
+		user := identity.FromProfile(p, false)
+		user.Npub = npub
+		return &user
+	}
 }
 
 // whitelistAdmit admits only the npubs on whitelist.

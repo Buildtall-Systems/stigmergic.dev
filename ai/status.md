@@ -4,6 +4,26 @@ Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit o
 
 ## 2026-10-06
 
+### Profile picture in the btk avatar dropdown
+
+The nav already mounted btk's avatar dropdown, but the login's Resolve
+returned the npub alone, so the dropdown showed a letter in place of
+the reader's picture and name. Resolve now reads the reader's kind 0
+profile through btk's ProfileResolver: picture and display name when
+found, the bare npub when the lookup is off, fails, or finds none. The
+relays come from a new `[profiles] relays` list, wss only like the
+vault list, defaulting to relay.damus.io and relay.primal.net. These
+are public relays that serve kind 0 without AUTH, because the server
+has no key to answer a challenge with. An empty list turns the lookup
+off. The resolver never writes back to them, bounds a lookup at five
+seconds, and caches a found profile for an hour. Only the me route
+calls Resolve, and htmx loads it after the page, so a slow lookup
+delays the nav slot alone.
+
+One `make test` run of five failed in this worktree; its output was
+lost, and four reruns under `-race` passed. No test reaches the new
+lookup: none loads the default config or calls the me route.
+
 ### Sign bridge stream fix
 
 On smallmind, a signed-in extension reader never mounted the private
