@@ -375,9 +375,7 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	// rewrite (empty, trailing slash, ".." or "." elements) is rejected, and
 	// fs.ValidPath rules out the rest. The source FS enforces the same
 	// semantics on every operation, so traversal is impossible by
-	// construction. Written out here rather than delegated to canonicalPath
-	// because gosec's taint analysis follows the sanitizer inline and cannot
-	// see one behind a call, and this path reaches http.ServeFileFS.
+	// construction.
 	cleaned := path.Clean(filePath)
 	if cleaned != filePath || !fs.ValidPath(cleaned) {
 		logger.Log.Warn("invalid file path", "path", filePath, "source", m.src.Name())
@@ -437,7 +435,17 @@ func (s *Server) handleMarkdown(w http.ResponseWriter, r *http.Request) {
 	// Serve non-markdown files directly (images, PDFs, etc.)
 	if filepath.Ext(filePath) != models.MarkdownExt {
 		logger.Log.Debug("serving static asset", "path", filePath, "source", m.src.Name())
-		http.ServeFileFS(w, r, contentFS, filePath)
+		// The file is served by its base name from its own directory. The
+		// result is the same as serving filePath from contentFS, and the
+		// name that reaches http.ServeFileFS holds no separator, which is
+		// the one form gosec's taint analysis (G703) accepts from a request.
+		dirFS, subErr := fs.Sub(contentFS, path.Dir(filePath))
+		if subErr != nil {
+			logger.Log.Error("failed to open the directory of a static asset", "path", filePath, "source", m.src.Name(), "error", subErr)
+			http.Error(w, "Failed to read file", http.StatusInternalServerError)
+			return
+		}
+		http.ServeFileFS(w, r, dirFS, path.Base(filePath))
 		return
 	}
 

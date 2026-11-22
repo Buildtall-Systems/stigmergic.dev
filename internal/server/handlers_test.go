@@ -51,7 +51,9 @@ func TestStaticFileServing(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	waitForServer(t, port)
@@ -91,7 +93,9 @@ func TestStaticFileMissing(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	waitForServer(t, port)
@@ -126,7 +130,9 @@ func TestStaticStylesDirectory(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	waitForServer(t, port)
@@ -162,7 +168,9 @@ func TestDefaultFileRedirect(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	waitForServer(t, port)
@@ -209,7 +217,9 @@ func TestDefaultFileNoRedirectForHTMX(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	waitForServer(t, port)
@@ -254,7 +264,9 @@ func TestNoDefaultFileNoRedirect(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	waitForServer(t, port)
@@ -309,7 +321,9 @@ func startServerWithConfig(t *testing.T, cfg *config.Config) (int, func()) {
 	cleanup := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}
 	return port, cleanup
 }

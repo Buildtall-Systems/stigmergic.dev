@@ -30,7 +30,9 @@ func TestSecurityHeaders(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -77,7 +79,9 @@ func TestRecoveryMiddleware(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	time.Sleep(100 * time.Millisecond)

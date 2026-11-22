@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -240,7 +241,11 @@ func TestServerShutdownTimeout(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	_ = srv.Shutdown(ctx)
+	// The deadline has passed before the call. Shutdown returns nil when no
+	// connection is open and the deadline error when one is.
+	if err := srv.Shutdown(ctx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("shutdown past its deadline returned %v, want nil or the deadline error", err)
+	}
 }
 
 func TestServerRespondsToRequests(t *testing.T) {
@@ -263,7 +268,9 @@ func TestServerRespondsToRequests(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	waitForServer(t, port)
@@ -544,7 +551,9 @@ func TestServerTreeUpdateOnFileEvent(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			t.Errorf("server shutdown failed: %v", err)
+		}
 	}()
 
 	// Wait for background scan to complete

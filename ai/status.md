@@ -2,6 +2,50 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-11-22
+
+### Embedded server tests no longer time out in Shutdown
+
+On Go 1.27.3 (nixpkgs 0bb8272), v0.8.0 failed two to six
+`internal/server` tests per run with "embedded server shutdown failed:
+context deadline exceeded", each after 5.0 seconds. Cause: the tests
+sent requests through `http.DefaultTransport`, which keeps connections
+alive. That transport can dial a second connection while the first is
+busy, give the request to the first when it frees up, and leave the
+second in its pool unused. The server holds an unused connection in
+the new state, and `http.Server.Shutdown` waits more than 5 seconds
+for a new connection before it closes it. The tests give Shutdown 5
+seconds. A connection log on a failing server showed it: the second
+connection entered the new state in the millisecond Shutdown began,
+never became active, and Shutdown returned the deadline error 5
+seconds later. v0.9.2 passed only because its timing differs.
+
+Fix, tests only: a `TestMain` in `internal/server` sets a default
+transport with keep-alives off, so a dialed connection serves the
+request that asked for it or is closed. Every `_ = srv.Shutdown(ctx)`
+in the package's tests now reports its error; the 1 ms deadline test
+accepts the deadline error alone. Production code is unchanged for
+this: `Start` gives Shutdown 30 seconds, so the worst effect in
+service is a stop delayed by about 5 seconds.
+
+Lint: golangci-lint 2.15.0 reported G703 (path traversal by taint) at
+the static-asset `http.ServeFileFS` call, on develop as well as here.
+The path is already canonical (`path.Clean` equality and
+`fs.ValidPath`), but gosec accepts only a base name from a request.
+The handler now serves `path.Base(filePath)` from `fs.Sub` of the
+file's directory, which reads the same file. No suppression.
+
+Verification: `make lint`, `make test`, `make build` pass in the dev
+shell (Go 1.26.4). `make test` ran 20 times on Go 1.27.3: no shutdown
+failure in any run. With the same transport change, v0.8.0 passed 3 of
+3 runs. One of the 20 runs failed `TestLocalDocumentLinksIntoTheVault`
+for a different reason, not changed here: `addMounts` publishes the
+vault mount before it scans it and rebuilds the indexes, and the test
+helper `waitForVaultMount` waits only for the mount, so a request in
+that interval renders without the vault's routes. The root checkout's
+`make lint` also fails on an untracked `scratch/measure/main.go` that
+no longer compiles; that file is outside this branch.
+
 ## 2026-10-06
 
 ### Profile picture in the btk avatar dropdown
