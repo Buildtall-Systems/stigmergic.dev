@@ -26,6 +26,12 @@ among them.
 Branch `feature/go-nostr-closed-race-pin`. Verification: `make lint`,
 `make test`, `make build` in the worktree, all pass.
 
+### v0.9.4 bump
+
+VERSION bumped 0.9.3 to 0.9.4 on `feature/version-0.9.4`, so a release
+can carry the go-nostr pin move. v0.9.3 was cut at `9973be2`, before
+the pin move, and still holds the race.
+
 ## 2026-11-22
 
 ### Embedded server tests no longer time out in Shutdown
