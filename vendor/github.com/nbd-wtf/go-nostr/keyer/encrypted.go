@@ -79,5 +79,5 @@ func (es EncryptedKeySigner) Decrypt(ctx context.Context, base64ciphertext strin
 	if err != nil {
 		return "", err
 	}
-	return nip44.Encrypt(plaintext, ck)
+	return nip44.Decrypt(base64ciphertext, ck)
 }

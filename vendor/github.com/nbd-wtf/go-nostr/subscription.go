@@ -127,12 +127,42 @@ func (sub *Subscription) dispatchEose() {
 	}
 }
 
+// ClosedError is the cause a subscription ends with when the relay sends CLOSED.
+type ClosedError struct {
+	// Reason is the text the relay gave, prefix included ("auth-required: ...").
+	Reason string
+}
+
+func (e *ClosedError) Error() string { return "CLOSED received: " + e.Reason }
+
+// Err returns the cause the subscription ended with, or nil while it is live.
+//
+// The cause is set before the Events channel closes, so a reader that sees
+// Events closed can always call Err to learn why. Reading it consumes nothing.
+func (sub *Subscription) Err() error {
+	return context.Cause(sub.Context)
+}
+
+// ClosedByRelay reports whether the subscription ended because the relay sent
+// CLOSED, and the reason the relay gave.
+//
+// ClosedReason and the close of Events are two signals of one end, and a select
+// on both can see Events closed first. A reader in that branch calls
+// ClosedByRelay to tell a relay's refusal from a dropped connection.
+func (sub *Subscription) ClosedByRelay() (reason string, closed bool) {
+	var ce *ClosedError
+	if errors.As(sub.Err(), &ce) {
+		return ce.Reason, true
+	}
+	return "", false
+}
+
 // handleClosed handles the CLOSED message from a relay.
 func (sub *Subscription) handleClosed(reason string) {
 	go func() {
 		sub.ClosedReason <- reason
 		sub.live.Store(false) // set this so we don't send an unnecessary CLOSE to the relay
-		sub.unsub(fmt.Errorf("CLOSED received: %s", reason))
+		sub.unsub(&ClosedError{Reason: reason})
 	}()
 }
 

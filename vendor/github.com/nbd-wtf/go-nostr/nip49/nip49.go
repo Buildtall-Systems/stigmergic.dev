@@ -3,6 +3,7 @@ package nip49
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 
@@ -19,6 +20,19 @@ const (
 	KnownToHaveBeenHandledInsecurely    KeySecurityByte = 0x00
 	NotKnownToHaveBeenHandledInsecurely KeySecurityByte = 0x01
 	ClientDoesNotTrackThisData          KeySecurityByte = 0x02
+)
+
+// DefaultMaxLogN is the largest scrypt work factor Decrypt and DecryptToBytes accept,
+// the largest row of the NIP-49 table (about 4 GiB of memory).
+const DefaultMaxLogN uint8 = 22
+
+// payloadLength is the size of the decoded ncryptsec: version, logn, salt, nonce,
+// key security byte, and the encrypted key with its tag.
+const payloadLength = 1 + 1 + 16 + 24 + 1 + 48
+
+var (
+	ErrInvalidPayload = errors.New("invalid ncryptsec payload")
+	ErrLogNTooLarge   = errors.New("ncryptsec logn above the accepted maximum")
 )
 
 func Encrypt(secretKey string, password string, logn uint8, ksb KeySecurityByte) (b32code string, err error) {
@@ -41,11 +55,13 @@ func EncryptBytes(secretKey []byte, password string, logn uint8, ksb KeySecurity
 		return "", err
 	}
 
-	concat := make([]byte, 91)
+	concat := make([]byte, payloadLength)
 	concat[0] = 0x02
 	concat[1] = byte(logn)
 	copy(concat[2:2+16], salt)
-	rand.Read(concat[2+16 : 2+16+24]) // nonce
+	if _, err := rand.Read(concat[2+16 : 2+16+24]); err != nil {
+		return "", fmt.Errorf("failed to read nonce: %w", err)
+	}
 	ad := []byte{byte(ksb)}
 	copy(concat[2+16+24:2+16+24+1], ad)
 
@@ -63,12 +79,24 @@ func EncryptBytes(secretKey []byte, password string, logn uint8, ksb KeySecurity
 	return bech32.Encode("ncryptsec", bits5)
 }
 
+// Decrypt is DecryptBounded with DefaultMaxLogN.
 func Decrypt(bech32string string, password string) (secretKey string, err error) {
-	secb, err := DecryptToBytes(bech32string, password)
+	return DecryptBounded(bech32string, password, DefaultMaxLogN)
+}
+
+// DecryptBounded refuses an ncryptsec whose logn is above maxLogN before it derives the key.
+func DecryptBounded(bech32string string, password string, maxLogN uint8) (secretKey string, err error) {
+	secb, err := DecryptToBytesBounded(bech32string, password, maxLogN)
 	return hex.EncodeToString(secb), err
 }
 
+// DecryptToBytes is DecryptToBytesBounded with DefaultMaxLogN.
 func DecryptToBytes(bech32string string, password string) (secretKey []byte, err error) {
+	return DecryptToBytesBounded(bech32string, password, DefaultMaxLogN)
+}
+
+// DecryptToBytesBounded refuses an ncryptsec whose logn is above maxLogN before it derives the key.
+func DecryptToBytesBounded(bech32string string, password string, maxLogN uint8) (secretKey []byte, err error) {
 	prefix, bits5, err := bech32.DecodeNoLimit(bech32string)
 	if err != nil {
 		return nil, err
@@ -81,6 +109,9 @@ func DecryptToBytes(bech32string string, password string) (secretKey []byte, err
 	if err != nil {
 		return nil, fmt.Errorf("failed translating data into 8 bits: %s", err.Error())
 	}
+	if len(data) != payloadLength {
+		return nil, fmt.Errorf("%w: expected %d bytes, got %d", ErrInvalidPayload, payloadLength, len(data))
+	}
 
 	version := data[0]
 	if version != 0x02 {
@@ -88,6 +119,9 @@ func DecryptToBytes(bech32string string, password string) (secretKey []byte, err
 	}
 
 	logn := data[1]
+	if logn > maxLogN {
+		return nil, fmt.Errorf("%w: %d > %d", ErrLogNTooLarge, logn, maxLogN)
+	}
 	n := int(math.Pow(2, float64(int(logn))))
 	salt := data[2 : 2+16]
 	nonce := data[2+16 : 2+16+24]

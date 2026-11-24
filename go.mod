@@ -63,4 +63,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/nbd-wtf/go-nostr => github.com/Buildtall-Systems/go-nostr v0.52.4-0.20260925134748-8255f4143109
+replace github.com/nbd-wtf/go-nostr => github.com/Buildtall-Systems/go-nostr v0.52.4-0.20261124171527-ed6d90b618dd

@@ -1,5 +1,5 @@
-github.com/Buildtall-Systems/go-nostr v0.52.4-0.20260925134748-8255f4143109 h1:+RSNZzaKze1LRI0lUx+abSYWjT4A1RIFk53gBeCKIHg=
-github.com/Buildtall-Systems/go-nostr v0.52.4-0.20260925134748-8255f4143109/go.mod h1:4avYoc9mDGZ9wHsvCOhHH9vPzKucCfuYBtJUSpHTfNk=
+github.com/Buildtall-Systems/go-nostr v0.52.4-0.20261124171527-ed6d90b618dd h1:bWjBZATF+n9dOKGU0SNr9lICUSnzasp5j1pjbU1olxg=
+github.com/Buildtall-Systems/go-nostr v0.52.4-0.20261124171527-ed6d90b618dd/go.mod h1:4avYoc9mDGZ9wHsvCOhHH9vPzKucCfuYBtJUSpHTfNk=
 github.com/BurntSushi/toml v1.5.0 h1:W5quZX/G/csjUnuI8SUYlsHs9M38FC7znL0lIO+DvMg=
 github.com/BurntSushi/toml v1.5.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/ImVexed/fasturl v0.0.0-20230304231329-4e41488060f3 h1:ClzzXMDDuUbWfNNZqGeYq4PnYOlwlOVIvSyNaIy0ykg=

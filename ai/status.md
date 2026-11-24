@@ -2,6 +2,30 @@
 
 Daily work log. Add entries under date headers (## YYYY-MM-DD) after each unit of work.
 
+## 2026-11-24
+
+### go-nostr pin moved to the CLOSED race fix
+
+`TestLoaderAuthenticatesThroughTheOwnersSigner` failed in the Nix check
+phase of a production deploy. Cause: a race in the go-nostr fork's
+pool. A relay's CLOSED shows on two signals, the reason on
+`ClosedReason` and the close of `Events`. When the CLOSED was fully
+processed before the pool reached its select, both were ready, Go
+picked one at random, and the closed-`Events` branch returned without
+the reason. The auth handler was skipped and the read came back empty.
+A scratch reproduction showed 7 skipped handlers in 30,000 reads on
+`8255f41` and 0 on the fix.
+
+The fork's fix is `ed6d90b`: the subscription records the CLOSED as its
+cancel cause, and the pool reads that cause on a closed `Events`. The
+`replace` for `github.com/nbd-wtf/go-nostr` moves from `8255f41` to
+`ed6d90b`, and `vendor/` is regenerated with `go mod vendor`. The move
+also brings in the fork commits between the two, the NIP-29 change
+among them.
+
+Branch `feature/go-nostr-closed-race-pin`. Verification: `make lint`,
+`make test`, `make build` in the worktree, all pass.
+
 ## 2026-11-22
 
 ### Embedded server tests no longer time out in Shutdown

@@ -34,6 +34,12 @@ type SimplePool struct {
 
 	proactiveAuth bool
 
+	// relayLocks serializes EnsureRelay per relay URL. It belongs to this
+	// pool: a pool shared across every pool let one pool's proactive auth,
+	// held under the lock, block a signer whose own pool connects to the
+	// same relay, until the auth timed out.
+	relayLocks namedLocks
+
 	// custom things not often used
 	penaltyBoxMu sync.Mutex
 	penaltyBox   map[string][2]float64
@@ -176,7 +182,7 @@ var (
 // If the relay is not connected, it attempts to connect.
 func (pool *SimplePool) EnsureRelay(url string) (*Relay, error) {
 	nm := NormalizeURL(url)
-	defer namedLock(nm)()
+	defer pool.relayLocks.lock(nm)()
 
 	relay, ok := pool.Relays.Load(nm)
 	if ok && relay == nil {
@@ -382,47 +388,13 @@ func (pool *SimplePool) FetchManyReplaceable(
 				return
 			}
 
-			hasAuthed := false
-
-		subscribe:
-			sub, err := relay.Subscribe(ctx, Filters{filter}, opts...)
-			if err != nil {
-				debugLogf("error subscribing to %s with %v: %s", relay, filter, err)
-				return
-			}
-
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-sub.EndOfStoredEvents:
-					return
-				case reason := <-sub.ClosedReason:
-					if strings.HasPrefix(reason, "auth-required:") && pool.authHandler != nil && !hasAuthed {
-						// relay is requesting auth. if we can we will perform auth and try again
-						err := relay.Auth(ctx, func(event *Event) error {
-							return pool.authHandler(ctx, RelayEvent{Event: event, Relay: relay})
-						})
-						if err == nil {
-							hasAuthed = true // so we don't keep doing AUTH again and again
-							goto subscribe
-						}
-					}
-					debugLogf("CLOSED from %s: '%s'\n", nm, reason)
-					return
-				case evt, more := <-sub.Events:
-					if !more {
-						return
-					}
-
-					ie := RelayEvent{Event: evt, Relay: relay}
-					if mh := pool.eventMiddleware; mh != nil {
-						mh(ie)
-					}
-
-					results.Store(ReplaceableKey{evt.PubKey, evt.Tags.GetD()}, evt)
-				}
-			}
+			pool.readStored(ctx, relay,
+				func() (*Subscription, error) { return relay.Subscribe(ctx, Filters{filter}, opts...) },
+				func(ie RelayEvent) bool {
+					results.Store(ReplaceableKey{ie.PubKey, ie.Tags.GetD()}, ie.Event)
+					return true
+				},
+			)
 		}(NormalizeURL(url))
 	}
 
@@ -431,6 +403,115 @@ func (pool *SimplePool) FetchManyReplaceable(
 	cancel(errors.New("all subscriptions ended"))
 
 	return results
+}
+
+// authRequiredPrefix is the NIP-42 prefix of a CLOSED or OK reason that asks for AUTH.
+const authRequiredPrefix = "auth-required:"
+
+// subscriptionEnd says why readSubscription stopped reading a subscription.
+type subscriptionEnd int
+
+const (
+	// subscriptionDone: the context ended, the stored events ended, or the
+	// caller's deliver function stopped the read.
+	subscriptionDone subscriptionEnd = iota
+	// subscriptionClosedByRelay: the relay sent CLOSED.
+	subscriptionClosedByRelay
+	// subscriptionBroken: the subscription ended for any other cause, for
+	// example a dropped connection.
+	subscriptionBroken
+)
+
+// readSubscription reads sub until it ends and passes each event to deliver.
+// It is the one place where the pool waits on a subscription.
+//
+// A relay's CLOSED shows on two signals: the reason on sub.ClosedReason and the
+// close of sub.Events. A select takes either one, so the closed-Events branch
+// asks the subscription for the cause. The CLOSED is reported with its reason
+// on both branches.
+//
+// A nil eose keeps the read going after the stored events end. A nil tick
+// turns the periodic onTick call off.
+func (pool *SimplePool) readSubscription(
+	ctx context.Context,
+	relay *Relay,
+	sub *Subscription,
+	eose <-chan struct{},
+	tick <-chan time.Time,
+	onTick func(),
+	deliver func(RelayEvent) bool,
+) (end subscriptionEnd, reason string) {
+	for {
+		select {
+		case <-ctx.Done():
+			return subscriptionDone, ""
+		case <-eose:
+			return subscriptionDone, ""
+		case <-tick:
+			onTick()
+		case reason := <-sub.ClosedReason:
+			return subscriptionClosedByRelay, reason
+		case evt, more := <-sub.Events:
+			if !more {
+				if reason, closed := sub.ClosedByRelay(); closed {
+					return subscriptionClosedByRelay, reason
+				}
+				return subscriptionBroken, ""
+			}
+
+			ie := RelayEvent{Event: evt, Relay: relay}
+			if mh := pool.eventMiddleware; mh != nil {
+				mh(ie)
+			}
+
+			if !deliver(ie) {
+				return subscriptionDone, ""
+			}
+		}
+	}
+}
+
+// authOnClosed answers a relay's CLOSED. When the reason asks for AUTH, the
+// pool has an auth handler, and this read has not authenticated yet, it
+// performs AUTH. It reports whether the caller must subscribe again.
+func (pool *SimplePool) authOnClosed(ctx context.Context, relay *Relay, reason string, hasAuthed bool) bool {
+	if hasAuthed || pool.authHandler == nil || !strings.HasPrefix(reason, authRequiredPrefix) {
+		return false
+	}
+
+	err := relay.Auth(ctx, func(event *Event) error {
+		return pool.authHandler(ctx, RelayEvent{Event: event, Relay: relay})
+	})
+	return err == nil
+}
+
+// readStored reads one relay's stored events: it subscribes, passes each event
+// to deliver, and returns at EOSE. When the relay answers CLOSED with an
+// auth-required reason it authenticates once and subscribes again.
+func (pool *SimplePool) readStored(
+	ctx context.Context,
+	relay *Relay,
+	subscribe func() (*Subscription, error),
+	deliver func(RelayEvent) bool,
+) {
+	hasAuthed := false // so we don't keep doing AUTH again and again
+	for {
+		sub, err := subscribe()
+		if err != nil {
+			debugLogf("error subscribing to %s: %s", relay, err)
+			return
+		}
+
+		end, reason := pool.readSubscription(ctx, relay, sub, sub.EndOfStoredEvents, nil, nil, deliver)
+		if end != subscriptionClosedByRelay {
+			return
+		}
+		if !pool.authOnClosed(ctx, relay, reason, hasAuthed) {
+			debugLogf("CLOSED from %s: '%s'\n", relay, reason)
+			return
+		}
+		hasAuthed = true
+	}
 }
 
 func (pool *SimplePool) subMany(
@@ -480,6 +561,25 @@ func (pool *SimplePool) subMany(
 				}
 			}()
 
+			deliver := func(ie RelayEvent) bool {
+				select {
+				case events <- ie:
+					return true
+				case <-ctx.Done():
+					return false
+				}
+			}
+			dropOldSeen := func() {
+				if eosed.Load() {
+					old := Timestamp(time.Now().Add(-seenAlreadyDropTick).Unix())
+					for id, value := range seenAlready.Range {
+						if value < old {
+							seenAlready.Delete(id)
+						}
+					}
+				}
+			}
+
 			hasAuthed := false
 			interval := 3 * time.Second
 			for {
@@ -490,6 +590,8 @@ func (pool *SimplePool) subMany(
 				}
 
 				var sub *Subscription
+				var end subscriptionEnd
+				var reason string
 
 				if mh := pool.queryMiddleware; mh != nil {
 					for _, filter := range filters {
@@ -524,70 +626,41 @@ func (pool *SimplePool) subMany(
 					goto reconnect
 				}
 
-				go func() {
+				// the subscription is an argument: the variable is assigned again on a resubscription
+				go func(sub *Subscription) {
 					<-sub.EndOfStoredEvents
 
 					// guard here otherwise a resubscription will trigger a duplicate call to eoseWg.Done()
 					if eosed.CompareAndSwap(false, true) {
 						eoseWg.Done()
 					}
-				}()
+				}(sub)
 
 				// reset interval when we get a good subscription
 				interval = 3 * time.Second
 
-				for {
-					select {
-					case evt, more := <-sub.Events:
-						if !more {
-							// this means the connection was closed for weird reasons, like the server shut down
-							// so we will update the filters here to include only events seem from now on
-							// and try to reconnect until we succeed
-							now := Now()
-							for i := range filters {
-								filters[i].Since = &now
-							}
-							debugLogf("%s reconnecting because sub.Events is broken\n", nm)
-							goto reconnect
-						}
-
-						ie := RelayEvent{Event: evt, Relay: relay}
-						if mh := pool.eventMiddleware; mh != nil {
-							mh(ie)
-						}
-
-						select {
-						case events <- ie:
-						case <-ctx.Done():
-							return
-						}
-					case <-ticker.C:
-						if eosed.Load() {
-							old := Timestamp(time.Now().Add(-seenAlreadyDropTick).Unix())
-							for id, value := range seenAlready.Range {
-								if value < old {
-									seenAlready.Delete(id)
-								}
-							}
-						}
-					case reason := <-sub.ClosedReason:
-						if strings.HasPrefix(reason, "auth-required:") && pool.authHandler != nil && !hasAuthed {
-							// relay is requesting auth. if we can we will perform auth and try again
-							err := relay.Auth(ctx, func(event *Event) error {
-								return pool.authHandler(ctx, RelayEvent{Event: event, Relay: relay})
-							})
-							if err == nil {
-								hasAuthed = true // so we don't keep doing AUTH again and again
-								goto subscribe
-							}
-						} else {
-							debugLogf("CLOSED from %s: '%s'\n", nm, reason)
-						}
-
-						return
-					case <-ctx.Done():
-						return
+				end, reason = pool.readSubscription(ctx, relay, sub, nil, ticker.C, dropOldSeen, deliver)
+				switch end {
+				case subscriptionClosedByRelay:
+					// a refusal, not a dropped connection: the filters stay as they are
+					if pool.authOnClosed(ctx, relay, reason, hasAuthed) {
+						hasAuthed = true // so we don't keep doing AUTH again and again
+						goto subscribe
 					}
+					debugLogf("CLOSED from %s: '%s'\n", nm, reason)
+					return
+				case subscriptionBroken:
+					// this means the connection was closed for weird reasons, like the server shut down
+					// so we will update the filters here to include only events seem from now on
+					// and try to reconnect until we succeed
+					now := Now()
+					for i := range filters {
+						filters[i].Since = &now
+					}
+					debugLogf("%s reconnecting because sub.Events is broken\n", nm)
+					goto reconnect
+				default:
+					return
 				}
 
 			reconnect:
@@ -665,51 +738,17 @@ func (pool *SimplePool) subManyEoseNonOverwriteCheckDuplicate(
 				return
 			}
 
-			hasAuthed := false
-
-		subscribe:
-			sub, err := relay.Subscribe(ctx, filters, opts...)
-			if err != nil {
-				debugLogf("error subscribing to %s with %v: %s", relay, filters, err)
-				return
-			}
-
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-sub.EndOfStoredEvents:
-					return
-				case reason := <-sub.ClosedReason:
-					if strings.HasPrefix(reason, "auth-required:") && pool.authHandler != nil && !hasAuthed {
-						// relay is requesting auth. if we can we will perform auth and try again
-						err := relay.Auth(ctx, func(event *Event) error {
-							return pool.authHandler(ctx, RelayEvent{Event: event, Relay: relay})
-						})
-						if err == nil {
-							hasAuthed = true // so we don't keep doing AUTH again and again
-							goto subscribe
-						}
-					}
-					debugLogf("CLOSED from %s: '%s'\n", nm, reason)
-					return
-				case evt, more := <-sub.Events:
-					if !more {
-						return
-					}
-
-					ie := RelayEvent{Event: evt, Relay: relay}
-					if mh := pool.eventMiddleware; mh != nil {
-						mh(ie)
-					}
-
+			pool.readStored(ctx, relay,
+				func() (*Subscription, error) { return relay.Subscribe(ctx, filters, opts...) },
+				func(ie RelayEvent) bool {
 					select {
 					case events <- ie:
+						return true
 					case <-ctx.Done():
-						return
+						return false
 					}
-				}
-			}
+				},
+			)
 		}(NormalizeURL(url))
 	}
 

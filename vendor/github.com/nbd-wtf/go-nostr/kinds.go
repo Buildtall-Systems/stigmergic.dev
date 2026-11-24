@@ -56,6 +56,7 @@ const (
 	KindSimpleGroupCreateGroup   int = 9007
 	KindSimpleGroupDeleteGroup   int = 9008
 	KindSimpleGroupCreateInvite  int = 9009
+	KindSimpleGroupUpdatePinList int = 9010
 	KindSimpleGroupJoinRequest   int = 9021
 	KindSimpleGroupLeaveRequest  int = 9022
 	KindZapGoal                  int = 9041
@@ -120,6 +121,8 @@ const (
 	KindSimpleGroupAdmins        int = 39001
 	KindSimpleGroupMembers       int = 39002
 	KindSimpleGroupRoles         int = 39003
+	KindSimpleGroupLiveKit       int = 39004
+	KindSimpleGroupPinnedEvents  int = 39005
 	KindWikiArticle              int = 30818
 	KindRedirects                int = 30819
 	KindFeed                     int = 31890

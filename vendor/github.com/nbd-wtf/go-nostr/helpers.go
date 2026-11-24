@@ -12,20 +12,21 @@ import (
 
 const MAX_LOCKS = 50
 
-var (
-	namedMutexPool = make([]sync.Mutex, MAX_LOCKS)
-	json           = jsoniter.ConfigFastest
-)
+var json = jsoniter.ConfigFastest
 
 //go:noescape
 //go:linkname memhash runtime.memhash
 func memhash(p unsafe.Pointer, h, s uintptr) uintptr
 
-func namedLock(name string) (unlock func()) {
+// namedLocks is a fixed set of mutexes, each standing for every name that
+// hashes to it.
+type namedLocks [MAX_LOCKS]sync.Mutex
+
+func (l *namedLocks) lock(name string) (unlock func()) {
 	sptr := unsafe.StringData(name)
 	idx := uint64(memhash(unsafe.Pointer(sptr), 0, uintptr(len(name)))) % MAX_LOCKS
-	namedMutexPool[idx].Lock()
-	return namedMutexPool[idx].Unlock
+	l[idx].Lock()
+	return l[idx].Unlock
 }
 
 func similar[E constraints.Ordered](as, bs []E) bool {
